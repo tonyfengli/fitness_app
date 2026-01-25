@@ -26,6 +26,8 @@ interface WorkoutControlsProps {
   currentTrack?: any;
   onStopMusic?: () => void;
   onEnableMusic?: () => void;
+  // Navigation callback (called on manual skip/back to clear natural ending state)
+  onManualNavigation?: () => void;
 }
 
 export function WorkoutControls({
@@ -43,12 +45,15 @@ export function WorkoutControls({
   currentTrack = null,
   onStopMusic,
   onEnableMusic,
+  onManualNavigation,
 }: WorkoutControlsProps) {
   const handleBack = () => {
     // Close panel without animation to avoid LayoutAnimation conflicts
     if (isSettingsPanelOpen && onCloseSettingsPanel) {
       onCloseSettingsPanel();
     }
+    // Clear natural ending state so music isn't queued during manual navigation
+    onManualNavigation?.();
     send({ type: 'BACK' });
   };
 
@@ -65,6 +70,8 @@ export function WorkoutControls({
     if (isSettingsPanelOpen && onCloseSettingsPanel) {
       onCloseSettingsPanel();
     }
+    // Clear natural ending state so music isn't queued during manual navigation
+    onManualNavigation?.();
     send({ type: 'SKIP' });
   };
 

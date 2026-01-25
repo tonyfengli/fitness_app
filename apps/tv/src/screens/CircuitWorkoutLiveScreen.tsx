@@ -22,7 +22,11 @@ import { useLightingControl } from '../hooks/useLightingControl';
 import { useAudio } from '../hooks/useAudio';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { useWorkoutMusic, useMusic } from '../hooks/useWorkoutMusic';
-import { musicTriggerController } from '../music';
+import {
+  createPhaseKey,
+  serializeKey,
+  shouldTriggerCountdown,
+} from '../music';
 import { RiseCountdownOverlay } from '../components/shared/RiseCountdownOverlay';
 
 // Re-export MattePanel for backward compatibility
@@ -97,14 +101,8 @@ export function CircuitWorkoutLiveScreen() {
 
   // Reset music trigger controller on mount to clear consumed phases from previous sessions
   // This ensures Rise/High countdowns work properly when re-entering the workout
-  // Also initialize currentRoundIndex to starting round for consistent same-round behavior
-  useEffect(() => {
-    const startingRoundIndex = state.context.currentRoundIndex;
-    console.log('[CircuitWorkoutLiveScreen] Resetting music trigger controller on mount, initializing to round', startingRoundIndex);
-    musicTriggerController.reset();
-    // Set currentRoundIndex so same-round re-entry consistently does NOT reset
-    musicTriggerController.resetForRound(startingRoundIndex);
-  }, []);
+  // Music trigger state is now managed by the workout machine context
+  // No need for manual initialization - machine handles resets atomically
 
   // Toggle settings panel with animation
   const toggleSettingsPanel = () => {
@@ -136,13 +134,21 @@ export function CircuitWorkoutLiveScreen() {
     pause: pauseMusic,
     resume: resumeMusic,
     start: startMusic,
-    stop: stopMusic,
+    stop: stopMusicBase,
     enable: enableMusic,
     playWithTrigger,
   } = useMusicPlayer();
 
+  // Wrapper for stopMusic that also resets trigger state in the workout machine
+  // This ensures triggers can fire again when music is re-enabled
+  const stopMusic = useCallback(() => {
+    stopMusicBase();
+    send({ type: 'RESET_MUSIC_TRIGGERS' });
+    console.log('[CircuitWorkoutLiveScreen] Music stopped - triggers reset via machine event');
+  }, [stopMusicBase, send]);
+
   // Get high countdown state from music provider
-  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, startHighCountdown, seekToHighSegment, tracks } = useMusic();
+  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, startHighCountdown, seekToHighSegment, tracks, clearNaturalEnding } = useMusic();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -344,6 +350,7 @@ export function CircuitWorkoutLiveScreen() {
     workoutState: state,
     circuitConfig,
     enabled: isMusicEnabled,
+    send,  // Pass send function for machine events
   });
 
   // Check if rise countdown should be shown for the current round's first exercise
@@ -505,16 +512,17 @@ export function CircuitWorkoutLiveScreen() {
     // Only relevant when in exercise state
     if (state.value !== 'exercise') return false;
 
-    const { currentRoundIndex, currentExerciseIndex, currentSetNumber } = state.context;
+    const { currentRoundIndex, currentExerciseIndex, currentSetNumber, triggeredPhases, consumedPhases } = state.context;
 
     // High countdown only triggers for exercise 0 (first exercise in round)
     if (currentExerciseIndex !== 0) return false;
 
-    // Create phase key using controller
-    const phase = musicTriggerController.createPhaseKey('exercise', currentRoundIndex, currentExerciseIndex, currentSetNumber);
+    // Create phase key
+    const phase = createPhaseKey('exercise', currentRoundIndex, currentExerciseIndex, currentSetNumber);
+    const phaseKey = serializeKey(phase);
 
     // If this phase already triggered or consumed, countdown already happened
-    if (musicTriggerController.isTriggered(phase) || musicTriggerController.isConsumed(phase)) {
+    if (triggeredPhases.includes(phaseKey) || consumedPhases.includes(phaseKey)) {
       return false;
     }
 
@@ -523,11 +531,11 @@ export function CircuitWorkoutLiveScreen() {
     const roundConfig = roundTemplates?.find(rt => rt.roundNumber === currentRoundIndex + 1);
     const musicConfig = roundConfig?.music;
 
-    // Use controller to check if countdown should trigger
-    const { shouldTrigger, type } = musicTriggerController.shouldTriggerCountdown(phase, musicConfig);
+    // Use stateless function to check if countdown should trigger
+    const { shouldTrigger: triggerNeeded, type } = shouldTriggerCountdown(phase, musicConfig, consumedPhases);
 
     // Only show optimistic state for 'high' countdown type
-    if (!shouldTrigger || type !== 'high') return false;
+    if (!triggerNeeded || type !== 'high') return false;
 
     // Multi-set logic
     const totalSets = roundConfig?.template?.repeatTimes || 1;
@@ -545,6 +553,8 @@ export function CircuitWorkoutLiveScreen() {
     state.context.currentRoundIndex,
     state.context.currentExerciseIndex,
     state.context.currentSetNumber,
+    state.context.triggeredPhases,
+    state.context.consumedPhases,
     circuitConfig,
   ]);
 
@@ -627,14 +637,16 @@ export function CircuitWorkoutLiveScreen() {
     // Mark that countdown needs to start workout when complete (automatic trigger from preview timer)
     countdownNeedsStartRef.current = true;
 
-    // Mark both the preview AND exercise 1 triggers as consumed using controller
+    // Mark both the preview AND exercise 1 triggers as consumed via machine events
     // Preview: prevents the preview trigger from firing when we RESUME after countdown completes
     // Exercise 1: prevents it from firing again when we transition to exercise state
-    const previewPhase = musicTriggerController.createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
-    const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
-    console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', musicTriggerController.serializeKey(previewPhase), musicTriggerController.serializeKey(exercisePhase));
-    musicTriggerController.consumePhase(previewPhase);
-    musicTriggerController.consumePhase(exercisePhase);
+    const previewPhase = createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
+    const exercisePhase = createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+    const previewKey = serializeKey(previewPhase);
+    const exerciseKey = serializeKey(exercisePhase);
+    console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', previewKey, exerciseKey);
+    send({ type: 'CONSUME_PHASE', phaseKey: previewKey });
+    send({ type: 'CONSUME_PHASE', phaseKey: exerciseKey });
 
     const trackId = exercise1Trigger?.trackId;
 
@@ -766,8 +778,9 @@ export function CircuitWorkoutLiveScreen() {
     console.log('[handleRiseAwareStart] hasRiseConfigured:', hasRiseConfigured, 'hasHighConfigured:', hasHighConfigured);
 
     // Early exit if phase is already consumed (prevents re-triggering countdown)
-    const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
-    if (musicTriggerController.isConsumed(exercisePhase)) {
+    const exercisePhase = createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+    const exercisePhaseKey = serializeKey(exercisePhase);
+    if (state.context.consumedPhases.includes(exercisePhaseKey)) {
       console.log('[handleRiseAwareStart] Phase already consumed, skipping countdown');
       // Just ensure workout is running (no-op if already running)
       send({ type: 'START_WORKOUT' });
@@ -783,12 +796,14 @@ export function CircuitWorkoutLiveScreen() {
       // Set rise countdown active (overlay will show)
       setRiseCountdownActive(true);
 
-      // Mark both the preview AND exercise 1 triggers as consumed using controller
-      const previewPhase = musicTriggerController.createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
-      const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
-      console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', musicTriggerController.serializeKey(previewPhase), musicTriggerController.serializeKey(exercisePhase));
-      musicTriggerController.consumePhase(previewPhase);
-      musicTriggerController.consumePhase(exercisePhase);
+      // Mark both the preview AND exercise 1 triggers as consumed via machine events
+      const previewPhase = createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
+      const exercisePhaseForRise = createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+      const previewKey = serializeKey(previewPhase);
+      const exerciseKeyForRise = serializeKey(exercisePhaseForRise);
+      console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', previewKey, exerciseKeyForRise);
+      send({ type: 'CONSUME_PHASE', phaseKey: previewKey });
+      send({ type: 'CONSUME_PHASE', phaseKey: exerciseKeyForRise });
 
       // Get trackId from trigger config
       const trackId = exercise1Trigger?.trackId;
@@ -805,12 +820,14 @@ export function CircuitWorkoutLiveScreen() {
       // Mark that countdown needs to start workout when complete (manual trigger from preview)
       countdownNeedsStartRef.current = true;
 
-      // Mark both the preview AND exercise 1 triggers as consumed using controller
-      const previewPhase = musicTriggerController.createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
-      const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
-      console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', musicTriggerController.serializeKey(previewPhase), musicTriggerController.serializeKey(exercisePhase));
-      musicTriggerController.consumePhase(previewPhase);
-      musicTriggerController.consumePhase(exercisePhase);
+      // Mark both the preview AND exercise 1 triggers as consumed via machine events
+      const previewPhaseHigh = createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
+      const exercisePhaseHigh = createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+      const previewKeyHigh = serializeKey(previewPhaseHigh);
+      const exerciseKeyHigh = serializeKey(exercisePhaseHigh);
+      console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', previewKeyHigh, exerciseKeyHigh);
+      send({ type: 'CONSUME_PHASE', phaseKey: previewKeyHigh });
+      send({ type: 'CONSUME_PHASE', phaseKey: exerciseKeyHigh });
 
       // Get trackId from trigger config
       const trackId = exercise1Trigger?.trackId;
@@ -824,7 +841,7 @@ export function CircuitWorkoutLiveScreen() {
       // No countdown configured, proceed normally
       send({ type: 'START_WORKOUT' });
     }
-  }, [circuitConfig, state.value, state.context.currentRoundIndex, state.context.currentSetNumber, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
+  }, [circuitConfig, state.value, state.context.currentRoundIndex, state.context.currentSetNumber, state.context.consumedPhases, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
 
   // Auto-focus close button when modal opens, restore focus when modal closes
   useEffect(() => {
@@ -923,6 +940,7 @@ export function CircuitWorkoutLiveScreen() {
                   if (state.context.currentRoundIndex === 0) {
                     navigation.goBack();
                   } else {
+                    clearNaturalEnding();
                     send({ type: 'BACK' });
                   }
                 }}
@@ -964,6 +982,7 @@ export function CircuitWorkoutLiveScreen() {
               <Pressable
                 onPress={() => {
                   setIsSettingsPanelOpen(false);
+                  clearNaturalEnding();
                   send({ type: 'SKIP' });
                 }}
                 focusable
@@ -1661,6 +1680,7 @@ export function CircuitWorkoutLiveScreen() {
               currentTrack={currentTrack}
               onStopMusic={stopMusic}
               onEnableMusic={enableMusic}
+              onManualNavigation={clearNaturalEnding}
             />
           </View>
 

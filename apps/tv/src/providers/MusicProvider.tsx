@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { musicService, MusicTrack, MusicSegment, EnergyLevel } from '../services/MusicService';
 import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
 import { api } from './TRPCProvider';
-import { musicTriggerController } from '../music';
+// Note: Music trigger state is now managed by the workout machine context.
+// Trigger resets should be done via RESET_MUSIC_TRIGGERS event to the machine.
 
 const DOWNLOADED_FILENAMES_KEY = '@music_downloaded_filenames';
 
@@ -96,6 +97,9 @@ interface MusicContextValue {
   // Rise countdown methods (for screen-level overlay)
   setRiseCountdownActive: (active: boolean) => void;
   seekToHighSegment: () => void; // Seek current track to high energy segment (for skip)
+
+  // Clear natural ending state (call when entering a new round)
+  clearNaturalEnding: () => void;
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null);
@@ -825,6 +829,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentTrack, clearBuildupCountdown]);
 
+  // Clear natural ending state (call when entering a new round)
+  // This allows the next round's triggers to play immediately instead of being queued
+  const clearNaturalEnding = useCallback(() => {
+    if (naturalEndingActiveRef.current || pendingTriggerRef.current) {
+      console.log('[MusicProvider] clearNaturalEnding - clearing natural ending state');
+      naturalEndingActiveRef.current = false;
+      setIsNaturalEndingActive(false);
+      // Clear any queued triggers - they're from the previous round
+      pendingTriggerRef.current = null;
+      clearPendingTriggerTimeout();
+    }
+  }, [clearPendingTriggerTimeout]);
+
   // Stop music on unmount to prevent orphaned audio during hot reload
   // Use immediate=true to skip fade-out and ensure cleanup completes before JS context is destroyed
   useEffect(() => {
@@ -949,9 +966,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     pendingTriggerRef.current = null;
     clearPendingTriggerTimeout();
 
-    // 4. Reset trigger controller (allows countdowns to fire again on same round)
-    musicTriggerController.reset();
-    console.log('[MusicProvider] Trigger controller reset');
+    // 4. Note: Trigger state is now managed by the workout machine context.
+    // Resetting triggers should be done by sending RESET_MUSIC_TRIGGERS event to the machine.
+    // This allows atomic resets coordinated with workout state transitions.
+    console.log('[MusicProvider] stop() - trigger reset should be handled by workout machine');
 
     // 5. Stop audio
     await musicService.stop();
@@ -1117,6 +1135,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     completeHighCountdown,
     cancelHighCountdown,
     seekToHighSegment,
+    clearNaturalEnding,
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 
 // Enable LayoutAnimation on Android
@@ -16,7 +16,9 @@ import { useLightingControl } from '../hooks/useLightingControl';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
 import { useMusic } from '../providers/MusicProvider';
-import { musicTriggerController } from '../music';
+// Note: Music trigger state is now managed by the workout machine context.
+// The live screen's useWorkoutMusic hook handles deduplication via
+// "isPlaying && currentEnergy === action.energy" check for preview phase.
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -631,6 +633,9 @@ export function CircuitWorkoutOverviewScreen() {
     }
   );
 
+  // Local trigger state for overview screen (no workout machine running)
+  const [localTriggeredPhases, setLocalTriggeredPhases] = useState<string[]>([]);
+
   // Create synthetic workout state for Round 1 Preview
   // This allows useWorkoutMusic to evaluate triggers on this screen
   const syntheticWorkoutState = useMemo(() => ({
@@ -641,8 +646,23 @@ export function CircuitWorkoutOverviewScreen() {
       currentSetNumber: 1,
       isPaused: false,
       isStarted: true,
+      // Music trigger state - uses local state since no machine is running
+      triggeredPhases: localTriggeredPhases,
+      consumedPhases: [] as string[],
     }
-  }), []);
+  }), [localTriggeredPhases]);
+
+  // Handle trigger events locally since no workout machine is running
+  const handleTriggerEvent = useCallback((event: { type: string; phaseKey?: string }) => {
+    if (event.type === 'MARK_PHASE_TRIGGERED' && event.phaseKey) {
+      setLocalTriggeredPhases(prev =>
+        prev.includes(event.phaseKey!) ? prev : [...prev, event.phaseKey!]
+      );
+    } else if (event.type === 'RESET_MUSIC_TRIGGERS') {
+      setLocalTriggeredPhases([]);
+    }
+    // Other events (CONSUME_PHASE, CLEAR_TRIGGERED_ONLY) not needed for overview
+  }, []);
 
   // Use workout music hook to handle automatic triggers
   // Only enable if music is enabled (user has toggled music on)
@@ -650,6 +670,7 @@ export function CircuitWorkoutOverviewScreen() {
     workoutState: syntheticWorkoutState,
     circuitConfig,
     enabled: isMusicEnabled,
+    send: handleTriggerEvent,
   });
 
   // Get session data to check template type
@@ -1110,9 +1131,8 @@ export function CircuitWorkoutOverviewScreen() {
                     useBuildup: previewTrigger?.useBuildup ?? false,
                     trackId: previewTrigger?.trackId,
                   });
-                  // Mark Round 1 Preview as triggered so CircuitWorkoutLive doesn't re-trigger
-                  const previewPhase = musicTriggerController.createPhaseKey('preview', 0, 0, 1);
-                  musicTriggerController.markTriggered(previewPhase);
+                  // Note: Deduplication for Round 1 Preview is handled by useWorkoutMusic
+                  // via "isPlaying && currentEnergy === action.energy" check
                 }
               }}
               focusable={isSettingsPanelOpen}

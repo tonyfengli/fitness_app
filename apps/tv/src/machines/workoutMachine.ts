@@ -1,29 +1,36 @@
 import { createMachine, assign } from 'xstate';
 import type { CircuitConfig } from '@acme/db';
+import { parsePhaseKey } from '../music/types';
 
 // Types for our machine
 export interface WorkoutContext {
   // Config
   circuitConfig: CircuitConfig | null;
-  
+
   // Timing
   timeRemaining: number;
   isPaused: boolean;
-  
+
   // Navigation state
   currentRoundIndex: number;
   currentExerciseIndex: number;
   currentSetNumber: number;
-  
+
   // Data
   rounds: any[]; // Will type this properly later
   selections: any[]; // Will type this properly later
-  
+
   // UI state
   isStarted: boolean;
+
+  // Music trigger state - single source of truth
+  // Phase keys format: `{type}-{roundIndex}-{phaseIndex}-{setNumber}`
+  triggeredPhases: string[];  // Phases that have fired their trigger
+  consumedPhases: string[];   // Phases consumed (e.g., from countdown flow)
+  lastResetRoundIndex: number; // Track which round we last reset for
 }
 
-export type WorkoutEvent = 
+export type WorkoutEvent =
   | { type: 'START_WORKOUT' }
   | { type: 'TIMER_TICK' }
   | { type: 'TIMER_COMPLETE' }
@@ -32,7 +39,12 @@ export type WorkoutEvent =
   | { type: 'CONFIG_UPDATED'; config: CircuitConfig }
   | { type: 'SELECTIONS_UPDATED'; selections: any[] }
   | { type: 'PAUSE' }
-  | { type: 'RESUME' };
+  | { type: 'RESUME' }
+  // Music trigger events
+  | { type: 'MARK_PHASE_TRIGGERED'; phaseKey: string }
+  | { type: 'CONSUME_PHASE'; phaseKey: string }
+  | { type: 'RESET_MUSIC_TRIGGERS' }
+  | { type: 'CLEAR_TRIGGERED_ONLY' };
 
 export const workoutMachine = createMachine({
   id: 'workout',
@@ -50,7 +62,11 @@ export const workoutMachine = createMachine({
     currentSetNumber: 1,
     rounds: [],
     selections: [],
-    isStarted: false
+    isStarted: false,
+    // Music trigger state
+    triggeredPhases: [],
+    consumedPhases: [],
+    lastResetRoundIndex: -1,
   },
   states: {
     roundPreview: {
@@ -60,7 +76,25 @@ export const workoutMachine = createMachine({
           if (context.currentRoundIndex === 0) return 0;
           return context.circuitConfig?.config?.restBetweenRounds || 60;
         },
-        isPaused: false
+        isPaused: false,
+        // Reset music trigger phases when entering a NEW round
+        // This is atomic - happens in the same tick as the state transition
+        triggeredPhases: ({ context }) => {
+          const willReset = context.currentRoundIndex !== context.lastResetRoundIndex;
+          if (willReset) {
+            console.log('[workoutMachine] roundPreview entry: resetting phases for round', context.currentRoundIndex);
+            return [];
+          }
+          return context.triggeredPhases;
+        },
+        consumedPhases: ({ context }) => {
+          const willReset = context.currentRoundIndex !== context.lastResetRoundIndex;
+          if (willReset) {
+            return [];
+          }
+          return context.consumedPhases;
+        },
+        lastResetRoundIndex: ({ context }) => context.currentRoundIndex,
       }),
       on: {
         START_WORKOUT: 'exercise',
@@ -558,6 +592,59 @@ export const workoutMachine = createMachine({
     workoutComplete: {
       type: 'final'
     }
+  },
+  // Global event handlers for music trigger management
+  // These can be triggered from any state
+  on: {
+    MARK_PHASE_TRIGGERED: {
+      actions: assign({
+        triggeredPhases: ({ context, event }) => {
+          if (event.type !== 'MARK_PHASE_TRIGGERED') return context.triggeredPhases;
+          if (context.triggeredPhases.includes(event.phaseKey)) {
+            return context.triggeredPhases;
+          }
+          console.log('[workoutMachine] MARK_PHASE_TRIGGERED:', event.phaseKey);
+          return [...context.triggeredPhases, event.phaseKey];
+        }
+      })
+    },
+    CONSUME_PHASE: {
+      actions: assign({
+        triggeredPhases: ({ context, event }) => {
+          if (event.type !== 'CONSUME_PHASE') return context.triggeredPhases;
+          if (context.triggeredPhases.includes(event.phaseKey)) {
+            return context.triggeredPhases;
+          }
+          return [...context.triggeredPhases, event.phaseKey];
+        },
+        consumedPhases: ({ context, event }) => {
+          if (event.type !== 'CONSUME_PHASE') return context.consumedPhases;
+          if (context.consumedPhases.includes(event.phaseKey)) {
+            return context.consumedPhases;
+          }
+          console.log('[workoutMachine] CONSUME_PHASE:', event.phaseKey);
+          return [...context.consumedPhases, event.phaseKey];
+        }
+      })
+    },
+    RESET_MUSIC_TRIGGERS: {
+      actions: assign({
+        triggeredPhases: () => {
+          console.log('[workoutMachine] RESET_MUSIC_TRIGGERS: clearing all');
+          return [];
+        },
+        consumedPhases: () => [],
+        lastResetRoundIndex: () => -1
+      })
+    },
+    CLEAR_TRIGGERED_ONLY: {
+      actions: assign({
+        triggeredPhases: ({ context }) => {
+          console.log('[workoutMachine] CLEAR_TRIGGERED_ONLY: preserving consumedPhases:', context.consumedPhases);
+          return [];
+        }
+      })
+    }
   }
 },
 {
@@ -625,3 +712,33 @@ export const workoutMachine = createMachine({
     }
   }
 });
+
+// =============================================================================
+// Helper Functions for Music Trigger State
+// =============================================================================
+
+/**
+ * Checks if a phase has been triggered in the workout context.
+ */
+export function isPhaseTriggered(context: WorkoutContext, phaseKey: string): boolean {
+  return context.triggeredPhases.includes(phaseKey);
+}
+
+/**
+ * Checks if a phase has been consumed in the workout context.
+ */
+export function isPhaseConsumed(context: WorkoutContext, phaseKey: string): boolean {
+  return context.consumedPhases.includes(phaseKey);
+}
+
+/**
+ * Creates a phase key string from components.
+ */
+export function createPhaseKey(
+  type: 'preview' | 'exercise' | 'rest' | 'setBreak',
+  roundIndex: number,
+  phaseIndex: number,
+  setNumber: number
+): string {
+  return `${type}-${roundIndex}-${phaseIndex}-${setNumber}`;
+}

@@ -47,9 +47,20 @@ export {
 } from './types';
 
 // =============================================================================
-// Controller
+// Controller (Stateless Functions)
 // =============================================================================
 
+// New stateless functions - use these with workout machine context
+export {
+  createPhaseKey,
+  serializeKey,
+  getTriggerConfig,
+  evaluateTrigger,
+  shouldTriggerCountdown,
+  getCountdownInfo,
+} from './MusicTriggerController';
+
+// Legacy singleton - deprecated, kept for backwards compatibility
 export { MusicTriggerController, musicTriggerController } from './MusicTriggerController';
 
 // =============================================================================

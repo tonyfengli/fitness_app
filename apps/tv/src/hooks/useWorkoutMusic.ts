@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { CircuitConfig } from '@acme/db';
 import { useMusic } from '../providers/MusicProvider';
 import {
-  musicTriggerController,
+  createPhaseKey,
+  serializeKey,
+  getTriggerConfig,
+  evaluateTrigger,
   type PhaseType,
   type PhaseKey,
   type RoundMusicConfig,
@@ -171,6 +174,10 @@ interface WorkoutState {
     isStarted: boolean;
     /** Actual remaining time in current phase (from state machine timer) */
     timeRemaining?: number;
+    /** Music trigger phases that have been triggered - from machine context */
+    triggeredPhases: string[];
+    /** Music trigger phases that have been consumed - from machine context */
+    consumedPhases: string[];
   };
 }
 
@@ -181,6 +188,8 @@ interface UseWorkoutMusicProps {
   circuitConfig: CircuitConfig | null | undefined;
   /** Whether music triggers are enabled */
   enabled?: boolean;
+  /** Function to send events to the workout machine */
+  send: (event: { type: string; phaseKey?: string }) => void;
 }
 
 /**
@@ -221,8 +230,8 @@ function getRoundMusicConfig(
  * Hook that bridges workout state to music triggers.
  *
  * Watches the workout machine state and evaluates music triggers when
- * the phase changes. Uses MusicTriggerController for trigger evaluation
- * and deduplication.
+ * the phase changes. Uses stateless evaluateTrigger function with
+ * phase state from the workout machine context.
  *
  * @example
  * ```tsx
@@ -230,6 +239,7 @@ function getRoundMusicConfig(
  *   workoutState: state,
  *   circuitConfig,
  *   enabled: isMusicEnabled,
+ *   send: send,  // from useMachine
  * });
  * ```
  */
@@ -237,6 +247,7 @@ export function useWorkoutMusic({
   workoutState,
   circuitConfig,
   enabled = true,
+  send,
 }: UseWorkoutMusicProps) {
   const {
     playWithTrigger,
@@ -249,40 +260,45 @@ export function useWorkoutMusic({
 
   // Track previous enabled state to detect re-enable
   const prevEnabledRef = useRef(enabled);
-  // Track previous state to detect transitions
-  const prevStateRef = useRef(workoutState.value);
+
 
   // When user re-enables music (enabled goes false → true), clear triggered phases
   // but preserve consumed phases (from countdown flow)
   useEffect(() => {
     if (enabled && !prevEnabledRef.current) {
-      // Use clearTriggeredOnly instead of reset to preserve consumed phases
-      // This prevents double-firing when countdown flow enables music
-      musicTriggerController.clearTriggeredOnly();
+      // Send event to clear triggered phases only
+      send({ type: 'CLEAR_TRIGGERED_ONLY' });
     }
     prevEnabledRef.current = enabled;
-  }, [enabled]);
+  }, [enabled, send]);
 
-  // Reset controller when entering roundPreview (new round)
-  useEffect(() => {
-    const currentState = workoutState.value;
-    const prevState = prevStateRef.current;
-    const { currentRoundIndex } = workoutState.context;
-
-    if (currentState === 'roundPreview' && prevState !== 'roundPreview') {
-      console.log('[useWorkoutMusic] Entering roundPreview - resetting for round', currentRoundIndex);
-      musicTriggerController.resetForRound(currentRoundIndex);
-    }
-
-    prevStateRef.current = currentState;
-  }, [workoutState.value, workoutState.context.currentRoundIndex]);
+  // Callback to mark a phase as triggered
+  const markTriggered = useCallback((phaseKey: string) => {
+    send({ type: 'MARK_PHASE_TRIGGERED', phaseKey });
+  }, [send]);
 
   // Main trigger evaluation effect
   useEffect(() => {
     const { value: stateValue, context } = workoutState;
-    const { currentRoundIndex, currentExerciseIndex, currentSetNumber, isPaused } = context;
+    const {
+      currentRoundIndex,
+      currentExerciseIndex,
+      currentSetNumber,
+      isPaused,
+      triggeredPhases,
+      consumedPhases,
+    } = context;
 
-    console.log('[useWorkoutMusic] State changed:', { stateValue, currentRoundIndex, currentExerciseIndex, currentSetNumber, isPaused, enabled });
+    console.log('[useWorkoutMusic] State changed:', {
+      stateValue,
+      currentRoundIndex,
+      currentExerciseIndex,
+      currentSetNumber,
+      isPaused,
+      enabled,
+      triggeredPhases: triggeredPhases.length,
+      consumedPhases: consumedPhases.length,
+    });
 
     // Map state to phase type
     const phaseType = mapStateToPhaseType(stateValue);
@@ -299,8 +315,8 @@ export function useWorkoutMusic({
       phaseIndex = currentSetNumber - 1;
     }
 
-    // Create phase key for controller
-    const phase: PhaseKey = musicTriggerController.createPhaseKey(
+    // Create phase key
+    const phase: PhaseKey = createPhaseKey(
       phaseType,
       currentRoundIndex,
       phaseIndex,
@@ -318,7 +334,7 @@ export function useWorkoutMusic({
 
     // Check if this phase has natural ending configured AND we're on the last set
     // Natural ending overshoot only applies when both conditions are true
-    const triggerConfig = musicTriggerController.getTriggerConfig(musicConfig, phase);
+    const triggerConfig = getTriggerConfig(musicConfig, phase);
     const isLastSet = currentSetNumber >= totalSets;
     const hasNaturalEnding = triggerConfig?.naturalEnding && isLastSet;
 
@@ -335,8 +351,8 @@ export function useWorkoutMusic({
       hasNaturalEnding
     );
 
-    // Evaluate trigger using controller
-    const action = musicTriggerController.evaluateTrigger(phase, musicConfig, {
+    // Evaluate trigger using stateless function with machine context
+    const action = evaluateTrigger(phase, musicConfig, triggeredPhases, consumedPhases, {
       isEnabled: enabled,
       isPaused,
       currentSetNumber,
@@ -346,6 +362,8 @@ export function useWorkoutMusic({
 
     console.log('[useWorkoutMusic] Action:', action);
 
+    const phaseKey = serializeKey(phase);
+
     // Handle action
     switch (action.type) {
       case 'none':
@@ -353,8 +371,8 @@ export function useWorkoutMusic({
         break;
 
       case 'play': {
-        console.log('[useWorkoutMusic] FIRING play for phase:', musicTriggerController.serializeKey(phase));
-        musicTriggerController.markTriggered(phase);
+        console.log('[useWorkoutMusic] FIRING play for phase:', phaseKey);
+        markTriggered(phaseKey);
 
         // Skip if preview with same energy already playing (optimization)
         // BUT don't skip if natural ending is active - let it queue in playWithTrigger
@@ -374,8 +392,8 @@ export function useWorkoutMusic({
       }
 
       case 'riseCountdown':
-        console.log('[useWorkoutMusic] FIRING Rise countdown for phase:', musicTriggerController.serializeKey(phase));
-        musicTriggerController.markTriggered(phase);
+        console.log('[useWorkoutMusic] FIRING Rise countdown for phase:', phaseKey);
+        markTriggered(phaseKey);
         setRiseCountdownActive(true);
         playWithTrigger({
           energy: 'medium',
@@ -385,8 +403,8 @@ export function useWorkoutMusic({
         break;
 
       case 'highCountdown':
-        console.log('[useWorkoutMusic] FIRING High countdown for phase:', musicTriggerController.serializeKey(phase));
-        musicTriggerController.markTriggered(phase);
+        console.log('[useWorkoutMusic] FIRING High countdown for phase:', phaseKey);
+        markTriggered(phaseKey);
         startHighCountdown({
           energy: 'high',
           trackId: action.trackId,
@@ -405,6 +423,8 @@ export function useWorkoutMusic({
     workoutState.context.currentExerciseIndex,
     workoutState.context.currentSetNumber,
     workoutState.context.isPaused,
+    workoutState.context.triggeredPhases,
+    workoutState.context.consumedPhases,
     circuitConfig,
     enabled,
     playWithTrigger,
@@ -413,12 +433,13 @@ export function useWorkoutMusic({
     isPlaying,
     currentEnergy,
     isNaturalEndingActive,
+    markTriggered,
   ]);
 
-  // Reset controller when workout ends
+  // Reset triggers when workout ends
   useEffect(() => {
     if (workoutState.value === 'idle' || workoutState.value === 'workoutComplete') {
-      musicTriggerController.reset();
+      send({ type: 'RESET_MUSIC_TRIGGERS' });
     }
-  }, [workoutState.value]);
+  }, [workoutState.value, send]);
 }
