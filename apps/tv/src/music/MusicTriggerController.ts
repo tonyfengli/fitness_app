@@ -78,6 +78,7 @@ export class MusicTriggerController {
    */
   consumePhase(phase: PhaseKey): void {
     const key = this.serializeKey(phase);
+    console.log('[MusicTriggerController] consumePhase:', key, '| currentRoundIndex:', this.currentRoundIndex);
     this.consumedPhases.add(key);
     this.triggeredPhases.add(key); // Also mark as triggered
   }
@@ -86,23 +87,31 @@ export class MusicTriggerController {
    * Checks if a phase has been consumed.
    */
   isConsumed(phase: PhaseKey): boolean {
-    return this.consumedPhases.has(this.serializeKey(phase));
+    const key = this.serializeKey(phase);
+    const consumed = this.consumedPhases.has(key);
+    console.log('[MusicTriggerController] isConsumed:', key, '=', consumed, '| consumedPhases:', Array.from(this.consumedPhases), '| currentRoundIndex:', this.currentRoundIndex);
+    return consumed;
   }
 
   /**
    * Resets deduplication state for a new round.
    * Called when entering roundPreview.
    *
-   * Only clears triggeredPhases, NOT consumedPhases.
-   * Consumed phases represent triggers played early via countdown flow
-   * and should persist until full reset() (workout end).
+   * Clears both triggeredPhases and consumedPhases when round changes.
+   * This allows triggers (including Rise/High countdowns) to fire again
+   * when navigating to a different round.
+   *
+   * Same-round re-entry (e.g., going back to preview within the same round)
+   * does NOT clear anything - consumed phases persist within a round.
    */
   resetForRound(roundIndex: number): void {
-    if (roundIndex !== this.currentRoundIndex) {
+    const willReset = roundIndex !== this.currentRoundIndex;
+    console.log('[MusicTriggerController] resetForRound:', roundIndex, '| currentRoundIndex:', this.currentRoundIndex, '| willReset:', willReset, '| consumedPhases before:', Array.from(this.consumedPhases));
+    if (willReset) {
       this.triggeredPhases.clear();
-      // consumedPhases intentionally NOT cleared - countdown flow may have
-      // consumed triggers before roundPreview state transition
+      this.consumedPhases.clear();
       this.currentRoundIndex = roundIndex;
+      console.log('[MusicTriggerController] resetForRound CLEARED - new currentRoundIndex:', this.currentRoundIndex);
     }
   }
 
@@ -110,6 +119,7 @@ export class MusicTriggerController {
    * Clears all deduplication state.
    */
   reset(): void {
+    console.log('[MusicTriggerController] reset() called - clearing all state. Was:', { consumedPhases: Array.from(this.consumedPhases), currentRoundIndex: this.currentRoundIndex });
     this.triggeredPhases.clear();
     this.consumedPhases.clear();
     this.currentRoundIndex = -1;
@@ -118,13 +128,12 @@ export class MusicTriggerController {
   /**
    * Clears only triggered phases, preserving consumed phases.
    * Used when music is re-enabled - we want normal triggers to re-fire,
-   * but consumed phases (from countdown flow) should stay blocked.
+   * but consumed phases (from countdown flow) should stay blocked
+   * until round changes or workout restarts.
    */
   clearTriggeredOnly(): void {
+    console.log('[MusicTriggerController] clearTriggeredOnly() - preserving consumedPhases:', Array.from(this.consumedPhases));
     this.triggeredPhases.clear();
-    // consumedPhases intentionally NOT cleared - these represent
-    // triggers that were played early via countdown and should
-    // remain blocked until round changes
   }
 
   // =============================================================================

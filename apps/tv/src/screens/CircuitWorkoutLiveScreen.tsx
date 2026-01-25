@@ -95,6 +95,17 @@ export function CircuitWorkoutLiveScreen() {
     setIsSettingsPanelOpen(false);
   }, []);
 
+  // Reset music trigger controller on mount to clear consumed phases from previous sessions
+  // This ensures Rise/High countdowns work properly when re-entering the workout
+  // Also initialize currentRoundIndex to starting round for consistent same-round behavior
+  useEffect(() => {
+    const startingRoundIndex = state.context.currentRoundIndex;
+    console.log('[CircuitWorkoutLiveScreen] Resetting music trigger controller on mount, initializing to round', startingRoundIndex);
+    musicTriggerController.reset();
+    // Set currentRoundIndex so same-round re-entry consistently does NOT reset
+    musicTriggerController.resetForRound(startingRoundIndex);
+  }, []);
+
   // Toggle settings panel with animation
   const toggleSettingsPanel = () => {
     LayoutAnimation.configureNext({
@@ -725,6 +736,12 @@ export function CircuitWorkoutLiveScreen() {
   // Rise = medium energy + useBuildup (buildup from medium to high)
   // High = high energy + showHighCountdown (duck current music, countdown, drop)
   const handleRiseAwareStart = useCallback(() => {
+    // Only handle start from roundPreview - if already in exercise, do nothing
+    if (state.value !== 'roundPreview') {
+      console.log('[handleRiseAwareStart] Not in roundPreview (state:', state.value, '), ignoring');
+      return;
+    }
+
     setIsSettingsPanelOpen(false);
 
     // Check if countdown is configured for current round's first exercise
@@ -747,6 +764,15 @@ export function CircuitWorkoutLiveScreen() {
 
     console.log('[handleRiseAwareStart] exercise1Trigger:', JSON.stringify(exercise1Trigger, null, 2));
     console.log('[handleRiseAwareStart] hasRiseConfigured:', hasRiseConfigured, 'hasHighConfigured:', hasHighConfigured);
+
+    // Early exit if phase is already consumed (prevents re-triggering countdown)
+    const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+    if (musicTriggerController.isConsumed(exercisePhase)) {
+      console.log('[handleRiseAwareStart] Phase already consumed, skipping countdown');
+      // Just ensure workout is running (no-op if already running)
+      send({ type: 'START_WORKOUT' });
+      return;
+    }
 
     if (hasRiseConfigured && !isRiseCountdownActive) {
       console.log('[CircuitWorkoutLiveScreen] Rise configured, triggering Rise countdown');
@@ -798,7 +824,7 @@ export function CircuitWorkoutLiveScreen() {
       // No countdown configured, proceed normally
       send({ type: 'START_WORKOUT' });
     }
-  }, [circuitConfig, state.context.currentRoundIndex, state.context.currentSetNumber, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
+  }, [circuitConfig, state.value, state.context.currentRoundIndex, state.context.currentSetNumber, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
 
   // Auto-focus close button when modal opens, restore focus when modal closes
   useEffect(() => {

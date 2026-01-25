@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { musicService, MusicTrack, MusicSegment, EnergyLevel } from '../services/MusicService';
 import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
 import { api } from './TRPCProvider';
+import { musicTriggerController } from '../music';
 
 const DOWNLOADED_FILENAMES_KEY = '@music_downloaded_filenames';
 
@@ -492,8 +493,17 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     naturalEnding?: boolean;
     /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
     roundEndTime?: number;
+    /** Internal: retry count to prevent infinite loops */
+    _retryCount?: number;
   }) => {
-    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime } = options;
+    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, _retryCount = 0 } = options;
+
+    // Prevent infinite retry loops (max 2 retries = 200ms total)
+    const MAX_RETRIES = 2;
+    if (_retryCount >= MAX_RETRIES) {
+      console.error('[MusicProvider] playWithTrigger MAX_RETRIES exceeded, giving up');
+      return;
+    }
 
     console.log('[MusicProvider] playWithTrigger called:', {
       energy,
@@ -544,7 +554,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         await musicService.stop(true); // Immediate stop
         isStartingRef.current = false;
       } else {
-        console.log('[MusicProvider] playWithTrigger BLOCKED - already starting');
+        // Schedule retry instead of silently failing
+        // This handles race conditions where isStartingRef is temporarily true
+        console.log('[MusicProvider] playWithTrigger BLOCKED - scheduling retry in 100ms (attempt', _retryCount + 1, ')');
+        setTimeout(() => {
+          playWithTrigger({ ...options, _retryCount: _retryCount + 1 });
+        }, 100);
         return;
       }
     }
@@ -910,18 +925,40 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [tracks.length, isPlaying, start]);
 
-  // Stop music
+  // Stop music - full reset, allows countdowns to fire again
   const stop = useCallback(async () => {
+    console.log('[MusicProvider] stop() called - full reset');
+
+    // 1. Cancel any active countdowns
+    if (isHighCountdownActive) {
+      // Restore volume if ducked
+      musicService.setVolume(originalVolumeRef.current);
+      setPendingHighTrigger(null);
+      setIsHighCountdownActive(false);
+    }
+    setIsRiseCountdownActive(false);
+
+    // 2. Clear all state
     setIsEnabled(false);
     setIsPaused(false);
     clearBuildupCountdown();
     naturalEndingActiveRef.current = false;
     setIsNaturalEndingActive(false);
+
+    // 3. Clear pending triggers
+    pendingTriggerRef.current = null;
+    clearPendingTriggerTimeout();
+
+    // 4. Reset trigger controller (allows countdowns to fire again on same round)
+    musicTriggerController.reset();
+    console.log('[MusicProvider] Trigger controller reset');
+
+    // 5. Stop audio
     await musicService.stop();
     setIsPlaying(false);
     setCurrentTrack(null);
     setCurrentSegment(null);
-  }, [clearBuildupCountdown]);
+  }, [clearBuildupCountdown, clearPendingTriggerTimeout, isHighCountdownActive]);
 
   // Enable music without playing
   const enable = useCallback(() => {
@@ -930,13 +967,32 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Pause music (does NOT change isEnabled - that controls trigger firing)
+  // Cancels active countdowns but preserves consumed state (won't re-trigger on resume)
   const pause = useCallback(() => {
+    console.log('[MusicProvider] pause() called');
+
+    // Cancel active countdowns (preserve consumed state - won't re-trigger on resume)
+    if (isHighCountdownActive) {
+      console.log('[MusicProvider] Cancelling high countdown on pause');
+      // Restore volume if ducked
+      musicService.setVolume(originalVolumeRef.current);
+      setPendingHighTrigger(null);
+      setIsHighCountdownActive(false);
+      setDropTime(null);
+    }
+    if (isRiseCountdownActive) {
+      console.log('[MusicProvider] Cancelling rise countdown on pause');
+      setIsRiseCountdownActive(false);
+      clearBuildupCountdown();
+    }
+
+    // Pause audio
     if (isPlaying && !isPaused) {
       musicService.pause();
       setIsPaused(true);
       setIsPlaying(false);
     }
-  }, [isPlaying, isPaused]);
+  }, [isPlaying, isPaused, isHighCountdownActive, isRiseCountdownActive, clearBuildupCountdown]);
 
   // Resume music (does NOT change isEnabled - that controls trigger firing)
   const resume = useCallback(() => {
