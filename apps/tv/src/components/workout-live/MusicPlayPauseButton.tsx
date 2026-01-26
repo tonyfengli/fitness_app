@@ -49,16 +49,27 @@ export function MusicPlayPauseButton({
   isStationsExercise = false,
 }: MusicPlayPauseButtonProps) {
   const handlePress = () => {
+    console.log('[MusicPlayPauseButton] handlePress called', {
+      isMusicPlaying,
+      isMusicPaused,
+      currentTrack: currentTrack?.name ?? null,
+      workoutStateValue,
+      timestamp: Date.now(),
+    });
+
     if (isMusicPlaying) {
       // PAUSE: Disable music triggers and pause audio
+      console.log('[MusicPlayPauseButton] Taking PAUSE path - isMusicPlaying is true');
       send({ type: 'SET_MUSIC_ENABLED', enabled: false });
       pauseMusic();
     } else {
       // PLAY: Enable music and start/resume audio
+      console.log('[MusicPlayPauseButton] Taking PLAY path - isMusicPlaying is false');
       const isPreview = workoutStateValue === 'roundPreview';
 
       if (isPreview) {
         // From preview: musicStartedFromPreview = true (countdowns allowed)
+        console.log('[MusicPlayPauseButton] PLAY from preview');
         send({ type: 'SET_MUSIC_ENABLED', enabled: true });
       } else {
         // Mid-workout: musicStartedFromPreview = false (no countdowns)
@@ -77,14 +88,18 @@ export function MusicPlayPauseButton({
             phaseIndex,
             currentSetNumber
           );
+          console.log('[MusicPlayPauseButton] PLAY mid-workout, consuming phase:', serializeKey(phase));
           send({ type: 'ENABLE_MUSIC_AND_CONSUME', phaseKey: serializeKey(phase) });
         } else {
           // Fallback: just enable (shouldn't happen in normal flow)
+          console.log('[MusicPlayPauseButton] PLAY fallback path');
           send({ type: 'SET_MUSIC_ENABLED', enabled: true });
         }
       }
 
+      console.log('[MusicPlayPauseButton] Calling playOrResume()');
       playOrResume();
+      console.log('[MusicPlayPauseButton] playOrResume() returned (async operation started)');
     }
   };
 

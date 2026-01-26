@@ -95,6 +95,9 @@ interface MusicContextValue {
   completeHighCountdown: () => Promise<void>;
   cancelHighCountdown: () => void;
 
+  // Rise from Rest - music plays during rest, drop hits when exercise starts
+  playRiseFromRest: (options: { trackId?: string; restDurationSec: number }) => Promise<void>;
+
   // Rise countdown methods (for screen-level overlay)
   setRiseCountdownActive: (active: boolean) => void;
   seekToHighSegment: () => void; // Seek current track to high energy segment (for skip)
@@ -726,6 +729,95 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setIsHighCountdownActive(true);
   }, []);
 
+  // Rise from Rest - music plays during rest, drop hits exactly when exercise starts
+  // Seeks to: highSegment.timestamp - restDurationSec
+  const playRiseFromRest = useCallback(async (options: { trackId?: string; restDurationSec: number }) => {
+    const { trackId, restDurationSec } = options;
+    console.log('[MusicProvider] playRiseFromRest called:', { trackId, restDurationSec });
+
+    if (restDurationSec <= 0) {
+      console.warn('[MusicProvider] playRiseFromRest - invalid rest duration:', restDurationSec);
+      return;
+    }
+
+    // Get downloaded tracks
+    const downloadedTracks = (tracks || []).filter(t =>
+      downloadedFilenames.has(t.filename)
+    ) as MusicTrack[];
+
+    let track: MusicTrack | undefined;
+
+    if (trackId) {
+      // Use specific track
+      track = downloadedTracks.find(t => t.id === trackId);
+      if (!track) {
+        console.warn('[MusicProvider] playRiseFromRest - specific track not found:', trackId);
+        return;
+      }
+    } else {
+      // Pick random track from compatible pool
+      const compatibleTracks = downloadedTracks.filter(t => {
+        const highSegments = t.segments?.filter(s => s.energy === 'high') || [];
+        return highSegments.some(s => s.timestamp >= restDurationSec);
+      });
+
+      if (compatibleTracks.length === 0) {
+        console.warn('[MusicProvider] playRiseFromRest - no compatible tracks found for rest duration:', restDurationSec);
+        return;
+      }
+
+      track = compatibleTracks[Math.floor(Math.random() * compatibleTracks.length)];
+    }
+
+    if (!track) {
+      console.warn('[MusicProvider] playRiseFromRest - no track selected');
+      return;
+    }
+
+    // Find all valid high segments (timestamp >= restDurationSec)
+    const validHighSegments = (track.segments || [])
+      .filter(s => s.energy === 'high' && s.timestamp >= restDurationSec);
+
+    if (validHighSegments.length === 0) {
+      console.warn('[MusicProvider] playRiseFromRest - no valid high segments for track:', track.name);
+      return;
+    }
+
+    // Pick random from valid high segments
+    const highSegment = validHighSegments[Math.floor(Math.random() * validHighSegments.length)]!;
+
+    // Calculate seek position: drop hits exactly when rest ends
+    const seekTimestamp = highSegment.timestamp - restDurationSec;
+
+    console.log('[MusicProvider] playRiseFromRest - precision calc:', {
+      track: track.name,
+      highSegmentTimestamp: highSegment.timestamp,
+      restDurationSec,
+      seekTimestamp,
+    });
+
+    // Find the segment at the seek point (for energy state tracking)
+    const segmentAtSeek = findSegmentAtTimestamp(track.segments || [], seekTimestamp);
+
+    // Create segment with seek timestamp
+    const playSegment: MusicSegment = {
+      ...segmentAtSeek,
+      timestamp: seekTimestamp,
+    } as MusicSegment;
+
+    // Enable and play
+    setIsEnabled(true);
+    setCurrentTrack(track);
+    setCurrentSegment(playSegment);
+    setCurrentEnergy(segmentAtSeek?.energy || 'high');
+
+    await musicService.play(track, { segment: playSegment, useBuildup: false });
+    setIsPlaying(true);
+    setIsPaused(false);
+
+    console.log('[MusicProvider] playRiseFromRest - playing:', track.name, 'from', seekTimestamp, 's');
+  }, [tracks, downloadedFilenames, findSegmentAtTimestamp]);
+
   // Prepare high audio early (called ~1s before countdown completes to account for loading latency)
   const prepareHighAudio = useCallback(async () => {
     console.log('[MusicProvider] prepareHighAudio called, pendingHighTrigger:', pendingHighTrigger);
@@ -1157,6 +1249,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     prepareHighAudio,
     completeHighCountdown,
     cancelHighCountdown,
+    playRiseFromRest,
     seekToHighSegment,
     clearNaturalEnding,
   };

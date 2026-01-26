@@ -98,6 +98,10 @@ export function evaluateTrigger(
     totalSets: number;
     /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
     roundEndTime?: number;
+    /** Rest duration in seconds - for Rise from Rest calculation */
+    restDurationSec?: number;
+    /** Next exercise trigger config - for Rise from Rest look-ahead */
+    nextExerciseTrigger?: MusicTrigger;
   }
 ): TriggerAction {
   const phaseKey = serializePhaseKey(phase);
@@ -144,8 +148,9 @@ export function evaluateTrigger(
   // Determine countdown type
   const countdownType = inferCountdownType(trigger);
 
-  // Check for countdown triggers (only on exercise 0)
+  // Check for countdown triggers on exercise phases
   if (phase.type === 'exercise' && phase.phaseIndex === 0 && countdownType) {
+    // Exercise 0: Traditional Rise or High countdown
     if (countdownType === 'rise') {
       return {
         type: 'riseCountdown',
@@ -158,6 +163,20 @@ export function evaluateTrigger(
         type: 'highCountdown',
         trackId: trigger.trackId,
         durationMs: 4500,
+      };
+    }
+  }
+
+  // Rise from Rest: Check on REST phase entry
+  // Look ahead to see if the NEXT exercise has Rise from Rest configured
+  // Rise from Rest = exercise trigger with useBuildup + high energy (exercise 2+)
+  if (phase.type === 'rest' && context.nextExerciseTrigger) {
+    const nextTrigger = context.nextExerciseTrigger;
+    if (nextTrigger.enabled && nextTrigger.useBuildup && nextTrigger.energy === 'high') {
+      return {
+        type: 'riseFromRest',
+        trackId: nextTrigger.trackId,
+        restDurationSec: context.restDurationSec ?? 0,
       };
     }
   }

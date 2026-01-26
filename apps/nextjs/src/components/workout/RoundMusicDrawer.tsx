@@ -230,6 +230,112 @@ export function RoundMusicDrawer({
     return { compatible: true };
   }, [calculateRemainingSetDuration]);
 
+  /**
+   * Get rest duration for the current round (in seconds).
+   */
+  const restDuration = useMemo((): number => {
+    if (!circuitConfig?.config?.roundTemplates) return 0;
+    const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
+      (rt) => rt.roundNumber === roundNumber
+    );
+    return roundConfig?.template?.restDuration ?? 0;
+  }, [circuitConfig, roundNumber]);
+
+  /**
+   * Get all track IDs used in any phase across the ENTIRE workout (all rounds).
+   * Used to determine "unused" tracks for Rise from Rest selection.
+   */
+  const usedTrackIds = useMemo((): Set<string> => {
+    const ids = new Set<string>();
+    if (!circuitConfig?.config?.roundTemplates) return ids;
+
+    for (const rt of circuitConfig.config.roundTemplates as any[]) {
+      const music = rt.music as RoundMusicConfig | undefined;
+      if (!music) continue;
+
+      // Check roundPreview
+      if (music.roundPreview?.trackId) ids.add(music.roundPreview.trackId);
+
+      // Check exercises
+      music.exercises?.forEach((t) => { if (t.trackId) ids.add(t.trackId); });
+
+      // Check rests
+      music.rests?.forEach((t) => { if (t.trackId) ids.add(t.trackId); });
+
+      // Check setBreaks
+      music.setBreaks?.forEach((t) => { if (t.trackId) ids.add(t.trackId); });
+    }
+
+    return ids;
+  }, [circuitConfig]);
+
+  /**
+   * Check if a track is compatible with Rise from Rest for exercise 2+.
+   * Rise from Rest seeks to: highSegment.timestamp - restDuration
+   * Track is compatible if it has a high segment where timestamp >= restDuration.
+   */
+  const getTrackRiseFromRestCompatibility = useCallback((
+    track: MusicTrack
+  ): { compatible: boolean; reason?: string; validHighSegments: number[] } => {
+    if (!track.segments || track.segments.length === 0) {
+      return { compatible: false, reason: "No segments", validHighSegments: [] };
+    }
+
+    if (restDuration <= 0) {
+      return { compatible: false, reason: "No rest before exercise", validHighSegments: [] };
+    }
+
+    // Find all high segments where timestamp >= restDuration
+    const highSegments = track.segments.filter(s => s.energy === "high");
+    if (highSegments.length === 0) {
+      return { compatible: false, reason: "No high energy segments", validHighSegments: [] };
+    }
+
+    const validHighSegments = highSegments
+      .filter(s => s.timestamp >= restDuration)
+      .map(s => s.timestamp);
+
+    if (validHighSegments.length === 0) {
+      return {
+        compatible: false,
+        reason: `Rest too long (${restDuration}s) - no valid drop points`,
+        validHighSegments: []
+      };
+    }
+
+    return { compatible: true, validHighSegments };
+  }, [restDuration]);
+
+  /**
+   * Get unused tracks that are compatible with Rise from Rest.
+   */
+  const riseFromRestCompatibleTracks = useMemo(() => {
+    if (!tracks || restDuration <= 0) return [];
+    return (tracks as MusicTrack[]).filter((track) => {
+      // Must not be used anywhere in the workout
+      if (usedTrackIds.has(track.id)) return false;
+      // Must be compatible with Rise from Rest timing
+      const { compatible } = getTrackRiseFromRestCompatibility(track);
+      return compatible;
+    });
+  }, [tracks, usedTrackIds, getTrackRiseFromRestCompatibility, restDuration]);
+
+  /**
+   * Check if Rise from Rest is available for exercises 2+.
+   * Requirements:
+   * 1. restDuration > 0 (there is a rest before the exercise)
+   * 2. At least one unused compatible track exists
+   */
+  const isRiseFromRestAvailable = useMemo((): { available: boolean; reason?: string } => {
+    if (restDuration <= 0) {
+      return { available: false, reason: "No rest between exercises" };
+    }
+    if (riseFromRestCompatibleTracks.length === 0) {
+      return { available: false, reason: "No compatible tracks available" };
+    }
+    return { available: true };
+  }, [restDuration, riseFromRestCompatibleTracks]);
+
   // Generate phases
   const phases = useMemo((): Phase[] => {
     const result: Phase[] = [];
@@ -1076,65 +1182,99 @@ export function RoundMusicDrawer({
                   </button>
                 )}
 
-                {/* Rise Countdown - Only for exercise phases (index 0 = first exercise), auto-selects Rise energy */}
-                {viewState.phase.phaseType === "exercise" && viewState.phase.index === 0 && (
-                  <button
-                    onClick={() => {
-                      const newValue = !detailUseBuildup;
-                      setDetailUseBuildup(newValue);
-                      // Auto-select Rise (medium) energy when enabling Rise countdown
-                      if (newValue) {
-                        setDetailEnergy("medium");
-                        // Disable High countdown (mutually exclusive)
-                        setDetailShowHighCountdown(false);
-                      }
-                    }}
-                    className={cn(
-                      "w-full p-4 rounded-xl transition-all text-left",
-                      detailUseBuildup
-                        ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300 dark:ring-amber-700"
-                        : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          Rise countdown
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                          Buildup → 3-2-1 → Drop into high energy
-                        </p>
-                      </div>
-                      <div
-                        className={cn(
-                          "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                          detailUseBuildup ? "bg-amber-500" : "bg-gray-200 dark:bg-gray-700"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                            detailUseBuildup ? "translate-x-6" : "translate-x-1"
-                          )}
-                        />
-                      </div>
-                    </div>
+                {/* Rise Countdown - For exercise phases */}
+                {/* Exercise 0: Traditional Rise (medium buildup → 3-2-1 → drop) */}
+                {/* Exercise 2+: Rise from Rest (music plays during rest, drop hits when exercise starts) */}
+                {viewState.phase.phaseType === "exercise" && (() => {
+                  const isFirstExercise = viewState.phase.index === 0;
+                  const isRiseDisabled = !isFirstExercise && !isRiseFromRestAvailable.available;
 
-                    {/* Buildup info */}
-                    {detailUseBuildup && (
-                      <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <p className="text-sm text-amber-700 dark:text-amber-300">
-                            Music starts at the buildup, countdown appears at 3 seconds before the drop
+                  return (
+                    <button
+                      onClick={() => {
+                        if (isRiseDisabled) return;
+                        const newValue = !detailUseBuildup;
+                        setDetailUseBuildup(newValue);
+                        // Auto-select energy based on exercise type
+                        if (newValue) {
+                          // Exercise 0: medium energy for traditional Rise
+                          // Exercise 2+: high energy for Rise from Rest (drop target)
+                          setDetailEnergy(isFirstExercise ? "medium" : "high");
+                          // Disable High countdown (mutually exclusive)
+                          setDetailShowHighCountdown(false);
+                        }
+                      }}
+                      disabled={isRiseDisabled}
+                      className={cn(
+                        "w-full p-4 rounded-xl transition-all text-left",
+                        isRiseDisabled
+                          ? "bg-gray-100 dark:bg-gray-800/30 cursor-not-allowed opacity-50"
+                          : detailUseBuildup
+                            ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300 dark:ring-amber-700"
+                            : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "font-medium",
+                            isRiseDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
+                          )}>
+                            {isFirstExercise ? "Rise countdown" : "Rise from rest"}
+                          </p>
+                          <p className={cn(
+                            "text-sm mt-0.5",
+                            isRiseDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"
+                          )}>
+                            {isFirstExercise
+                              ? "Buildup → 3-2-1 → Drop into high energy"
+                              : isRiseDisabled
+                                ? isRiseFromRestAvailable.reason
+                                : "Music plays during rest, drop hits when exercise starts"}
                           </p>
                         </div>
+                        <div
+                          className={cn(
+                            "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                            isRiseDisabled
+                              ? "bg-gray-200 dark:bg-gray-700"
+                              : detailUseBuildup
+                                ? "bg-amber-500"
+                                : "bg-gray-200 dark:bg-gray-700"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                              detailUseBuildup && !isRiseDisabled ? "translate-x-6" : "translate-x-1"
+                            )}
+                          />
+                        </div>
                       </div>
-                    )}
-                  </button>
-                )}
+
+                      {/* Info section */}
+                      {detailUseBuildup && !isRiseDisabled && (
+                        <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                              {isFirstExercise
+                                ? "Music starts at the buildup, countdown appears at 3 seconds before the drop"
+                                : `Music seeks so the drop hits exactly when the ${restDuration}s rest ends`}
+                            </p>
+                          </div>
+                          {!isFirstExercise && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 ml-6">
+                              {riseFromRestCompatibleTracks.length} compatible track{riseFromRestCompatibleTracks.length !== 1 ? 's' : ''} available
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {/* High Countdown - Only for exercise phases (index 0 = first exercise), auto-selects High energy */}
                 {viewState.phase.phaseType === "exercise" && viewState.phase.index === 0 && (
@@ -1398,10 +1538,38 @@ export function RoundMusicDrawer({
             ) : (
               filteredTracks.map((track) => {
                 const energyLevels = getTrackEnergyLevels(track);
-                const compatibility = detailNaturalEnding && viewState.type === "track-picker"
-                  ? getTrackNaturalEndingCompatibility(track, viewState.phase)
-                  : { compatible: true };
-                const isDisabled = detailNaturalEnding && !compatibility.compatible;
+
+                // Determine compatibility based on active mode
+                const isRiseFromRest = detailUseBuildup &&
+                  viewState.type === "track-picker" &&
+                  viewState.phase.phaseType === "exercise" &&
+                  viewState.phase.index > 0;
+
+                let compatibility: { compatible: boolean; reason?: string };
+                let isDisabled = false;
+
+                if (detailNaturalEnding && viewState.type === "track-picker") {
+                  // Natural ending compatibility
+                  compatibility = getTrackNaturalEndingCompatibility(track, viewState.phase);
+                  isDisabled = !compatibility.compatible;
+                } else if (isRiseFromRest) {
+                  // Rise from Rest compatibility (exercise 2+)
+                  // Must be unused AND have valid high segment timing
+                  if (usedTrackIds.has(track.id)) {
+                    compatibility = { compatible: false, reason: "Already used in workout" };
+                    isDisabled = true;
+                  } else {
+                    const riseCompat = getTrackRiseFromRestCompatibility(track);
+                    compatibility = {
+                      compatible: riseCompat.compatible,
+                      reason: riseCompat.reason
+                    };
+                    isDisabled = !riseCompat.compatible;
+                  }
+                } else {
+                  compatibility = { compatible: true };
+                  isDisabled = false;
+                }
 
                 return (
                   <button

@@ -257,6 +257,7 @@ export function useWorkoutMusic({
     startHighCountdown,
     setRiseCountdownActive,
     isNaturalEndingActive,
+    playRiseFromRest,
   } = useMusic();
 
   // musicEnabled now comes from XState context - atomic with trigger state
@@ -319,11 +320,17 @@ export function useWorkoutMusic({
     // Get music config for this round
     const musicConfig = getRoundMusicConfig(circuitConfig, currentRoundIndex);
 
-    // Get total sets for context
+    // Get round config for timing info
     const roundConfig = (circuitConfig?.config?.roundTemplates as any[])?.find(
       (rt) => rt.roundNumber === currentRoundIndex + 1
     );
     const totalSets = roundConfig?.template?.repeatTimes || 1;
+    const restDurationSec = roundConfig?.template?.restDuration || 0;
+
+    // For rest phases, get the next exercise's trigger config (for Rise from Rest look-ahead)
+    const nextExerciseTrigger = phaseType === 'rest'
+      ? musicConfig?.exercises?.[phaseIndex + 1]
+      : undefined;
 
     // Check if this phase has natural ending configured AND we're on the last set
     // Natural ending overshoot only applies when both conditions are true
@@ -352,6 +359,8 @@ export function useWorkoutMusic({
       currentSetNumber,
       totalSets,
       roundEndTime,
+      restDurationSec,
+      nextExerciseTrigger,
     });
 
     console.log('[useWorkoutMusic] Action:', action);
@@ -431,8 +440,24 @@ export function useWorkoutMusic({
         break;
 
       case 'riseFromRest':
-        // Future: implement rise from rest
-        console.log('[useWorkoutMusic] Rise from rest not yet implemented');
+        // Rise from Rest - music plays during rest, drop hits when exercise starts
+        // Gate with musicStartedFromPreview flag (same as other countdowns)
+        if (!musicStartedFromPreview) {
+          console.log('[useWorkoutMusic] SKIPPING Rise from Rest - music enabled mid-workout, playing directly');
+          markTriggered(phaseKey);
+          playWithTrigger({
+            energy: 'high',
+            useBuildup: false,
+            trackId: action.trackId,
+          });
+          break;
+        }
+        console.log('[useWorkoutMusic] FIRING Rise from Rest for phase:', phaseKey, 'restDuration:', action.restDurationSec);
+        markTriggered(phaseKey);
+        playRiseFromRest({
+          trackId: action.trackId,
+          restDurationSec: action.restDurationSec,
+        });
         break;
     }
   }, [
@@ -453,6 +478,7 @@ export function useWorkoutMusic({
     currentEnergy,
     isNaturalEndingActive,
     markTriggered,
+    playRiseFromRest,
   ]);
 
   // Reset triggers when workout ends
