@@ -16,6 +16,7 @@ import { useLightingControl } from '../hooks/useLightingControl';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
 import { useMusic } from '../providers/MusicProvider';
+import { MusicPlayPauseButton } from '../components/workout-live/MusicPlayPauseButton';
 // Note: Music trigger state is now managed by the workout machine context.
 // The live screen's useWorkoutMusic hook handles deduplication via
 // "isPlaying && currentEnergy === action.energy" check for preview phase.
@@ -605,6 +606,7 @@ export function CircuitWorkoutOverviewScreen() {
     stop: stopMusic,
     enable: enableMusic,
     playWithTrigger,
+    playOrResume,
   } = useMusicPlayer();
 
 
@@ -635,6 +637,7 @@ export function CircuitWorkoutOverviewScreen() {
 
   // Local trigger state for overview screen (no workout machine running)
   const [localTriggeredPhases, setLocalTriggeredPhases] = useState<string[]>([]);
+  const [localMusicEnabled, setLocalMusicEnabled] = useState(false);
 
   // Create synthetic workout state for Round 1 Preview
   // This allows useWorkoutMusic to evaluate triggers on this screen
@@ -649,19 +652,28 @@ export function CircuitWorkoutOverviewScreen() {
       // Music trigger state - uses local state since no machine is running
       triggeredPhases: localTriggeredPhases,
       consumedPhases: [] as string[],
+      // Music enabled state for useWorkoutMusic
+      musicEnabled: localMusicEnabled,
+      musicStartedFromPreview: true, // Always true since we're on overview (preview) screen
     }
-  }), [localTriggeredPhases]);
+  }), [localTriggeredPhases, localMusicEnabled]);
 
   // Handle trigger events locally since no workout machine is running
-  const handleTriggerEvent = useCallback((event: { type: string; phaseKey?: string }) => {
+  const handleTriggerEvent = useCallback((event: { type: string; phaseKey?: string; enabled?: boolean }) => {
     if (event.type === 'MARK_PHASE_TRIGGERED' && event.phaseKey) {
       setLocalTriggeredPhases(prev =>
         prev.includes(event.phaseKey!) ? prev : [...prev, event.phaseKey!]
       );
     } else if (event.type === 'RESET_MUSIC_TRIGGERS') {
       setLocalTriggeredPhases([]);
+    } else if (event.type === 'SET_MUSIC_ENABLED') {
+      setLocalMusicEnabled(event.enabled ?? false);
+      // Reset triggers when disabled (mirrors XState behavior)
+      if (!event.enabled) {
+        setLocalTriggeredPhases([]);
+      }
     }
-    // Other events (CONSUME_PHASE, CLEAR_TRIGGERED_ONLY) not needed for overview
+    // Other events (CONSUME_PHASE, CLEAR_TRIGGERED_ONLY, ENABLE_MUSIC_AND_CONSUME) not needed for overview
   }, []);
 
   // Use workout music hook to handle automatic triggers
@@ -669,7 +681,6 @@ export function CircuitWorkoutOverviewScreen() {
   useWorkoutMusic({
     workoutState: syntheticWorkoutState,
     circuitConfig,
-    enabled: isMusicEnabled,
     send: handleTriggerEvent,
   });
 
@@ -1112,57 +1123,19 @@ export function CircuitWorkoutOverviewScreen() {
             </Pressable>
 
             {/* Music Toggle */}
-            <Pressable
-              onPress={() => {
-                if (isMusicPlaying) {
-                  // Pause music - preserves current track position
-                  pauseMusic();
-                } else if (isMusicPaused && currentTrack) {
-                  // Resume paused music
-                  resumeMusic();
-                } else {
-                  // Start fresh with Round 1 Preview config
-                  const round1Template = circuitConfig?.config?.roundTemplates?.find(
-                    (rt: any) => rt.roundNumber === 1
-                  );
-                  const previewTrigger = round1Template?.music?.roundPreview;
-                  playWithTrigger({
-                    energy: previewTrigger?.energy ?? 'low',
-                    useBuildup: previewTrigger?.useBuildup ?? false,
-                    trackId: previewTrigger?.trackId,
-                  });
-                  // Note: Deduplication for Round 1 Preview is handled by useWorkoutMusic
-                  // via "isPlaying && currentEnergy === action.energy" check
-                }
-              }}
+            <MusicPlayPauseButton
+              send={handleTriggerEvent}
+              workoutStateValue="roundPreview"
+              currentRoundIndex={0}
+              currentExerciseIndex={0}
+              currentSetNumber={1}
+              isMusicPlaying={isMusicPlaying}
+              isMusicPaused={isMusicPaused}
+              currentTrack={currentTrack}
+              pauseMusic={pauseMusic}
+              playOrResume={playOrResume}
               focusable={isSettingsPanelOpen}
-            >
-              {({ focused }) => (
-                <MattePanel
-                  focused={focused}
-                  radius={22}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: isMusicPlaying ?
-                      (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
-                      (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                    borderColor: isMusicPlaying ?
-                      TOKENS.color.accent2 :
-                      (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                    borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
-                  }}
-                >
-                  <Icon
-                    name={isMusicPlaying ? "music-note" : "music-off"}
-                    size={20}
-                    color={isMusicPlaying ? TOKENS.color.accent2 : TOKENS.color.text}
-                  />
-                </MattePanel>
-              )}
-            </Pressable>
+            />
           </View>
           )}
         </View>

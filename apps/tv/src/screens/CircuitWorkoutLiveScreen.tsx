@@ -16,6 +16,7 @@ import { TOKENS, CircuitExercise, RoundData } from '../components/workout-live/t
 import { MattePanel } from '../components/workout-live/MattePanel';
 import { WorkoutHeader } from '../components/workout-live/WorkoutHeader';
 import { WorkoutControls } from '../components/workout-live/WorkoutControls';
+import { MusicPlayPauseButton } from '../components/workout-live/MusicPlayPauseButton';
 import { WorkoutContent } from '../components/workout-live/WorkoutContent';
 import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/useWorkoutMachineWithLighting';
 import { useLightingControl } from '../hooks/useLightingControl';
@@ -355,6 +356,17 @@ export function CircuitWorkoutLiveScreen() {
     circuitConfig,
     send,  // Pass send function for machine events
   });
+
+  // Sync music state from overview screen on mount
+  // If music is already playing (started on overview), sync XState to match
+  const hasSyncedMusicState = useRef(false);
+  useEffect(() => {
+    if (!hasSyncedMusicState.current && isMusicPlaying && !state.context.musicEnabled) {
+      console.log('[CircuitWorkoutLiveScreen] Syncing music state from overview - music already playing');
+      send({ type: 'SET_MUSIC_ENABLED', enabled: true });
+      hasSyncedMusicState.current = true;
+    }
+  }, [isMusicPlaying, state.context.musicEnabled, send]);
 
   // Check if rise countdown should be shown for the current round's first exercise
   // Rise countdown triggers when transitioning from preview to exercise with useBuildup: true
@@ -1234,47 +1246,19 @@ export function CircuitWorkoutLiveScreen() {
                         </Pressable>
 
                         {/* Music Toggle */}
-                        <Pressable
-                          onPress={() => {
-                            if (isMusicPlaying) {
-                              // Pause music - preserves current track position
-                              pauseMusic();
-                            } else if (isMusicPaused && currentTrack) {
-                              // Resume paused music
-                              resumeMusic();
-                            } else {
-                              // Enable music - triggers will handle playback
-                              enableMusic();
-                            }
-                          }}
+                        <MusicPlayPauseButton
+                          send={send}
+                          workoutStateValue={state.value}
+                          currentRoundIndex={state.context.currentRoundIndex}
+                          currentExerciseIndex={state.context.currentExerciseIndex}
+                          currentSetNumber={state.context.currentSetNumber}
+                          isMusicPlaying={isMusicPlaying}
+                          isMusicPaused={isMusicPaused}
+                          currentTrack={currentTrack}
+                          pauseMusic={pauseMusic}
+                          playOrResume={playOrResume}
                           focusable={isSettingsPanelOpen}
-                        >
-                          {({ focused }) => (
-                            <MattePanel
-                              focused={focused}
-                              radius={22}
-                              style={{
-                                width: 44,
-                                height: 44,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                backgroundColor: isMusicPlaying ?
-                                  (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
-                                  (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                                borderColor: isMusicPlaying ?
-                                  TOKENS.color.accent :
-                                  (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                                borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
-                              }}
-                            >
-                              <Icon
-                                name={isMusicPlaying ? "music-note" : "music-off"}
-                                size={20}
-                                color={isMusicPlaying ? TOKENS.color.accent : TOKENS.color.text}
-                              />
-                            </MattePanel>
-                          )}
-                        </Pressable>
+                        />
                       </View>
                     )}
                   </>
@@ -1692,39 +1676,12 @@ export function CircuitWorkoutLiveScreen() {
               isSettingsPanelOpen={isSettingsPanelOpen}
               onToggleSettingsPanel={toggleSettingsPanel}
               onCloseSettingsPanel={() => setIsSettingsPanelOpen(false)}
-              // Music props
+              // Music props (passed to MusicPlayPauseButton inside WorkoutControls)
               isMusicPlaying={isMusicPlaying}
-              onMusicPlayPause={() => {
-                if (isMusicPlaying) {
-                  // Disable music triggers atomically in XState before pausing audio
-                  send({ type: 'SET_MUSIC_ENABLED', enabled: false });
-                  pauseMusic();
-                } else {
-                  // Use atomic XState event to enable music AND consume current phase
-                  // This prevents race conditions where triggers fire before consume is processed
-                  const phaseType = state.value === 'roundPreview' ? 'preview' :
-                                   state.value === 'exercise' ? 'exercise' :
-                                   state.value === 'rest' ? 'rest' :
-                                   state.value === 'setBreak' ? 'setBreak' : null;
-                  if (phaseType) {
-                    const phaseIndex = (phaseType === 'exercise' || phaseType === 'rest')
-                      ? state.context.currentExerciseIndex
-                      : (phaseType === 'setBreak' ? state.context.currentSetNumber - 1 : 0);
-                    const phase = createPhaseKey(
-                      phaseType as any,
-                      state.context.currentRoundIndex,
-                      phaseIndex,
-                      state.context.currentSetNumber
-                    );
-                    // Atomic: enable music + consume phase in single XState event
-                    send({ type: 'ENABLE_MUSIC_AND_CONSUME', phaseKey: serializeKey(phase) });
-                  } else {
-                    // No phase to consume, just enable
-                    send({ type: 'SET_MUSIC_ENABLED', enabled: true });
-                  }
-                  playOrResume();
-                }
-              }}
+              isMusicPaused={isMusicPaused}
+              currentTrack={currentTrack}
+              pauseMusic={pauseMusic}
+              playOrResume={playOrResume}
               onManualNavigation={clearNaturalEnding}
             />
           </View>

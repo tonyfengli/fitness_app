@@ -3,6 +3,7 @@ import { View, Text, Pressable, LayoutAnimation, Platform, UIManager } from 'rea
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { TOKENS } from './types';
 import { MattePanel } from './MattePanel';
+import { MusicPlayPauseButton } from './MusicPlayPauseButton';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -21,9 +22,12 @@ interface WorkoutControlsProps {
   isSettingsPanelOpen?: boolean;
   onToggleSettingsPanel?: () => void;
   onCloseSettingsPanel?: () => void; // Close without animation (for navigation)
-  // Music props
+  // Music props (from MusicProvider)
   isMusicPlaying?: boolean;
-  onMusicPlayPause?: () => void;
+  isMusicPaused?: boolean;
+  currentTrack?: any | null;
+  pauseMusic?: () => void;
+  playOrResume?: () => Promise<void>;
   // Navigation callback (called on manual skip/back to clear natural ending state)
   onManualNavigation?: () => void;
 }
@@ -40,7 +44,10 @@ export function WorkoutControls({
   onToggleSettingsPanel,
   onCloseSettingsPanel,
   isMusicPlaying = false,
-  onMusicPlayPause,
+  isMusicPaused = false,
+  currentTrack = null,
+  pauseMusic,
+  playOrResume,
   onManualNavigation,
 }: WorkoutControlsProps) {
   const handleBack = () => {
@@ -288,41 +295,22 @@ export function WorkoutControls({
               }} />
 
               {/* Music Play/Pause Button */}
-              <Pressable
-                onPress={onMusicPlayPause}
-                focusable={isSettingsPanelOpen}
-                style={{ marginRight: 6 }}
-              >
-                {({ focused }) => (
-                  <MattePanel
-                    focused={focused}
-                    radius={22}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isMusicPlaying ?
-                        (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
-                        (focused ?
-                          (isStationsExercise ? 'rgba(255,179,102,0.2)' : 'rgba(255,255,255,0.15)') :
-                          (isStationsExercise ? 'rgba(255,179,102,0.1)' : 'rgba(255,255,255,0.06)')),
-                      borderColor: isMusicPlaying ?
-                        TOKENS.color.accent2 :
-                        (focused ?
-                          (isStationsExercise ? 'rgba(255,179,102,0.4)' : 'rgba(255,255,255,0.25)') :
-                          'transparent'),
-                      borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
-                    }}
-                  >
-                    <Icon
-                      name={isMusicPlaying ? "pause" : "play-arrow"}
-                      size={20}
-                      color={isMusicPlaying ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
-                    />
-                  </MattePanel>
-                )}
-              </Pressable>
+              <View style={{ marginRight: 6 }}>
+                <MusicPlayPauseButton
+                  send={send}
+                  workoutStateValue={state.value}
+                  currentRoundIndex={state.context.currentRoundIndex}
+                  currentExerciseIndex={state.context.currentExerciseIndex}
+                  currentSetNumber={state.context.currentSetNumber}
+                  isMusicPlaying={isMusicPlaying}
+                  isMusicPaused={isMusicPaused}
+                  currentTrack={currentTrack}
+                  pauseMusic={pauseMusic ?? (() => {})}
+                  playOrResume={playOrResume ?? (async () => {})}
+                  focusable={isSettingsPanelOpen}
+                  isStationsExercise={isStationsExercise}
+                />
+              </View>
 
               {/* Lights Button */}
               <Pressable
