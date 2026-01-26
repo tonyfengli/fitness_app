@@ -70,9 +70,10 @@ interface MusicContextValue {
   enable: () => void;
   pause: () => void;
   resume: () => void;
+  playOrResume: () => Promise<void>;
   toggle: () => void;
   skipNext: () => Promise<void>;
-  skipBack: () => Promise<void>;
+  skipBack: () => void;
   syncMusic: () => Promise<void>;
   clearLocalTracks: () => Promise<void>;
   preSelectRiseTrack: (energy: PlayableEnergy) => void; // Pre-select a random track for buildup
@@ -897,7 +898,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           setIsPaused(false);
           setCurrentTrack(null);
           setCurrentSegment(null);
-          setCurrentEnergy(null);
+          // Preserve currentEnergy so play after stop uses the same energy level
           setIsEnabled(false);
           clearBuildupCountdown();
           naturalEndingActiveRef.current = false;
@@ -984,12 +985,15 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   }, []);
 
-  // Pause music (does NOT change isEnabled - that controls trigger firing)
-  // Cancels active countdowns but preserves consumed state (won't re-trigger on resume)
+  // Pause music - sets isEnabled=false so triggers won't fire while paused
+  // Triggers that would fire are NOT consumed, so they can fire when user navigates back
   const pause = useCallback(() => {
     console.log('[MusicProvider] pause() called');
 
-    // Cancel active countdowns (preserve consumed state - won't re-trigger on resume)
+    // Disable triggers while paused (phases won't be marked triggered or consumed)
+    setIsEnabled(false);
+
+    // Cancel active countdowns
     if (isHighCountdownActive) {
       console.log('[MusicProvider] Cancelling high countdown on pause');
       // Restore volume if ducked
@@ -1012,14 +1016,32 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isPlaying, isPaused, isHighCountdownActive, isRiseCountdownActive, clearBuildupCountdown]);
 
-  // Resume music (does NOT change isEnabled - that controls trigger firing)
+  // Resume music - re-enables triggers
   const resume = useCallback(() => {
     if (isPaused && currentTrack) {
+      setIsEnabled(true);
       musicService.resume();
       setIsPaused(false);
       setIsPlaying(true);
     }
   }, [isPaused, currentTrack]);
+
+  // Play or Resume - smart function that resumes if paused, or starts new track if stopped
+  const playOrResume = useCallback(async () => {
+    if (isPaused && currentTrack) {
+      // Resume the paused track
+      console.log('[MusicProvider] playOrResume() - resuming paused track');
+      setIsEnabled(true);
+      musicService.resume();
+      setIsPaused(false);
+      setIsPlaying(true);
+    } else {
+      // Start new random track at current energy (or 'low' as fallback)
+      console.log('[MusicProvider] playOrResume() - starting new track at energy:', currentEnergy);
+      setIsEnabled(true);
+      await playNextTrack({ energy: (currentEnergy as PlayableEnergy) || 'low' });
+    }
+  }, [isPaused, currentTrack, currentEnergy, playNextTrack]);
 
   // Toggle music
   const toggle = useCallback(() => {
@@ -1030,47 +1052,47 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isEnabled, start, stop]);
 
-  // Skip to next track
+  // Skip to next track (Forward)
+  // Clears natural ending state, auto-resumes if paused
   const skipNext = useCallback(async () => {
+    console.log('[MusicProvider] skipNext() - forward to next track');
+    // Clear natural ending state
+    naturalEndingActiveRef.current = false;
+    setIsNaturalEndingActive(false);
+    pendingTriggerRef.current = null;
+    clearPendingTriggerTimeout();
+    // Auto-resume: enable and unpause
+    setIsEnabled(true);
     setIsPaused(false);
     clearBuildupCountdown();
-    await playNextTrack({ energy: currentEnergy as PlayableEnergy | undefined });
-  }, [playNextTrack, currentEnergy, clearBuildupCountdown]);
+    await playNextTrack({ energy: (currentEnergy as PlayableEnergy) || 'low' });
+  }, [playNextTrack, currentEnergy, clearBuildupCountdown, clearPendingTriggerTimeout]);
 
-  // Skip back
-  const skipBack = useCallback(async () => {
-    const currentTime = await musicService.getCurrentTime();
-
-    if (currentTime > 5 && currentTrack) {
-      // Restart current track at segment position
-      const segment = currentSegment;
-      if (segment) {
-        musicService.seekTo(segment.timestamp);
-      } else {
-        musicService.seekTo(0);
-      }
+  // Skip back (Back)
+  // Restarts current track from beginning, clears natural ending, auto-resumes if paused
+  const skipBack = useCallback(() => {
+    console.log('[MusicProvider] skipBack() - restart track from beginning');
+    if (!currentTrack) {
+      console.log('[MusicProvider] skipBack() - no current track');
       return;
     }
-
-    if (playedTracksHistory.current.length >= 2) {
-      playedTracksHistory.current.pop();
-      const previous = playedTracksHistory.current.pop();
-
-      if (previous) {
-        try {
-          playedTracksHistory.current.push(previous);
-          setIsPaused(false);
-          clearBuildupCountdown();
-          await musicService.play(previous.track, { segment: previous.segment || undefined });
-          setError(null);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to play previous track');
-        }
-      }
-    } else if (currentTrack && currentSegment) {
-      musicService.seekTo(currentSegment.timestamp);
+    // Clear natural ending state
+    naturalEndingActiveRef.current = false;
+    setIsNaturalEndingActive(false);
+    pendingTriggerRef.current = null;
+    clearPendingTriggerTimeout();
+    // Auto-resume: enable and unpause
+    setIsEnabled(true);
+    setIsPaused(false);
+    clearBuildupCountdown();
+    // Seek to beginning of track
+    musicService.seekTo(0);
+    // Ensure playing state is set (in case we were paused)
+    if (!isPlaying) {
+      musicService.resume();
+      setIsPlaying(true);
     }
-  }, [currentTrack, currentSegment, clearBuildupCountdown]);
+  }, [currentTrack, isPlaying, clearBuildupCountdown, clearPendingTriggerTimeout]);
 
   // Sync music files
   const syncMusic = useCallback(async () => {
@@ -1122,6 +1144,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     enable,
     pause,
     resume,
+    playOrResume,
     toggle,
     skipNext,
     skipBack,

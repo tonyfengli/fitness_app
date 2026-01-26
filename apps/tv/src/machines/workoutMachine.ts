@@ -28,6 +28,15 @@ export interface WorkoutContext {
   triggeredPhases: string[];  // Phases that have fired their trigger
   consumedPhases: string[];   // Phases consumed (e.g., from countdown flow)
   lastResetRoundIndex: number; // Track which round we last reset for
+
+  // Music enabled state - controls whether triggers fire
+  // Moved here from React state to enable atomic updates with trigger phase tracking
+  musicEnabled: boolean;
+
+  // Flag to track if music was enabled from preview (vs mid-workout)
+  // When true, countdown triggers (Rise/High) are allowed
+  // When false (manual mid-workout enable), countdowns are skipped - just play music
+  musicStartedFromPreview: boolean;
 }
 
 export type WorkoutEvent =
@@ -44,7 +53,10 @@ export type WorkoutEvent =
   | { type: 'MARK_PHASE_TRIGGERED'; phaseKey: string }
   | { type: 'CONSUME_PHASE'; phaseKey: string }
   | { type: 'RESET_MUSIC_TRIGGERS' }
-  | { type: 'CLEAR_TRIGGERED_ONLY' };
+  | { type: 'CLEAR_TRIGGERED_ONLY' }
+  // Music enabled control - atomic with trigger state
+  | { type: 'SET_MUSIC_ENABLED'; enabled: boolean }
+  | { type: 'ENABLE_MUSIC_AND_CONSUME'; phaseKey: string };
 
 export const workoutMachine = createMachine({
   id: 'workout',
@@ -67,6 +79,10 @@ export const workoutMachine = createMachine({
     triggeredPhases: [],
     consumedPhases: [],
     lastResetRoundIndex: -1,
+    // Music enabled - starts disabled until user activates
+    musicEnabled: false,
+    // Music started from preview - gates countdown triggers
+    musicStartedFromPreview: false,
   },
   states: {
     roundPreview: {
@@ -642,6 +658,66 @@ export const workoutMachine = createMachine({
         triggeredPhases: ({ context }) => {
           console.log('[workoutMachine] CLEAR_TRIGGERED_ONLY: preserving consumedPhases:', context.consumedPhases);
           return [];
+        }
+      })
+    },
+    SET_MUSIC_ENABLED: {
+      actions: assign({
+        musicEnabled: ({ event }) => {
+          if (event.type !== 'SET_MUSIC_ENABLED') return false;
+          console.log('[workoutMachine] SET_MUSIC_ENABLED:', event.enabled);
+          return event.enabled;
+        },
+        // When enabling from preview, set flag to allow countdowns
+        // When disabling, reset flag
+        musicStartedFromPreview: ({ event }) => {
+          if (event.type !== 'SET_MUSIC_ENABLED') return false;
+          if (event.enabled) {
+            console.log('[workoutMachine] SET_MUSIC_ENABLED: musicStartedFromPreview = true (from preview)');
+            return true;
+          }
+          return false;
+        },
+        // When enabling music, clear triggeredPhases so triggers can fire again
+        // Preserve consumedPhases (from countdown flow) to prevent duplicate countdowns
+        triggeredPhases: ({ context, event }) => {
+          if (event.type !== 'SET_MUSIC_ENABLED') return context.triggeredPhases;
+          if (event.enabled) {
+            console.log('[workoutMachine] SET_MUSIC_ENABLED: clearing triggeredPhases, preserving consumedPhases:', context.consumedPhases);
+            return [];
+          }
+          return context.triggeredPhases;
+        }
+      })
+    },
+    // Atomic operation: enable music AND consume a phase in one event
+    // This prevents race conditions when user presses play during countdown-eligible phase
+    // Sets musicStartedFromPreview: false since this is a mid-workout manual enable
+    ENABLE_MUSIC_AND_CONSUME: {
+      actions: assign({
+        musicEnabled: () => {
+          console.log('[workoutMachine] ENABLE_MUSIC_AND_CONSUME: enabling music');
+          return true;
+        },
+        // Mid-workout enable = no countdown triggers allowed
+        musicStartedFromPreview: () => {
+          console.log('[workoutMachine] ENABLE_MUSIC_AND_CONSUME: musicStartedFromPreview = false (mid-workout)');
+          return false;
+        },
+        triggeredPhases: ({ context, event }) => {
+          if (event.type !== 'ENABLE_MUSIC_AND_CONSUME') return context.triggeredPhases;
+          if (context.triggeredPhases.includes(event.phaseKey)) {
+            return context.triggeredPhases;
+          }
+          return [...context.triggeredPhases, event.phaseKey];
+        },
+        consumedPhases: ({ context, event }) => {
+          if (event.type !== 'ENABLE_MUSIC_AND_CONSUME') return context.consumedPhases;
+          if (context.consumedPhases.includes(event.phaseKey)) {
+            return context.consumedPhases;
+          }
+          console.log('[workoutMachine] ENABLE_MUSIC_AND_CONSUME: consuming phase:', event.phaseKey);
+          return [...context.consumedPhases, event.phaseKey];
         }
       })
     }

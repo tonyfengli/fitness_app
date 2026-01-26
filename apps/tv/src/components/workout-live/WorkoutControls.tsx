@@ -22,10 +22,8 @@ interface WorkoutControlsProps {
   onToggleSettingsPanel?: () => void;
   onCloseSettingsPanel?: () => void; // Close without animation (for navigation)
   // Music props
-  isMusicEnabled?: boolean;
-  currentTrack?: any;
-  onStopMusic?: () => void;
-  onEnableMusic?: () => void;
+  isMusicPlaying?: boolean;
+  onMusicPlayPause?: () => void;
   // Navigation callback (called on manual skip/back to clear natural ending state)
   onManualNavigation?: () => void;
 }
@@ -41,10 +39,8 @@ export function WorkoutControls({
   isSettingsPanelOpen = false,
   onToggleSettingsPanel,
   onCloseSettingsPanel,
-  isMusicEnabled = false,
-  currentTrack = null,
-  onStopMusic,
-  onEnableMusic,
+  isMusicPlaying = false,
+  onMusicPlayPause,
   onManualNavigation,
 }: WorkoutControlsProps) {
   const handleBack = () => {
@@ -73,16 +69,6 @@ export function WorkoutControls({
     // Clear natural ending state so music isn't queued during manual navigation
     onManualNavigation?.();
     send({ type: 'SKIP' });
-  };
-
-  const handleMusicToggle = () => {
-    if (isMusicEnabled) {
-      // Disable music - stops playback and ignores triggers
-      onStopMusic?.();
-    } else {
-      // Enable music - triggers will handle playback
-      onEnableMusic?.();
-    }
   };
 
   const toggleSettingsPanel = () => {
@@ -301,6 +287,43 @@ export function WorkoutControls({
                 marginRight: 8,
               }} />
 
+              {/* Music Play/Pause Button */}
+              <Pressable
+                onPress={onMusicPlayPause}
+                focusable={isSettingsPanelOpen}
+                style={{ marginRight: 6 }}
+              >
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    radius={22}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isMusicPlaying ?
+                        (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
+                        (focused ?
+                          (isStationsExercise ? 'rgba(255,179,102,0.2)' : 'rgba(255,255,255,0.15)') :
+                          (isStationsExercise ? 'rgba(255,179,102,0.1)' : 'rgba(255,255,255,0.06)')),
+                      borderColor: isMusicPlaying ?
+                        TOKENS.color.accent2 :
+                        (focused ?
+                          (isStationsExercise ? 'rgba(255,179,102,0.4)' : 'rgba(255,255,255,0.25)') :
+                          'transparent'),
+                      borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                    }}
+                  >
+                    <Icon
+                      name={isMusicPlaying ? "pause" : "play-arrow"}
+                      size={20}
+                      color={isMusicPlaying ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+
               {/* Lights Button */}
               <Pressable
                 onPress={async () => {
@@ -309,7 +332,6 @@ export function WorkoutControls({
                   }
                 }}
                 focusable={isSettingsPanelOpen}
-                style={{ marginRight: 6 }}
               >
                 {({ focused }) => (
                   <MattePanel
@@ -337,42 +359,6 @@ export function WorkoutControls({
                       name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"}
                       size={20}
                       color={isLightingEnabled ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
-                    />
-                  </MattePanel>
-                )}
-              </Pressable>
-
-              {/* Music Toggle */}
-              <Pressable
-                onPress={handleMusicToggle}
-                focusable={isSettingsPanelOpen}
-              >
-                {({ focused }) => (
-                  <MattePanel
-                    focused={focused}
-                    radius={22}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isMusicEnabled ?
-                        (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
-                        (focused ?
-                          (isStationsExercise ? 'rgba(255,179,102,0.2)' : 'rgba(255,255,255,0.15)') :
-                          (isStationsExercise ? 'rgba(255,179,102,0.1)' : 'rgba(255,255,255,0.06)')),
-                      borderColor: isMusicEnabled ?
-                        TOKENS.color.accent2 :
-                        (focused ?
-                          (isStationsExercise ? 'rgba(255,179,102,0.4)' : 'rgba(255,255,255,0.25)') :
-                          'transparent'),
-                      borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
-                    }}
-                  >
-                    <Icon
-                      name={isMusicEnabled ? "music-note" : "music-off"}
-                      size={20}
-                      color={isMusicEnabled ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
                     />
                   </MattePanel>
                 )}

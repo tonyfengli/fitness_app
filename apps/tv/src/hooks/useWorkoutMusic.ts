@@ -178,6 +178,10 @@ interface WorkoutState {
     triggeredPhases: string[];
     /** Music trigger phases that have been consumed - from machine context */
     consumedPhases: string[];
+    /** Music enabled state - from machine context for atomic updates */
+    musicEnabled: boolean;
+    /** Whether music was enabled from preview (true) vs mid-workout (false) */
+    musicStartedFromPreview: boolean;
   };
 }
 
@@ -186,10 +190,8 @@ interface UseWorkoutMusicProps {
   workoutState: WorkoutState;
   /** The circuit configuration (contains music config per round) */
   circuitConfig: CircuitConfig | null | undefined;
-  /** Whether music triggers are enabled */
-  enabled?: boolean;
   /** Function to send events to the workout machine */
-  send: (event: { type: string; phaseKey?: string }) => void;
+  send: (event: { type: string; phaseKey?: string; enabled?: boolean }) => void;
 }
 
 /**
@@ -246,7 +248,6 @@ function getRoundMusicConfig(
 export function useWorkoutMusic({
   workoutState,
   circuitConfig,
-  enabled = true,
   send,
 }: UseWorkoutMusicProps) {
   const {
@@ -258,19 +259,8 @@ export function useWorkoutMusic({
     isNaturalEndingActive,
   } = useMusic();
 
-  // Track previous enabled state to detect re-enable
-  const prevEnabledRef = useRef(enabled);
-
-
-  // When user re-enables music (enabled goes false → true), clear triggered phases
-  // but preserve consumed phases (from countdown flow)
-  useEffect(() => {
-    if (enabled && !prevEnabledRef.current) {
-      // Send event to clear triggered phases only
-      send({ type: 'CLEAR_TRIGGERED_ONLY' });
-    }
-    prevEnabledRef.current = enabled;
-  }, [enabled, send]);
+  // musicEnabled now comes from XState context - atomic with trigger state
+  // No more race conditions between React state and XState events
 
   // Callback to mark a phase as triggered
   const markTriggered = useCallback((phaseKey: string) => {
@@ -287,6 +277,8 @@ export function useWorkoutMusic({
       isPaused,
       triggeredPhases,
       consumedPhases,
+      musicEnabled,
+      musicStartedFromPreview,
     } = context;
 
     console.log('[useWorkoutMusic] State changed:', {
@@ -295,7 +287,8 @@ export function useWorkoutMusic({
       currentExerciseIndex,
       currentSetNumber,
       isPaused,
-      enabled,
+      musicEnabled,
+      musicStartedFromPreview,
       triggeredPhases: triggeredPhases.length,
       consumedPhases: consumedPhases.length,
     });
@@ -352,8 +345,9 @@ export function useWorkoutMusic({
     );
 
     // Evaluate trigger using stateless function with machine context
+    // musicEnabled comes from XState context - atomic with triggeredPhases/consumedPhases
     const action = evaluateTrigger(phase, musicConfig, triggeredPhases, consumedPhases, {
-      isEnabled: enabled,
+      isEnabled: musicEnabled,
       isPaused,
       currentSetNumber,
       totalSets,
@@ -392,6 +386,18 @@ export function useWorkoutMusic({
       }
 
       case 'riseCountdown':
+        // Gate countdown with musicStartedFromPreview flag
+        // If music was enabled mid-workout, skip countdown and just play
+        if (!musicStartedFromPreview) {
+          console.log('[useWorkoutMusic] SKIPPING Rise countdown - music enabled mid-workout, playing directly');
+          markTriggered(phaseKey);
+          playWithTrigger({
+            energy: 'high', // Skip buildup, go straight to high
+            useBuildup: false,
+            trackId: action.trackId,
+          });
+          break;
+        }
         console.log('[useWorkoutMusic] FIRING Rise countdown for phase:', phaseKey);
         markTriggered(phaseKey);
         setRiseCountdownActive(true);
@@ -403,6 +409,18 @@ export function useWorkoutMusic({
         break;
 
       case 'highCountdown':
+        // Gate countdown with musicStartedFromPreview flag
+        // If music was enabled mid-workout, skip countdown and just play
+        if (!musicStartedFromPreview) {
+          console.log('[useWorkoutMusic] SKIPPING High countdown - music enabled mid-workout, playing directly');
+          markTriggered(phaseKey);
+          playWithTrigger({
+            energy: 'high',
+            useBuildup: false,
+            trackId: action.trackId,
+          });
+          break;
+        }
         console.log('[useWorkoutMusic] FIRING High countdown for phase:', phaseKey);
         markTriggered(phaseKey);
         startHighCountdown({
@@ -425,8 +443,9 @@ export function useWorkoutMusic({
     workoutState.context.isPaused,
     workoutState.context.triggeredPhases,
     workoutState.context.consumedPhases,
+    workoutState.context.musicEnabled,
+    workoutState.context.musicStartedFromPreview,
     circuitConfig,
-    enabled,
     playWithTrigger,
     startHighCountdown,
     setRiseCountdownActive,

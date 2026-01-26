@@ -128,20 +128,22 @@ export function CircuitWorkoutLiveScreen() {
   // Initialize music player
   const {
     isPlaying: isMusicPlaying,
-    isEnabled: isMusicEnabled,
     isPaused: isMusicPaused,
     currentTrack,
+    currentEnergy,
     pause: pauseMusic,
     resume: resumeMusic,
     start: startMusic,
     stop: stopMusicBase,
     enable: enableMusic,
     playWithTrigger,
+    playOrResume,
   } = useMusicPlayer();
 
   // Wrapper for stopMusic that also resets trigger state in the workout machine
   // This ensures triggers can fire again when music is re-enabled
   const stopMusic = useCallback(() => {
+    send({ type: 'SET_MUSIC_ENABLED', enabled: false });
     stopMusicBase();
     send({ type: 'RESET_MUSIC_TRIGGERS' });
     console.log('[CircuitWorkoutLiveScreen] Music stopped - triggers reset via machine event');
@@ -335,7 +337,8 @@ export function CircuitWorkoutLiveScreen() {
       // Clear current phase when workout completes
       setCurrentPhase(null, null);
       // Transition music to low energy if enabled, otherwise leave it off
-      if (isMusicEnabled) {
+      // Use XState musicEnabled as source of truth
+      if (state.context.musicEnabled) {
         playWithTrigger({ energy: 'low' });
       }
       // Close settings panel before navigating
@@ -345,11 +348,11 @@ export function CircuitWorkoutLiveScreen() {
     isStartedOverride: false // Don't use automatic lighting in machine
   });
 
-  // Bridge workout state to music triggers (enabled when music system is on)
+  // Bridge workout state to music triggers
+  // Music enabled state is now in XState context for atomic updates with trigger tracking
   useWorkoutMusic({
     workoutState: state,
     circuitConfig,
-    enabled: isMusicEnabled,
     send,  // Pass send function for machine events
   });
 
@@ -509,6 +512,9 @@ export function CircuitWorkoutLiveScreen() {
   // Optimistically detect when High countdown SHOULD show (before isHighCountdownActive is set)
   // This prevents the flash on the render where state changes but countdown hasn't started yet
   const shouldShowHighCountdownOptimistic = useMemo(() => {
+    // Only relevant when music is enabled (use XState as source of truth)
+    if (!state.context.musicEnabled) return false;
+
     // Only relevant when in exercise state
     if (state.value !== 'exercise') return false;
 
@@ -549,6 +555,7 @@ export function CircuitWorkoutLiveScreen() {
 
     return true;
   }, [
+    state.context.musicEnabled,
     state.value,
     state.context.currentRoundIndex,
     state.context.currentExerciseIndex,
@@ -609,8 +616,8 @@ export function CircuitWorkoutLiveScreen() {
     // Don't trigger if already in a countdown
     if (isRiseCountdownActive || isHighCountdownActive) return;
 
-    // Don't trigger if music is disabled
-    if (!isMusicEnabled) return;
+    // Don't trigger if music is disabled (use XState as source of truth)
+    if (!state.context.musicEnabled) return;
 
     // Check if countdown is configured for current round's first exercise
     const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
@@ -674,7 +681,7 @@ export function CircuitWorkoutLiveScreen() {
     state.context.currentSetNumber,
     isRiseCountdownActive,
     isHighCountdownActive,
-    isMusicEnabled,
+    state.context.musicEnabled,
     circuitConfig,
     setRiseCountdownActive,
     playWithTrigger,
@@ -751,6 +758,14 @@ export function CircuitWorkoutLiveScreen() {
     // Only handle start from roundPreview - if already in exercise, do nothing
     if (state.value !== 'roundPreview') {
       console.log('[handleRiseAwareStart] Not in roundPreview (state:', state.value, '), ignoring');
+      return;
+    }
+
+    // If music is not enabled, skip countdown and start workout directly
+    // Use XState musicEnabled as source of truth
+    if (!state.context.musicEnabled) {
+      console.log('[handleRiseAwareStart] Music not enabled, skipping countdown');
+      send({ type: 'START_WORKOUT' });
       return;
     }
 
@@ -841,7 +856,7 @@ export function CircuitWorkoutLiveScreen() {
       // No countdown configured, proceed normally
       send({ type: 'START_WORKOUT' });
     }
-  }, [circuitConfig, state.value, state.context.currentRoundIndex, state.context.currentSetNumber, state.context.consumedPhases, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
+  }, [circuitConfig, state.value, state.context.currentRoundIndex, state.context.currentSetNumber, state.context.consumedPhases, state.context.musicEnabled, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
 
   // Auto-focus close button when modal opens, restore focus when modal closes
   useEffect(() => {
@@ -1486,11 +1501,13 @@ export function CircuitWorkoutLiveScreen() {
                     {/* Music Toggle */}
                     <Pressable
                       onPress={() => {
-                        if (isMusicEnabled) {
+                        if (state.context.musicEnabled) {
                           // Disable music - stops playback and ignores triggers
+                          send({ type: 'SET_MUSIC_ENABLED', enabled: false });
                           stopMusic();
                         } else {
                           // Enable music - triggers will handle playback
+                          send({ type: 'SET_MUSIC_ENABLED', enabled: true });
                           enableMusic();
                         }
                       }}
@@ -1505,19 +1522,19 @@ export function CircuitWorkoutLiveScreen() {
                             height: 44,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: isMusicEnabled ?
+                            backgroundColor: state.context.musicEnabled ?
                               (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
                               (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                            borderColor: isMusicEnabled ?
+                            borderColor: state.context.musicEnabled ?
                               TOKENS.color.accent :
                               (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                            borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
+                            borderWidth: state.context.musicEnabled ? 1.5 : (focused ? 1 : 0),
                           }}
                         >
                           <Icon
-                            name={isMusicEnabled ? "music-note" : "music-off"}
+                            name={state.context.musicEnabled ? "music-note" : "music-off"}
                             size={20}
-                            color={isMusicEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                            color={state.context.musicEnabled ? TOKENS.color.accent : TOKENS.color.text}
                           />
                         </MattePanel>
                       )}
@@ -1676,10 +1693,38 @@ export function CircuitWorkoutLiveScreen() {
               onToggleSettingsPanel={toggleSettingsPanel}
               onCloseSettingsPanel={() => setIsSettingsPanelOpen(false)}
               // Music props
-              isMusicEnabled={isMusicEnabled}
-              currentTrack={currentTrack}
-              onStopMusic={stopMusic}
-              onEnableMusic={enableMusic}
+              isMusicPlaying={isMusicPlaying}
+              onMusicPlayPause={() => {
+                if (isMusicPlaying) {
+                  // Disable music triggers atomically in XState before pausing audio
+                  send({ type: 'SET_MUSIC_ENABLED', enabled: false });
+                  pauseMusic();
+                } else {
+                  // Use atomic XState event to enable music AND consume current phase
+                  // This prevents race conditions where triggers fire before consume is processed
+                  const phaseType = state.value === 'roundPreview' ? 'preview' :
+                                   state.value === 'exercise' ? 'exercise' :
+                                   state.value === 'rest' ? 'rest' :
+                                   state.value === 'setBreak' ? 'setBreak' : null;
+                  if (phaseType) {
+                    const phaseIndex = (phaseType === 'exercise' || phaseType === 'rest')
+                      ? state.context.currentExerciseIndex
+                      : (phaseType === 'setBreak' ? state.context.currentSetNumber - 1 : 0);
+                    const phase = createPhaseKey(
+                      phaseType as any,
+                      state.context.currentRoundIndex,
+                      phaseIndex,
+                      state.context.currentSetNumber
+                    );
+                    // Atomic: enable music + consume phase in single XState event
+                    send({ type: 'ENABLE_MUSIC_AND_CONSUME', phaseKey: serializeKey(phase) });
+                  } else {
+                    // No phase to consume, just enable
+                    send({ type: 'SET_MUSIC_ENABLED', enabled: true });
+                  }
+                  playOrResume();
+                }
+              }}
               onManualNavigation={clearNaturalEnding}
             />
           </View>
@@ -2070,6 +2115,7 @@ export function CircuitWorkoutLiveScreen() {
           </MattePanel>
         </TVFocusGuideView>
       )}
+
     </View>
   );
 }
