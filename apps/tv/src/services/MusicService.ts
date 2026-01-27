@@ -352,32 +352,48 @@ class MusicService {
    * Pause current playback
    */
   pause(): void {
+    console.log('[MusicService] pause() called, currentSound:', !!this.currentSound, 'isPlaying:', this.isPlaying);
     if (this.currentSound && this.isPlaying) {
       try {
         this.currentSound.pause();
         this.isPlaying = false;
+        console.log('[MusicService] pause() success');
       } catch (error) {
         console.error('[MusicService] Error pausing:', error);
       }
+    } else {
+      console.log('[MusicService] pause() skipped - no sound or not playing');
     }
   }
 
   /**
    * Resume paused playback
+   * @returns true if resume was initiated, false if no sound to resume
    */
-  resume(): void {
-    if (this.currentSound && !this.isPlaying) {
-      try {
-        this.isPlaying = true;
-        this.currentSound.play((success) => {
-          if (!success) {
-            this.isPlaying = false;
-          }
-        });
-      } catch (error) {
-        console.error('[MusicService] Error resuming:', error);
-        this.isPlaying = false;
-      }
+  resume(): boolean {
+    console.log('[MusicService] resume() called, currentSound:', !!this.currentSound, 'isPlaying:', this.isPlaying);
+    if (!this.currentSound) {
+      console.log('[MusicService] resume() failed - no current sound');
+      return false;
+    }
+    if (this.isPlaying) {
+      console.log('[MusicService] resume() skipped - already playing');
+      return true; // Already playing is considered success
+    }
+    try {
+      this.isPlaying = true;
+      this.currentSound.play((success) => {
+        console.log('[MusicService] resume() play callback, success:', success);
+        if (!success) {
+          this.isPlaying = false;
+        }
+      });
+      console.log('[MusicService] resume() initiated');
+      return true;
+    } catch (error) {
+      console.error('[MusicService] Error resuming:', error);
+      this.isPlaying = false;
+      return false;
     }
   }
 

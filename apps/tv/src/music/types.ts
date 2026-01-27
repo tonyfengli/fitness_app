@@ -93,6 +93,9 @@ export interface MusicTrigger {
   // Timing options
   naturalEnding?: boolean;
   repeatOnAllSets?: boolean;
+
+  // Specific segment timestamp to play (for tracks with multiple high segments)
+  segmentTimestamp?: number;
 }
 
 /**
@@ -128,6 +131,8 @@ export interface PlayAction {
   naturalEnding?: boolean;
   /** Absolute timestamp (ms) when the round/set ends - used for precision natural ending */
   roundEndTime?: number;
+  /** Specific segment timestamp to seek to (for tracks with multiple high segments) */
+  segmentTimestamp?: number;
 }
 
 /**
@@ -136,6 +141,7 @@ export interface PlayAction {
 export interface RiseCountdownAction {
   type: 'riseCountdown';
   trackId?: string;
+  segmentTimestamp?: number;
   // riseDuration is calculated from track segments, not stored here
 }
 
@@ -145,15 +151,18 @@ export interface RiseCountdownAction {
 export interface HighCountdownAction {
   type: 'highCountdown';
   trackId?: string;
+  segmentTimestamp?: number;
   durationMs: number;
 }
 
 /**
- * Future: Rise from rest - start buildup during rest period.
+ * Rise from rest - music plays during rest, drop hits when exercise starts.
  */
 export interface RiseFromRestAction {
   type: 'riseFromRest';
+  energy: PlayableEnergy;
   trackId?: string;
+  segmentTimestamp?: number;
   restDurationSec: number;
 }
 

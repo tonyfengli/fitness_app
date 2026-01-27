@@ -19,6 +19,7 @@ import { api } from '../providers/TRPCProvider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 // import { useRealtimeTrainingSessions } from '../hooks/useRealtimeTrainingSessions'; // Commented out - realtime disabled
 import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
+import { useMusic } from '../providers/MusicProvider';
 
 // Program label mapping for coach names
 const PROGRAM_LABELS: Record<string, string> = {
@@ -153,6 +154,10 @@ export function MainScreen() {
   const [hasActionButtonFocus, setHasActionButtonFocus] = useState(false);
   const [sessionOffset, setSessionOffset] = useState(0);
   const [focusHint, setFocusHint] = useState<'left' | 'right' | null>(null);
+
+  // TODO: TEMPORARY - Remove once segment timestamps are finalized
+  // Used to refresh track segments from API when starting a workout
+  const { refreshTracks } = useMusic();
 
   // Music download modal state
   const [showMusicModal, setShowMusicModal] = useState(false);
@@ -525,8 +530,10 @@ export function MainScreen() {
           );
           // Still navigate to the new session but it will remain in 'open' status
           if (newSession.templateType === 'circuit') {
+            // TODO: TEMPORARY - refresh tracks for updated segments
+            await refreshTracks();
             // For circuit sessions, go directly to workout overview
-            navigation.navigate('CircuitWorkoutOverview', { 
+            navigation.navigate('CircuitWorkoutOverview', {
               sessionId: newSession.id
             });
           } else {
@@ -565,8 +572,10 @@ export function MainScreen() {
       
       // Navigate based on session type
       if (newSession.templateType === 'circuit') {
+        // TODO: TEMPORARY - refresh tracks for updated segments
+        await refreshTracks();
         // For circuit sessions, go directly to workout overview
-        navigation.navigate('CircuitWorkoutOverview', { 
+        navigation.navigate('CircuitWorkoutOverview', {
           sessionId: newSession.id
         });
       } else {
@@ -876,8 +885,10 @@ export function MainScreen() {
       
       // Navigate based on session type
       if (session.templateType === 'circuit') {
+        // TODO: TEMPORARY - refresh tracks for updated segments
+        await refreshTracks();
         // For circuit sessions, go directly to workout overview
-        navigation.navigate('CircuitWorkoutOverview', { 
+        navigation.navigate('CircuitWorkoutOverview', {
           sessionId: session.id
         });
       } else {

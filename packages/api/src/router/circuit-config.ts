@@ -21,6 +21,7 @@ const MusicTriggerSchemaV3 = z.object({
   naturalEnding: z.boolean().optional(), // If true, seek so music ends naturally with round end
   showRiseCountdown: z.boolean().optional(), // Show 3-2-1 countdown before rise drop (when useBuildup is true)
   showHighCountdown: z.boolean().optional(), // Show 4.5s countdown before high energy drop
+  segmentTimestamp: z.number().optional(), // Specific segment timestamp to play (for tracks with multiple high segments)
 });
 
 const RoundMusicConfigSchemaV3 = z.object({

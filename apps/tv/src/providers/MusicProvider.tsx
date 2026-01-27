@@ -87,6 +87,8 @@ interface MusicContextValue {
     naturalEnding?: boolean;
     /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
     roundEndTime?: number;
+    /** Specific segment timestamp to play (for tracks with multiple high segments) */
+    segmentTimestamp?: number;
   }) => Promise<void>;
 
   // High countdown methods
@@ -96,7 +98,7 @@ interface MusicContextValue {
   cancelHighCountdown: () => void;
 
   // Rise from Rest - music plays during rest, drop hits when exercise starts
-  playRiseFromRest: (options: { trackId?: string; restDurationSec: number }) => Promise<void>;
+  playRiseFromRest: (options: { trackId?: string; restDurationSec: number; segmentTimestamp?: number }) => Promise<void>;
 
   // Rise countdown methods (for screen-level overlay)
   setRiseCountdownActive: (active: boolean) => void;
@@ -104,9 +106,27 @@ interface MusicContextValue {
 
   // Clear natural ending state (call when entering a new round)
   clearNaturalEnding: () => void;
+
+  // TODO: TEMPORARY - Remove once segment timestamps are finalized
+  // Refresh tracks from API to get updated segment timestamps for testing
+  refreshTracks: () => Promise<void>;
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null);
+
+/**
+ * Delay before the high beat hits (in seconds).
+ * When seeking to a high segment, we seek to (timestamp - HIGH_BEAT_DELAY_SEC)
+ * so the beat hits this many seconds after playback starts.
+ */
+const HIGH_BEAT_DELAY_SEC = 2.5;
+
+/**
+ * Fixed duration for Rise countdown (in seconds).
+ * Music seeks to (highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC)
+ * so the drop hits exactly when the countdown ends.
+ */
+const RISE_COUNTDOWN_DURATION_SEC = 5;
 
 /**
  * Helper to check if a track has a segment with the given energy
@@ -116,12 +136,44 @@ function hasEnergySegment(track: MusicTrack, energy: PlayableEnergy): boolean {
 }
 
 /**
+ * Helper to check if a track is valid for Rise countdown.
+ * Track must have a high segment at >= RISE_COUNTDOWN_DURATION_SEC.
+ */
+function isValidForRiseCountdown(track: MusicTrack): boolean {
+  return track.segments?.some(
+    s => s.energy === 'high' && s.timestamp >= RISE_COUNTDOWN_DURATION_SEC
+  ) ?? false;
+}
+
+/**
+ * Helper to get valid high segments for Rise countdown (timestamp >= 5s).
+ */
+function getValidRiseHighSegments(segments: MusicSegment[]): MusicSegment[] {
+  return segments.filter(
+    s => s.energy === 'high' && s.timestamp >= RISE_COUNTDOWN_DURATION_SEC
+  );
+}
+
+/**
  * Helper to get a random segment with the given energy from a track
  */
 function getRandomSegmentByEnergy(segments: MusicSegment[], energy: PlayableEnergy): MusicSegment | null {
   const matching = segments.filter(s => s.energy === energy);
   if (matching.length === 0) return null;
   return matching[Math.floor(Math.random() * matching.length)] ?? null;
+}
+
+/**
+ * Apply high beat delay to a segment timestamp.
+ * For high energy segments, we want the beat to hit 1 second after playback starts.
+ */
+function applyHighBeatDelay(segment: MusicSegment | null, energy: PlayableEnergy): number {
+  if (!segment) return 0;
+  if (energy === 'high') {
+    // Seek 1 second before the high segment so beat hits after delay
+    return Math.max(0, segment.timestamp - HIGH_BEAT_DELAY_SEC);
+  }
+  return segment.timestamp;
 }
 
 export function MusicProvider({ children }: { children: React.ReactNode }) {
@@ -217,7 +269,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Fetch tracks from API
-  const { data: apiTracksData, isLoading, error: queryError } = useQuery({
+  const { data: apiTracksData, isLoading, error: queryError, refetch: refetchTracks } = useQuery({
     ...api.music.list.queryOptions({}),
   });
   const apiTracks = apiTracksData as MusicTrack[] | undefined;
@@ -295,8 +347,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const preSelectRiseTrack = useCallback((energy: PlayableEnergy) => {
     if (!downloadedTracks || downloadedTracks.length === 0) return;
 
-    // Filter tracks that have the target energy segment (for buildup, we need 'medium' segment)
-    const trackPool = downloadedTracks.filter(t => hasEnergySegment(t, 'medium') && hasEnergySegment(t, 'high'));
+    // Filter tracks that are valid for Rise countdown (high segment at >= 5s)
+    const trackPool = downloadedTracks.filter(isValidForRiseCountdown);
     if (trackPool.length === 0) return;
 
     // Get IDs of recently played tracks
@@ -312,23 +364,31 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     const track = availableTracks[randomIndex];
     if (!track) return;
 
-    // Calculate rise duration (high.timestamp - medium.timestamp)
-    const segments = track.segments || [];
-    const mediumSegment = segments.find(s => s.energy === 'medium');
-    const highSegment = segments.find(s => s.energy === 'high');
-    if (!mediumSegment || !highSegment) return;
-
-    const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
-
+    // Rise duration is now fixed at RISE_COUNTDOWN_DURATION_SEC
     setPreSelectedRiseTrack({
       track,
-      riseDuration: Math.round(riseDuration * 10) / 10,
+      riseDuration: RISE_COUNTDOWN_DURATION_SEC,
     });
   }, [downloadedTracks]);
 
   // Clear pre-selected rise track
   const clearPreSelectedRiseTrack = useCallback(() => {
     setPreSelectedRiseTrack(null);
+  }, []);
+
+  // Helper to find segment at a specific timestamp
+  const findSegmentAtTimestamp = useCallback((segments: MusicSegment[], timestamp: number): MusicSegment | null => {
+    if (!segments || segments.length === 0) return null;
+    const sorted = [...segments].sort((a, b) => a.timestamp - b.timestamp);
+    let result = sorted[0] || null;
+    for (const segment of sorted) {
+      if (segment.timestamp <= timestamp) {
+        result = segment;
+      } else {
+        break;
+      }
+    }
+    return result;
   }, []);
 
   // Play next random track (optionally filtered by energy)
@@ -359,6 +419,14 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     let trackPool = targetEnergy
       ? downloadedTracks.filter(t => hasEnergySegment(t, targetEnergy))
       : downloadedTracks;
+
+    // For Rise countdown, filter for tracks valid for Rise (high segment >= 5s)
+    if (useBuildup && !naturalEnding) {
+      const riseCompatibleTracks = trackPool.filter(isValidForRiseCountdown);
+      if (riseCompatibleTracks.length > 0) {
+        trackPool = riseCompatibleTracks;
+      }
+    }
 
     // For natural ending, also filter by tracks that have duration metadata
     if (naturalEnding && roundEndTime) {
@@ -424,29 +492,36 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         naturalEndingActiveRef.current = naturalEnding;
         setIsNaturalEndingActive(naturalEnding);
 
-        // Handle buildup for Rise (medium to high transition) - NOT for natural ending
+        // Handle buildup for Rise countdown - NOT for natural ending
+        // Rise: seek to (highSegment.timestamp - 5s), countdown for fixed 5 seconds
         let playSegment = segment;
         if (useBuildup && !naturalEnding) {
           const segments = track.segments || [];
-          const mediumSegment = segments.find(s => s.energy === 'medium');
-          const highSegment = segments.find(s => s.energy === 'high');
+          const validHighSegments = getValidRiseHighSegments(segments);
 
-          if (mediumSegment && highSegment) {
-            const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
-            if (riseDuration > 0) {
-              console.log('[MusicProvider] playNextTrack - Rise duration calculated:', riseDuration);
-              startBuildupCountdown(riseDuration);
-              playSegment = mediumSegment; // Start at medium segment
-            }
-          } else if (segment?.buildupDuration && segment.buildupDuration > 0) {
-            // Fallback to segment's buildupDuration if no medium/high segments found
-            startBuildupCountdown(segment.buildupDuration);
+          if (validHighSegments.length > 0) {
+            // Pick a random valid high segment
+            const highSegment = validHighSegments[Math.floor(Math.random() * validHighSegments.length)];
+            // Seek to 5 seconds before the high segment drop
+            const seekPosition = highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC;
+            startBuildupCountdown(RISE_COUNTDOWN_DURATION_SEC);
+            playSegment = { ...highSegment, timestamp: seekPosition };
+            console.log('[MusicProvider] playNextTrack Rise countdown - seeking to:', seekPosition, 'drop at:', highSegment.timestamp);
           }
         }
 
         // For natural ending, use calculated seek position
         if (seekTimestamp !== undefined && playSegment) {
           playSegment = { ...playSegment, timestamp: seekTimestamp };
+        } else if (targetEnergy === 'high' && !useBuildup && playSegment) {
+          // Apply high beat delay - seek 1 second before high segment so beat hits after delay
+          const originalTimestamp = playSegment.timestamp;
+          const delayedTimestamp = applyHighBeatDelay(playSegment, 'high');
+          playSegment = { ...playSegment, timestamp: delayedTimestamp };
+          console.log('[MusicProvider] playNextTrack - applied high beat delay:', {
+            original: originalTimestamp,
+            delayed: delayedTimestamp,
+          });
         }
 
         await musicService.play(track, { segment: playSegment, useBuildup: false });
@@ -463,21 +538,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       isStartingRef.current = false;
     }
   }, [downloadedTracks, tracks, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp]);
-
-  // Helper to find segment at a specific timestamp
-  const findSegmentAtTimestamp = useCallback((segments: MusicSegment[], timestamp: number): MusicSegment | null => {
-    if (!segments || segments.length === 0) return null;
-    const sorted = [...segments].sort((a, b) => a.timestamp - b.timestamp);
-    let result = sorted[0] || null;
-    for (const segment of sorted) {
-      if (segment.timestamp <= timestamp) {
-        result = segment;
-      } else {
-        break;
-      }
-    }
-    return result;
-  }, []);
 
   // Clear pending trigger timeout (cleanup helper)
   const clearPendingTriggerTimeout = useCallback(() => {
@@ -501,10 +561,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     naturalEnding?: boolean;
     /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
     roundEndTime?: number;
+    /** Specific segment timestamp to play (for tracks with multiple high segments) */
+    segmentTimestamp?: number;
     /** Internal: retry count to prevent infinite loops */
     _retryCount?: number;
   }) => {
-    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, _retryCount = 0 } = options;
+    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, segmentTimestamp, _retryCount = 0 } = options;
 
     // Prevent infinite retry loops (max 2 retries = 200ms total)
     const MAX_RETRIES = 2;
@@ -606,6 +668,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
             // Find which segment the seek point falls into
             segment = findSegmentAtTimestamp(specificTrack.segments || [], seekTimestamp);
+          } else if (segmentTimestamp !== undefined) {
+            // Specific segment timestamp requested - find segment at that timestamp
+            const targetSegment = (specificTrack.segments || []).find(
+              s => s.energy === energy && s.timestamp === segmentTimestamp
+            );
+            if (targetSegment) {
+              segment = targetSegment;
+              console.log('[MusicProvider] playWithTrigger - using specific segment timestamp:', segmentTimestamp);
+            } else {
+              // Fallback: create segment at the requested timestamp
+              segment = { timestamp: segmentTimestamp, energy } as MusicSegment;
+              console.log('[MusicProvider] playWithTrigger - segment not found, using timestamp directly:', segmentTimestamp);
+            }
           } else {
             // Standard behavior - try to get segment with requested energy
             segment = getRandomSegmentByEnergy(specificTrack.segments || [], energy);
@@ -625,26 +700,43 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           setIsNaturalEndingActive(naturalEnding);
 
           // Handle buildup for specific tracks (not for natural ending)
+          // Rise countdown: seek to (highSegment.timestamp - 5s), countdown for fixed 5 seconds
           if (useBuildup && !naturalEnding) {
             const segments = specificTrack.segments || [];
-            const mediumSegment = segments.find(s => s.energy === 'medium');
-            const highSegment = segments.find(s => s.energy === 'high');
+            // Find valid high segments (timestamp >= RISE_COUNTDOWN_DURATION_SEC)
+            const validHighSegments = getValidRiseHighSegments(segments);
 
-            if (mediumSegment && highSegment) {
-              const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
-              if (riseDuration > 0) {
-                startBuildupCountdown(riseDuration);
-                segment = mediumSegment;
+            if (validHighSegments.length > 0) {
+              // Use segmentTimestamp if provided, otherwise pick random valid high segment
+              let highSegment = segmentTimestamp !== undefined
+                ? validHighSegments.find(s => s.timestamp === segmentTimestamp)
+                : validHighSegments[Math.floor(Math.random() * validHighSegments.length)];
+
+              if (highSegment) {
+                // Seek to 5 seconds before the high segment drop
+                const seekPosition = highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC;
+                startBuildupCountdown(RISE_COUNTDOWN_DURATION_SEC);
+                segment = { ...highSegment, timestamp: seekPosition };
+                console.log('[MusicProvider] Rise countdown - seeking to:', seekPosition, 'drop at:', highSegment.timestamp);
               }
-            } else if (segment?.buildupDuration && segment.buildupDuration > 0) {
-              startBuildupCountdown(segment.buildupDuration);
             }
           }
 
-          // Create a modified segment with the natural ending seek timestamp if needed
-          const playSegment = seekTimestamp !== undefined
-            ? { ...segment, timestamp: seekTimestamp } as MusicSegment
-            : segment;
+          // Create a modified segment with the appropriate seek timestamp
+          let playSegment: MusicSegment | null = segment;
+          if (seekTimestamp !== undefined) {
+            // Natural ending - use calculated seek position
+            playSegment = { ...segment, timestamp: seekTimestamp } as MusicSegment;
+          } else if (energy === 'high' && !useBuildup && segment) {
+            // Apply high beat delay - seek 1 second before high segment so beat hits after delay
+            const originalTimestamp = segment.timestamp;
+            const delayedTimestamp = applyHighBeatDelay(segment, 'high');
+            playSegment = { ...segment, timestamp: delayedTimestamp };
+            console.log('[MusicProvider] playWithTrigger - applied high beat delay:', {
+              original: originalTimestamp,
+              delayed: delayedTimestamp,
+            });
+          }
 
           // For buildup, we handle the countdown ourselves, so don't pass useBuildup to MusicService
           await musicService.play(specificTrack, { segment: playSegment || undefined, useBuildup: false });
@@ -662,26 +754,33 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
     // If useBuildup and we have a pre-selected rise track, use it
     if (useBuildup && preSelectedRiseTrack) {
-      const { track: preSelectedTrack, riseDuration } = preSelectedRiseTrack;
+      const { track: preSelectedTrack } = preSelectedRiseTrack;
 
       isStartingRef.current = true;
       try {
-        const mediumSegment = getRandomSegmentByEnergy(preSelectedTrack.segments || [], 'medium');
+        // Find valid high segments for Rise countdown
+        const validHighSegments = getValidRiseHighSegments(preSelectedTrack.segments || []);
+        const highSegment = validHighSegments.length > 0
+          ? validHighSegments[Math.floor(Math.random() * validHighSegments.length)]
+          : null;
 
-        if (mediumSegment) {
-          playedTracksHistory.current.push({ track: preSelectedTrack, segment: mediumSegment });
+        if (highSegment) {
+          // Seek to 5 seconds before the high segment drop
+          const seekPosition = highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC;
+          const playSegment = { ...highSegment, timestamp: seekPosition };
+
+          playedTracksHistory.current.push({ track: preSelectedTrack, segment: playSegment });
           setIsPaused(false);
-          setCurrentEnergy(mediumSegment.energy);
+          setCurrentEnergy('high'); // Will transition to high
           setIsEnabled(true);
           isSwitchingTrackRef.current = true;
           naturalEndingActiveRef.current = false;
           setIsNaturalEndingActive(false);
 
-          if (riseDuration && riseDuration > 0) {
-            startBuildupCountdown(riseDuration);
-          }
+          startBuildupCountdown(RISE_COUNTDOWN_DURATION_SEC);
+          console.log('[MusicProvider] Rise countdown (preselected) - seeking to:', seekPosition, 'drop at:', highSegment.timestamp);
 
-          await musicService.play(preSelectedTrack, { segment: mediumSegment, useBuildup: false });
+          await musicService.play(preSelectedTrack, { segment: playSegment, useBuildup: false });
           setError(null);
           setPreSelectedRiseTrack(null);
           return;
@@ -729,11 +828,15 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setIsHighCountdownActive(true);
   }, []);
 
-  // Rise from Rest - music plays during rest, drop hits exactly when exercise starts
-  // Seeks to: highSegment.timestamp - restDurationSec
-  const playRiseFromRest = useCallback(async (options: { trackId?: string; restDurationSec: number }) => {
-    const { trackId, restDurationSec } = options;
-    console.log('[MusicProvider] playRiseFromRest called:', { trackId, restDurationSec });
+  // Rise from Rest - music plays during rest, drop hits 0.75s after exercise starts (syncs with rise countdown)
+  // Seeks to: highSegment.timestamp - restDurationSec - DROP_DELAY_SEC
+  const playRiseFromRest = useCallback(async (options: { trackId?: string; restDurationSec: number; segmentTimestamp?: number }) => {
+    const { trackId, restDurationSec, segmentTimestamp } = options;
+    // Drop hits 0.75s after exercise starts to sync with rise countdown timing
+    const DROP_DELAY_SEC = 0.75;
+    const totalDuration = restDurationSec + DROP_DELAY_SEC;
+
+    console.log('[MusicProvider] playRiseFromRest called:', { trackId, restDurationSec, dropDelaySec: DROP_DELAY_SEC });
 
     if (restDurationSec <= 0) {
       console.warn('[MusicProvider] playRiseFromRest - invalid rest duration:', restDurationSec);
@@ -755,18 +858,28 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     } else {
-      // Pick random track from compatible pool
+      // Pick random track from compatible pool (needs high segment at >= totalDuration for positive seek)
       const compatibleTracks = downloadedTracks.filter(t => {
         const highSegments = t.segments?.filter(s => s.energy === 'high') || [];
-        return highSegments.some(s => s.timestamp >= restDurationSec);
+        return highSegments.some(s => s.timestamp >= totalDuration);
       });
 
       if (compatibleTracks.length === 0) {
-        console.warn('[MusicProvider] playRiseFromRest - no compatible tracks found for rest duration:', restDurationSec);
+        console.warn('[MusicProvider] playRiseFromRest - no compatible tracks found for duration:', totalDuration);
         return;
       }
 
-      track = compatibleTracks[Math.floor(Math.random() * compatibleTracks.length)];
+      // Exclude recently played tracks to avoid repeats
+      const recentlyPlayedIds = new Set(
+        playedTracksHistory.current.slice(-Math.max(0, compatibleTracks.length - 1)).map(h => h.track.id)
+      );
+      let availableTracks = compatibleTracks.filter(t => !recentlyPlayedIds.has(t.id));
+      if (availableTracks.length === 0) {
+        // All tracks recently played, reset history and use full pool
+        availableTracks = compatibleTracks;
+      }
+
+      track = availableTracks[Math.floor(Math.random() * availableTracks.length)];
     }
 
     if (!track) {
@@ -774,25 +887,48 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Find all valid high segments (timestamp >= restDurationSec)
-    const validHighSegments = (track.segments || [])
-      .filter(s => s.energy === 'high' && s.timestamp >= restDurationSec);
+    // Find the high segment to use
+    let highSegment: MusicSegment | undefined;
 
-    if (validHighSegments.length === 0) {
-      console.warn('[MusicProvider] playRiseFromRest - no valid high segments for track:', track.name);
-      return;
+    if (segmentTimestamp !== undefined) {
+      // Specific segment timestamp requested
+      highSegment = (track.segments || []).find(
+        s => s.energy === 'high' && s.timestamp === segmentTimestamp
+      );
+      if (highSegment) {
+        console.log('[MusicProvider] playRiseFromRest - using specific segment timestamp:', segmentTimestamp);
+        // Validate that seek position would be positive
+        if (highSegment.timestamp < totalDuration) {
+          console.warn('[MusicProvider] playRiseFromRest - specified segment timestamp too early for rest duration, falling back to random');
+          highSegment = undefined;
+        }
+      } else {
+        console.warn('[MusicProvider] playRiseFromRest - specified segment not found:', segmentTimestamp);
+      }
     }
 
-    // Pick random from valid high segments
-    const highSegment = validHighSegments[Math.floor(Math.random() * validHighSegments.length)]!;
+    // If no specific segment or it wasn't valid, find valid high segments
+    if (!highSegment) {
+      const validHighSegments = (track.segments || [])
+        .filter(s => s.energy === 'high' && s.timestamp >= totalDuration);
 
-    // Calculate seek position: drop hits exactly when rest ends
-    const seekTimestamp = highSegment.timestamp - restDurationSec;
+      if (validHighSegments.length === 0) {
+        console.warn('[MusicProvider] playRiseFromRest - no valid high segments for track:', track.name);
+        return;
+      }
+
+      // Pick random from valid high segments
+      highSegment = validHighSegments[Math.floor(Math.random() * validHighSegments.length)]!;
+    }
+
+    // Calculate seek position: drop hits 1s after exercise starts
+    const seekTimestamp = highSegment.timestamp - totalDuration;
 
     console.log('[MusicProvider] playRiseFromRest - precision calc:', {
       track: track.name,
       highSegmentTimestamp: highSegment.timestamp,
       restDurationSec,
+      dropDelaySec: DROP_DELAY_SEC,
       seekTimestamp,
     });
 
@@ -812,6 +948,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setCurrentEnergy(segmentAtSeek?.energy || 'high');
 
     await musicService.play(track, { segment: playSegment, useBuildup: false });
+    playedTracksHistory.current.push({ track, segment: playSegment });
     setIsPlaying(true);
     setIsPaused(false);
 
@@ -912,9 +1049,14 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     const highSegment = segments.find(s => s.energy === 'high');
 
     if (highSegment) {
-      console.log('[MusicProvider] seekToHighSegment - seeking to:', highSegment.timestamp);
-      musicService.seekTo(highSegment.timestamp);
-      setCurrentSegment(highSegment);
+      // Apply high beat delay - seek 1 second before high segment so beat hits after delay
+      const delayedTimestamp = applyHighBeatDelay(highSegment, 'high');
+      console.log('[MusicProvider] seekToHighSegment - seeking to:', {
+        original: highSegment.timestamp,
+        delayed: delayedTimestamp,
+      });
+      musicService.seekTo(delayedTimestamp);
+      setCurrentSegment({ ...highSegment, timestamp: delayedTimestamp });
       setCurrentEnergy('high');
       clearBuildupCountdown(); // Clear any buildup state
     } else {
@@ -934,6 +1076,29 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       clearPendingTriggerTimeout();
     }
   }, [clearPendingTriggerTimeout]);
+
+  // TODO: TEMPORARY - Remove once segment timestamps are finalized
+  // Refresh tracks from API to get updated segment timestamps for testing
+  const refreshTracks = useCallback(async () => {
+    console.log('[MusicProvider] refreshTracks - fetching latest tracks from API...');
+    try {
+      const result = await refetchTracks();
+      if (result.data && result.data.length > 0) {
+        const freshTracks = result.data as MusicTrack[];
+        // Update cache with fresh data
+        await AsyncStorage.setItem(TRACKS_CACHE_KEY, JSON.stringify(freshTracks));
+        setCachedTracks(freshTracks);
+        console.log('[MusicProvider] refreshTracks - updated', freshTracks.length, 'tracks');
+        // Log segment info for debugging
+        freshTracks.forEach(t => {
+          const highSegs = t.segments?.filter(s => s.energy === 'high') || [];
+          console.log(`[MusicProvider] Track "${t.name}" high segments:`, highSegs.map(s => s.timestamp));
+        });
+      }
+    } catch (error) {
+      console.error('[MusicProvider] refreshTracks - error:', error);
+    }
+  }, [refetchTracks]);
 
   // Stop music on unmount to prevent orphaned audio during hot reload
   // Use immediate=true to skip fade-out and ensure cleanup completes before JS context is destroyed
@@ -957,6 +1122,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           }
           break;
         case 'trackEnd':
+          console.log('[MusicProvider] trackEnd event', {
+            naturalEndingActive: naturalEndingActiveRef.current,
+            hasPendingTrigger: !!pendingTriggerRef.current,
+            isEnabled,
+            currentEnergy,
+          });
           setCurrentTrack(null);
           setCurrentSegment(null);
           clearBuildupCountdown();
@@ -973,12 +1144,20 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
               pendingTriggerRef.current = null;
               // Play the queued trigger
               playWithTrigger(pending);
+            } else if (isEnabled) {
+              // Natural ending finished but still in same round (edge case: workout paused)
+              // Music is still enabled, so play a new track at high energy
+              console.log('[MusicProvider] Natural ending complete in same round - playing new track at high energy');
+              playNextTrack({ energy: 'high' });
             } else {
+              console.log('[MusicProvider] Natural ending complete - music disabled, stopping playback');
               setIsPlaying(false);
             }
           } else if (isEnabled && currentEnergy && currentEnergy !== 'outro') {
+            console.log('[MusicProvider] Track ended - playing next at energy:', currentEnergy);
             playNextTrack({ energy: currentEnergy as PlayableEnergy });
           } else {
+            console.log('[MusicProvider] Track ended - stopping (disabled or outro energy)');
             setIsPlaying(false);
           }
           break;
@@ -1118,22 +1297,39 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isPaused, currentTrack]);
 
-  // Play or Resume - smart function that resumes if paused, or starts new track if stopped
+  // Play or Resume - smart function that resumes if paused, or enables music if stopped
+  // When starting fresh, just enables music and lets the trigger system (useWorkoutMusic) handle playback
   const playOrResume = useCallback(async () => {
+    console.log('[MusicProvider] playOrResume() called', {
+      isPaused,
+      currentTrack: currentTrack?.name ?? null,
+      currentEnergy,
+      isEnabled,
+    });
+
+    // Try to resume if we have a paused track
     if (isPaused && currentTrack) {
-      // Resume the paused track
-      console.log('[MusicProvider] playOrResume() - resuming paused track');
+      console.log('[MusicProvider] playOrResume() - attempting to resume paused track');
       setIsEnabled(true);
-      musicService.resume();
-      setIsPaused(false);
-      setIsPlaying(true);
-    } else {
-      // Start new random track at current energy (or 'low' as fallback)
-      console.log('[MusicProvider] playOrResume() - starting new track at energy:', currentEnergy);
-      setIsEnabled(true);
-      await playNextTrack({ energy: (currentEnergy as PlayableEnergy) || 'low' });
+      const resumeSuccess = musicService.resume();
+
+      if (resumeSuccess) {
+        console.log('[MusicProvider] playOrResume() - resume initiated successfully');
+        setIsPaused(false);
+        setIsPlaying(true);
+        return;
+      }
+
+      // Resume failed - fall through to enable music
+      console.log('[MusicProvider] playOrResume() - resume failed, enabling music for trigger system');
     }
-  }, [isPaused, currentTrack, currentEnergy, playNextTrack]);
+
+    // Enable music and let the trigger system (useWorkoutMusic) handle playback
+    // This prevents double-play when both playOrResume and the trigger system try to play
+    console.log('[MusicProvider] playOrResume() - enabling music, trigger system will handle playback');
+    setIsEnabled(true);
+    setIsPaused(false);
+  }, [isPaused, currentTrack, currentEnergy, isEnabled]);
 
   // Toggle music
   const toggle = useCallback(() => {
@@ -1252,6 +1448,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     playRiseFromRest,
     seekToHighSegment,
     clearNaturalEnding,
+    refreshTracks, // TODO: TEMPORARY - Remove once segment timestamps are finalized
   };
 
   return (

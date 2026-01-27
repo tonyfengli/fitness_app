@@ -124,6 +124,28 @@ export function evaluateTrigger(
     return { type: 'none', reason: 'Phase already triggered' };
   }
 
+  // Rise from Rest: Check on REST phase entry BEFORE checking rest trigger
+  // This is because Rise from Rest is configured on the NEXT exercise, not the rest phase
+  // For exercise 2+, any useBuildup: true means Rise from Rest (the only "rise" option available)
+  // Energy is always 'high' - Rise from Rest seeks to the high/drop segment
+  if (phase.type === 'rest' && context.nextExerciseTrigger) {
+    const nextTrigger = context.nextExerciseTrigger;
+    console.log('[MusicTrigger] Checking Rise from Rest:', {
+      nextTriggerEnabled: nextTrigger.enabled,
+      useBuildup: nextTrigger.useBuildup,
+      restDurationSec: context.restDurationSec,
+    });
+    if (nextTrigger.enabled && nextTrigger.useBuildup) {
+      return {
+        type: 'riseFromRest',
+        energy: 'high',
+        trackId: nextTrigger.trackId,
+        segmentTimestamp: nextTrigger.segmentTimestamp,
+        restDurationSec: context.restDurationSec ?? 0,
+      };
+    }
+  }
+
   // Get trigger config
   const trigger = getTriggerConfig(musicConfig, phase);
   if (!trigger?.enabled) {
@@ -155,6 +177,7 @@ export function evaluateTrigger(
       return {
         type: 'riseCountdown',
         trackId: trigger.trackId,
+        segmentTimestamp: trigger.segmentTimestamp,
       };
     }
     if (countdownType === 'high') {
@@ -162,21 +185,8 @@ export function evaluateTrigger(
       return {
         type: 'highCountdown',
         trackId: trigger.trackId,
+        segmentTimestamp: trigger.segmentTimestamp,
         durationMs: 4500,
-      };
-    }
-  }
-
-  // Rise from Rest: Check on REST phase entry
-  // Look ahead to see if the NEXT exercise has Rise from Rest configured
-  // Rise from Rest = exercise trigger with useBuildup + high energy (exercise 2+)
-  if (phase.type === 'rest' && context.nextExerciseTrigger) {
-    const nextTrigger = context.nextExerciseTrigger;
-    if (nextTrigger.enabled && nextTrigger.useBuildup && nextTrigger.energy === 'high') {
-      return {
-        type: 'riseFromRest',
-        trackId: nextTrigger.trackId,
-        restDurationSec: context.restDurationSec ?? 0,
       };
     }
   }
@@ -189,6 +199,7 @@ export function evaluateTrigger(
     type: 'play',
     energy: energy as PlayableEnergy,
     trackId: trigger.trackId,
+    segmentTimestamp: trigger.segmentTimestamp,
     useBuildup: trigger.useBuildup && !trigger.naturalEnding, // No buildup for natural ending
     naturalEnding: shouldUseNaturalEnding,
     roundEndTime: shouldUseNaturalEnding ? context.roundEndTime : undefined,

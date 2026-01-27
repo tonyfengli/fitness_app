@@ -91,6 +91,8 @@ export const MusicTriggerSchema = z.object({
   showRiseCountdown: z.boolean().optional(),
   // When energy is "high", show a 4.5s countdown before the high energy drop (current music ducks)
   showHighCountdown: z.boolean().optional(),
+  // Specific segment timestamp to play (for tracks with multiple high segments)
+  segmentTimestamp: z.number().optional(),
 });
 
 // Music configuration schema for a round

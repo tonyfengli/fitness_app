@@ -390,6 +390,7 @@ export function useWorkoutMusic({
           trackId: action.trackId,
           naturalEnding: action.naturalEnding,
           roundEndTime: action.roundEndTime,
+          segmentTimestamp: action.segmentTimestamp,
         });
         break;
       }
@@ -404,6 +405,7 @@ export function useWorkoutMusic({
             energy: 'high', // Skip buildup, go straight to high
             useBuildup: false,
             trackId: action.trackId,
+            segmentTimestamp: action.segmentTimestamp,
           });
           break;
         }
@@ -427,6 +429,7 @@ export function useWorkoutMusic({
             energy: 'high',
             useBuildup: false,
             trackId: action.trackId,
+            segmentTimestamp: action.segmentTimestamp,
           });
           break;
         }
@@ -439,26 +442,43 @@ export function useWorkoutMusic({
         });
         break;
 
-      case 'riseFromRest':
+      case 'riseFromRest': {
         // Rise from Rest - music plays during rest, drop hits when exercise starts
         // Gate with musicStartedFromPreview flag (same as other countdowns)
+
+        // Also consume the NEXT exercise phase so it doesn't fire when we enter the exercise
+        // Rise from Rest is for exerciseIndex+1 (the exercise AFTER this rest)
+        const nextExercisePhase = createPhaseKey(
+          'exercise',
+          currentRoundIndex,
+          currentExerciseIndex + 1,
+          currentSetNumber
+        );
+        const nextExerciseKey = serializeKey(nextExercisePhase);
+
         if (!musicStartedFromPreview) {
           console.log('[useWorkoutMusic] SKIPPING Rise from Rest - music enabled mid-workout, playing directly');
           markTriggered(phaseKey);
+          send({ type: 'CONSUME_PHASE', phaseKey: nextExerciseKey });
           playWithTrigger({
             energy: 'high',
             useBuildup: false,
             trackId: action.trackId,
+            segmentTimestamp: action.segmentTimestamp,
           });
           break;
         }
         console.log('[useWorkoutMusic] FIRING Rise from Rest for phase:', phaseKey, 'restDuration:', action.restDurationSec);
+        console.log('[useWorkoutMusic] Also consuming next exercise phase:', nextExerciseKey);
         markTriggered(phaseKey);
+        send({ type: 'CONSUME_PHASE', phaseKey: nextExerciseKey });
         playRiseFromRest({
           trackId: action.trackId,
           restDurationSec: action.restDurationSec,
+          segmentTimestamp: action.segmentTimestamp,
         });
         break;
+      }
     }
   }, [
     workoutState.value,

@@ -294,24 +294,6 @@ export function WorkoutControls({
                 marginRight: 8,
               }} />
 
-              {/* Music Play/Pause Button */}
-              <View style={{ marginRight: 6 }}>
-                <MusicPlayPauseButton
-                  send={send}
-                  workoutStateValue={state.value}
-                  currentRoundIndex={state.context.currentRoundIndex}
-                  currentExerciseIndex={state.context.currentExerciseIndex}
-                  currentSetNumber={state.context.currentSetNumber}
-                  isMusicPlaying={isMusicPlaying}
-                  isMusicPaused={isMusicPaused}
-                  currentTrack={currentTrack}
-                  pauseMusic={pauseMusic ?? (() => {})}
-                  playOrResume={playOrResume ?? (async () => {})}
-                  focusable={isSettingsPanelOpen}
-                  isStationsExercise={isStationsExercise}
-                />
-              </View>
-
               {/* Lights Button */}
               <Pressable
                 onPress={async () => {
@@ -320,6 +302,7 @@ export function WorkoutControls({
                   }
                 }}
                 focusable={isSettingsPanelOpen}
+                style={{ marginRight: 6 }}
               >
                 {({ focused }) => (
                   <MattePanel
@@ -351,6 +334,22 @@ export function WorkoutControls({
                   </MattePanel>
                 )}
               </Pressable>
+
+              {/* Music Play/Pause Button - always rightmost */}
+              <MusicPlayPauseButton
+                send={send}
+                workoutStateValue={state.value}
+                currentRoundIndex={state.context.currentRoundIndex}
+                currentExerciseIndex={state.context.currentExerciseIndex}
+                currentSetNumber={state.context.currentSetNumber}
+                isMusicPlaying={isMusicPlaying}
+                isMusicPaused={isMusicPaused}
+                currentTrack={currentTrack}
+                pauseMusic={pauseMusic ?? (() => {})}
+                playOrResume={playOrResume ?? (async () => {})}
+                focusable={isSettingsPanelOpen}
+                isStationsExercise={isStationsExercise}
+              />
             </View>
           )}
         </>

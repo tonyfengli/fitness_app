@@ -23,6 +23,12 @@ const ENERGY_DISPLAY: Record<EnergyLevel, string> = {
   high: "High",
 };
 
+// Playback modes - the primary selection for each phase type
+type Exercise1Mode = "rise" | "high";
+type Exercise2PlusMode = "riseFromRest" | "naturalEnding" | "high";
+type RestMode = "low" | "naturalEnding";
+type PlaybackMode = Exercise1Mode | Exercise2PlusMode | RestMode;
+
 interface MusicTrigger {
   enabled: boolean;
   trackId?: string;
@@ -32,6 +38,7 @@ interface MusicTrigger {
   energy?: EnergyLevel;
   repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
   naturalEnding?: boolean; // If true, seek so music ends naturally with round end
+  segmentTimestamp?: number; // Specific high segment timestamp to play (if not set, random)
 }
 
 interface RoundMusicConfig {
@@ -80,14 +87,22 @@ export function RoundMusicDrawer({
   const [detailEnabled, setDetailEnabled] = useState(false);
   const [detailTrackId, setDetailTrackId] = useState<string | null>(null);
   const [detailTrackName, setDetailTrackName] = useState<string>("");
-  const [detailEnergy, setDetailEnergy] = useState<EnergyLevel>("high");
   const [detailRepeatOnAllSets, setDetailRepeatOnAllSets] = useState(false);
+  // Mode-based state (replaces energy + toggles)
+  const [detailMode, setDetailMode] = useState<PlaybackMode>("high");
+  const [detailHighCountdown, setDetailHighCountdown] = useState(false); // Sub-option for High mode in Exercise 1
+  // Legacy state kept for compatibility during transition
+  const [detailEnergy, setDetailEnergy] = useState<EnergyLevel>("high");
   const [detailNaturalEnding, setDetailNaturalEnding] = useState(false);
   const [detailUseBuildup, setDetailUseBuildup] = useState(false);
   const [detailShowHighCountdown, setDetailShowHighCountdown] = useState(false);
 
   // Track picker state
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
+  const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
+
+  // Segment selection state (for tracks with multiple high segments)
+  const [detailSegmentTimestamp, setDetailSegmentTimestamp] = useState<number | null>(null);
 
   // Alert state for auto-enabled next round preview
   const [showNextRoundAlert, setShowNextRoundAlert] = useState(false);
@@ -511,31 +526,116 @@ export function RoundMusicDrawer({
     return ["low", "medium", "high"].filter((e) => energies.has(e as EnergyLevel)) as EnergyLevel[];
   };
 
+  // Get high segments from a track
+  const getHighSegments = (track: MusicTrack): number[] => {
+    if (!track.segments || track.segments.length === 0) return [];
+    return track.segments
+      .filter((s) => s.energy === "high")
+      .map((s) => s.timestamp)
+      .sort((a, b) => a - b);
+  };
+
+  // Format timestamp as m:ss
+  const formatTimestamp = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Map trigger config to playback mode
+  const triggerToMode = (trigger: MusicTrigger | undefined, phase: Phase): PlaybackMode => {
+    const isExercise1 = phase.phaseType === "exercise" && phase.index === 0;
+    const isExercise2Plus = phase.phaseType === "exercise" && phase.index > 0;
+    const isRest = phase.phaseType === "rest";
+    const isPreviewOrSetBreak = phase.phaseType === "preview" || phase.phaseType === "setBreak";
+
+    if (isPreviewOrSetBreak) {
+      // Preview and Set Break: Always low energy
+      return "low";
+    } else if (isExercise1) {
+      // Exercise 1: Rise (useBuildup) or High
+      if (trigger?.useBuildup && trigger?.energy === "medium") return "rise";
+      return "high"; // Default
+    } else if (isExercise2Plus) {
+      // Exercise 2+: Rise from Rest, Natural Ending, or High
+      if (trigger?.useBuildup) return "riseFromRest";
+      if (trigger?.naturalEnding) return "naturalEnding";
+      return "high"; // Default
+    } else if (isRest) {
+      // Rest: Low or Natural Ending
+      if (trigger?.naturalEnding) return "naturalEnding";
+      return "low"; // Default
+    }
+    return "low"; // Fallback (should not reach here)
+  };
+
   // Open phase detail
   const handleOpenPhaseDetail = (phase: Phase) => {
     const trigger = getTriggerForPhase(phase);
     console.log('[RoundMusicDrawer] Opening phase detail:', {
       phase: phase.key,
       trigger,
-      showHighCountdown: trigger?.showHighCountdown,
     });
     setDetailEnabled(trigger?.enabled ?? false);
     setDetailTrackId(trigger?.trackId || null);
     setDetailTrackName(trigger?.trackName || "");
-    // Rise (medium) is only allowed for preview/exercise phases - default to low for rest, high for setBreak
+    setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
+
+    // Map to new mode-based state
+    const mode = triggerToMode(trigger, phase);
+    setDetailMode(mode);
+    // High countdown is a sub-option for High mode in Exercise 1
+    setDetailHighCountdown(trigger?.showHighCountdown ?? false);
+
+    // Keep legacy state for compatibility
     const savedEnergy = trigger?.energy as EnergyLevel | undefined;
     const isRestOrSetBreak = phase.phaseType === "rest" || phase.phaseType === "setBreak";
-    const defaultEnergy = phase.phaseType === "rest" ? "low" : "high";
+    const defaultEnergy = (phase.phaseType === "rest" || phase.phaseType === "preview") ? "low" : "high";
     setDetailEnergy(
       savedEnergy && !(isRestOrSetBreak && savedEnergy === "medium")
         ? savedEnergy
         : defaultEnergy
     );
-    setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
     setDetailNaturalEnding(trigger?.naturalEnding ?? false);
     setDetailUseBuildup(trigger?.useBuildup ?? false);
     setDetailShowHighCountdown(trigger?.showHighCountdown ?? false);
+    setDetailSegmentTimestamp(trigger?.segmentTimestamp ?? null);
     setViewState({ type: "phase-detail", phase });
+  };
+
+  // Map playback mode to trigger fields
+  const modeToTriggerFields = (mode: PlaybackMode, phase: Phase): Partial<MusicTrigger> => {
+    const isExercise1 = phase.phaseType === "exercise" && phase.index === 0;
+
+    switch (mode) {
+      case "rise":
+        // Exercise 1: Rise countdown (medium energy, useBuildup)
+        return { energy: "medium", useBuildup: true, showHighCountdown: false, naturalEnding: false };
+      case "high":
+        // High energy - countdown is optional for Exercise 1 only
+        return {
+          energy: "high",
+          useBuildup: false,
+          showHighCountdown: isExercise1 ? detailHighCountdown : false,
+          naturalEnding: false,
+        };
+      case "riseFromRest":
+        // Exercise 2+: Rise from Rest (high energy, useBuildup)
+        return { energy: "high", useBuildup: true, showHighCountdown: false, naturalEnding: false };
+      case "naturalEnding":
+        // Natural ending - uses high energy for exercises, low for rest
+        return {
+          energy: phase.phaseType === "rest" ? "low" : "high",
+          useBuildup: false,
+          showHighCountdown: false,
+          naturalEnding: true,
+        };
+      case "low":
+        // Rest: Low energy
+        return { energy: "low", useBuildup: false, showHighCountdown: false, naturalEnding: false };
+      default:
+        return { energy: "high", useBuildup: false, showHighCountdown: false, naturalEnding: false };
+    }
   };
 
   // Apply phase detail changes and save immediately
@@ -545,6 +645,13 @@ export function RoundMusicDrawer({
     const phase = viewState.phase;
     const showRepeatOption = repeatTimes > 1 && (phase.phaseType === "exercise" || phase.phaseType === "rest");
 
+    // Map mode to trigger fields (only for exercise/rest phases that have mode UI)
+    // Preview and setBreak always use low energy
+    const isPreviewOrSetBreak = phase.phaseType === "preview" || phase.phaseType === "setBreak";
+    const modeFields = isPreviewOrSetBreak
+      ? { energy: "low" as EnergyLevel, useBuildup: false, showHighCountdown: false, naturalEnding: false }
+      : modeToTriggerFields(detailMode, phase);
+
     // Build updated config
     const newConfig = { ...localConfig };
     const defaultTrigger: MusicTrigger = { enabled: false };
@@ -552,16 +659,15 @@ export function RoundMusicDrawer({
       enabled: detailEnabled,
       trackId: detailTrackId || undefined,
       trackName: detailTrackId ? detailTrackName : undefined,
-      energy: detailEnergy,
-      naturalEnding: detailNaturalEnding,
-      useBuildup: detailUseBuildup,
-      showHighCountdown: detailShowHighCountdown,
+      segmentTimestamp: detailTrackId ? (detailSegmentTimestamp ?? undefined) : undefined,
+      ...modeFields,
       ...(showRepeatOption ? { repeatOnAllSets: detailRepeatOnAllSets } : {}),
     };
 
     console.log('[RoundMusicDrawer] Applying phase detail:', {
       phase: phase.key,
-      detailShowHighCountdown,
+      mode: detailMode,
+      modeFields,
       updates,
     });
 
@@ -666,7 +772,7 @@ export function RoundMusicDrawer({
         musicConfig: {
           roundPreview: {
             enabled: true,
-            energy: "high", // Default to high energy for preview
+            energy: "low", // Preview always plays at low energy
           },
         },
       });
@@ -696,13 +802,40 @@ export function RoundMusicDrawer({
     </button>
   );
 
+  // Get display name for a playback mode
+  const getModeDisplayName = (mode: PlaybackMode, phase: Phase, trigger?: MusicTrigger): string => {
+    switch (mode) {
+      case "rise":
+        return "Rise";
+      case "high":
+        // For Exercise 1, indicate if countdown is enabled
+        if (phase.phaseType === "exercise" && phase.index === 0 && trigger?.showHighCountdown) {
+          return "High (Countdown)";
+        }
+        return "High";
+      case "riseFromRest":
+        return "Rise from Rest";
+      case "naturalEnding":
+        return "Natural Ending";
+      case "low":
+        return "Low";
+      default:
+        return "High";
+    }
+  };
+
   // Get status text for a phase
   const getPhaseStatus = (phase: Phase): string => {
     const trigger = getTriggerForPhase(phase);
     if (!trigger?.enabled) return "No music";
 
-    const trackPart = trigger.trackName || "Random";
-    const energyPart = ENERGY_DISPLAY[trigger.energy || "high"];
+    let trackPart = trigger.trackName || "Random";
+    // Add segment timestamp if specified
+    if (trigger.trackName && trigger.segmentTimestamp !== undefined) {
+      trackPart += ` @ ${formatTimestamp(trigger.segmentTimestamp)}`;
+    }
+    const mode = triggerToMode(trigger, phase);
+    const modePart = getModeDisplayName(mode, phase, trigger);
 
     // Show repeat indicator for exercise/rest phases in multi-set rounds
     const showRepeat = repeatTimes > 1 &&
@@ -710,7 +843,7 @@ export function RoundMusicDrawer({
       trigger.repeatOnAllSets;
 
     const repeatPart = showRepeat ? ` · ${repeatTimes}x` : "";
-    return `${trackPart} · ${energyPart}${repeatPart}`;
+    return `${trackPart} · ${modePart}${repeatPart}`;
   };
 
   // Auto-dismiss alerts after 4 seconds
@@ -990,65 +1123,250 @@ export function RoundMusicDrawer({
             !detailEnabled && "opacity-40 pointer-events-none"
           )}>
             {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* WHAT TO PLAY Section */}
+            {/* MODE SELECTION - Different options per phase type */}
+            {/* Only shown for exercise and rest phases */}
             {/* ═══════════════════════════════════════════════════════════════ */}
-            <div className="mb-8">
-              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
-                What to Play
+            {(viewState.phase.phaseType === "exercise" || viewState.phase.phaseType === "rest") && (
+            <div className="mb-6">
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                Playback Mode
               </h3>
 
-              {/* Energy Selection */}
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Energy</p>
-                <div className="flex gap-2">
-                  {(["low", "medium", "high"] as EnergyLevel[])
-                    // Rise (medium) is only available for preview and exercise phases, not rest or setBreak
-                    .filter((energy) => {
-                      if (energy === "medium" && (viewState.phase.phaseType === "rest" || viewState.phase.phaseType === "setBreak")) {
-                        return false;
-                      }
-                      return true;
-                    })
-                    .map((energy) => {
-                    const isAvailable = !availableEnergies || availableEnergies.includes(energy);
-                    const isSelected = detailEnergy === energy;
-
-                    return (
-                      <button
-                        key={energy}
-                        onClick={() => {
-                          if (!isAvailable) return;
-                          setDetailEnergy(energy);
-                          // Clear energy-specific settings when changing energy
-                          // Rise countdown only applies to "medium" energy
-                          if (energy !== "medium") setDetailUseBuildup(false);
-                          // High countdown only applies to "high" energy
-                          if (energy !== "high") setDetailShowHighCountdown(false);
-                        }}
-                        disabled={!isAvailable}
-                        className={cn(
-                          "flex-1 py-3 rounded-xl font-medium transition-all",
-                          !isAvailable && "opacity-30 cursor-not-allowed",
-                          isSelected
-                            ? energy === "low"
-                              ? "bg-blue-500 text-white"
-                              : energy === "medium"
-                              ? "bg-amber-500 text-white"
-                              : "bg-orange-500 text-white"
-                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                        )}
-                      >
-                        {ENERGY_DISPLAY[energy]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Track Selection - Radio Button Style */}
               <div className="space-y-2">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Track</p>
+                {/* Exercise 1: Rise or High */}
+                {viewState.phase.phaseType === "exercise" && viewState.phase.index === 0 && (
+                  <>
+                    {/* Rise Mode */}
+                    <button
+                      onClick={() => {
+                        setDetailMode("rise");
+                        setDetailHighCountdown(false);
+                      }}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                        detailMode === "rise"
+                          ? "bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                        detailMode === "rise" ? "border-amber-500" : "border-gray-300 dark:border-gray-600"
+                      )}>
+                        {detailMode === "rise" && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">Rise</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Buildup → 3-2-1 countdown → Drop
+                        </p>
+                      </div>
+                    </button>
 
+                    {/* High Mode */}
+                    <button
+                      onClick={() => setDetailMode("high")}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all",
+                        detailMode === "high"
+                          ? "bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                          detailMode === "high" ? "border-orange-500" : "border-gray-300 dark:border-gray-600"
+                        )}>
+                          {detailMode === "high" && <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white">High</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Start at high energy
+                          </p>
+                        </div>
+                      </div>
+                      {/* Countdown sub-option for High mode */}
+                      {detailMode === "high" && (
+                        <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-800">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailHighCountdown(!detailHighCountdown);
+                            }}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <div className={cn(
+                              "w-4 h-4 rounded border-2 flex items-center justify-center",
+                              detailHighCountdown
+                                ? "bg-orange-500 border-orange-500"
+                                : "border-gray-300 dark:border-gray-600"
+                            )}>
+                              {detailHighCountdown && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                              Show 3-2-1 countdown
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </button>
+                  </>
+                )}
+
+                {/* Exercise 2+: Rise from Rest, Natural Ending, or High */}
+                {viewState.phase.phaseType === "exercise" && viewState.phase.index > 0 && (
+                  <>
+                    {/* Rise from Rest */}
+                    <button
+                      onClick={() => setDetailMode("riseFromRest")}
+                      disabled={!isRiseFromRestAvailable.available}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                        !isRiseFromRestAvailable.available && "opacity-50 cursor-not-allowed",
+                        detailMode === "riseFromRest"
+                          ? "bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                        detailMode === "riseFromRest" ? "border-amber-500" : "border-gray-300 dark:border-gray-600"
+                      )}>
+                        {detailMode === "riseFromRest" && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn("font-medium", !isRiseFromRestAvailable.available ? "text-gray-400" : "text-gray-900 dark:text-white")}>
+                          Rise from Rest
+                        </p>
+                        <p className={cn("text-sm", !isRiseFromRestAvailable.available ? "text-gray-400" : "text-gray-500 dark:text-gray-400")}>
+                          {!isRiseFromRestAvailable.available
+                            ? isRiseFromRestAvailable.reason
+                            : "Music plays during rest, drop hits when exercise starts"}
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Natural Ending */}
+                    <button
+                      onClick={() => setDetailMode("naturalEnding")}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                        detailMode === "naturalEnding"
+                          ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                        detailMode === "naturalEnding" ? "border-purple-500" : "border-gray-300 dark:border-gray-600"
+                      )}>
+                        {detailMode === "naturalEnding" && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">Natural Ending</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Music ends when the set completes
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* High */}
+                    <button
+                      onClick={() => setDetailMode("high")}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                        detailMode === "high"
+                          ? "bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                        detailMode === "high" ? "border-orange-500" : "border-gray-300 dark:border-gray-600"
+                      )}>
+                        {detailMode === "high" && <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">High</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Play at high energy
+                        </p>
+                      </div>
+                    </button>
+                  </>
+                )}
+
+                {/* Rest: Low or Natural Ending */}
+                {viewState.phase.phaseType === "rest" && (
+                  <>
+                    {/* Low */}
+                    <button
+                      onClick={() => setDetailMode("low")}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                        detailMode === "low"
+                          ? "bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                        detailMode === "low" ? "border-blue-500" : "border-gray-300 dark:border-gray-600"
+                      )}>
+                        {detailMode === "low" && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">Low</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Play at low energy during rest
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Natural Ending */}
+                    <button
+                      onClick={() => setDetailMode("naturalEnding")}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                        detailMode === "naturalEnding"
+                          ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                        detailMode === "naturalEnding" ? "border-purple-500" : "border-gray-300 dark:border-gray-600"
+                      )}>
+                        {detailMode === "naturalEnding" && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">Natural Ending</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Music ends when rest completes
+                        </p>
+                      </div>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* TRACK SELECTION */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <div className="mb-6">
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                Track
+              </h3>
+
+              <div className="space-y-2">
                 {/* Random Option */}
                 <button
                   onClick={() => {
@@ -1062,58 +1380,64 @@ export function RoundMusicDrawer({
                       : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
                   )}
                 >
-                  {/* Radio Circle */}
                   <div className={cn(
                     "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-                    trackMode === "random"
-                      ? "border-purple-500"
-                      : "border-gray-300 dark:border-gray-600"
+                    trackMode === "random" ? "border-purple-500" : "border-gray-300 dark:border-gray-600"
                   )}>
-                    {trackMode === "random" && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                    )}
+                    {trackMode === "random" && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 dark:text-white">Random</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Auto-select based on energy level
+                      Auto-select a compatible track
                     </p>
                   </div>
                 </button>
 
                 {/* Specific Track Option */}
-                <button
+                <div
                   onClick={() => {
                     if (trackMode === "random") {
-                      // Switch to specific mode - open track picker
                       setTrackSearchQuery("");
+                      setExpandedTrackId(null);
                       setViewState({ type: "track-picker", phase: viewState.phase });
                     }
                   }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      if (trackMode === "random") {
+                        setTrackSearchQuery("");
+                        setExpandedTrackId(null);
+                        setViewState({ type: "track-picker", phase: viewState.phase });
+                      }
+                    }
+                  }}
                   className={cn(
-                    "w-full p-4 rounded-xl text-left transition-all",
+                    "w-full p-4 rounded-xl text-left transition-all cursor-pointer",
                     trackMode === "specific"
                       ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
                       : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    {/* Radio Circle */}
                     <div className={cn(
                       "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-                      trackMode === "specific"
-                        ? "border-purple-500"
-                        : "border-gray-300 dark:border-gray-600"
+                      trackMode === "specific" ? "border-purple-500" : "border-gray-300 dark:border-gray-600"
                     )}>
-                      {trackMode === "specific" && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                      )}
+                      {trackMode === "specific" && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white">Specific Track</p>
                       {trackMode === "specific" && detailTrackName ? (
                         <p className="text-sm text-purple-600 dark:text-purple-400 truncate">
                           {detailTrackName}
+                          {detailSegmentTimestamp !== null && (
+                            <span className="text-orange-500 ml-1">
+                              @ {formatTimestamp(detailSegmentTimestamp)}
+                            </span>
+                          )}
                         </p>
                       ) : (
                         <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1121,12 +1445,12 @@ export function RoundMusicDrawer({
                         </p>
                       )}
                     </div>
-                    {/* Change button when specific track is selected */}
                     {trackMode === "specific" && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setTrackSearchQuery("");
+                          setExpandedTrackId(null);
                           setViewState({ type: "track-picker", phase: viewState.phase });
                         }}
                         className="px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors"
@@ -1135,268 +1459,47 @@ export function RoundMusicDrawer({
                       </button>
                     )}
                   </div>
-                </button>
+                </div>
               </div>
             </div>
 
             {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* HOW TO PLAY Section */}
+            {/* REPEAT OPTION - Only for multi-set rounds */}
             {/* ═══════════════════════════════════════════════════════════════ */}
-            <div className="mb-8">
-              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
-                How to Play
-              </h3>
-
-              <div className="space-y-3">
-                {/* Repeat on All Sets - Only show for exercise/rest phases in rounds with 2+ sets */}
-                {repeatTimes > 1 && (viewState.phase.phaseType === "exercise" || viewState.phase.phaseType === "rest") && (
-                  <button
-                    onClick={() => setDetailRepeatOnAllSets(!detailRepeatOnAllSets)}
-                    className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          Play every set
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                          {detailRepeatOnAllSets
-                            ? `Triggers on all ${repeatTimes} sets`
-                            : "Only triggers on first set"}
-                        </p>
-                      </div>
-                      <div
-                        className={cn(
-                          "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                          detailRepeatOnAllSets ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                            detailRepeatOnAllSets ? "translate-x-6" : "translate-x-1"
-                          )}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                )}
-
-                {/* Rise Countdown - For exercise phases */}
-                {/* Exercise 0: Traditional Rise (medium buildup → 3-2-1 → drop) */}
-                {/* Exercise 2+: Rise from Rest (music plays during rest, drop hits when exercise starts) */}
-                {viewState.phase.phaseType === "exercise" && (() => {
-                  const isFirstExercise = viewState.phase.index === 0;
-                  const isRiseDisabled = !isFirstExercise && !isRiseFromRestAvailable.available;
-
-                  return (
-                    <button
-                      onClick={() => {
-                        if (isRiseDisabled) return;
-                        const newValue = !detailUseBuildup;
-                        setDetailUseBuildup(newValue);
-                        // Auto-select energy based on exercise type
-                        if (newValue) {
-                          // Exercise 0: medium energy for traditional Rise
-                          // Exercise 2+: high energy for Rise from Rest (drop target)
-                          setDetailEnergy(isFirstExercise ? "medium" : "high");
-                          // Disable High countdown (mutually exclusive)
-                          setDetailShowHighCountdown(false);
-                        }
-                      }}
-                      disabled={isRiseDisabled}
-                      className={cn(
-                        "w-full p-4 rounded-xl transition-all text-left",
-                        isRiseDisabled
-                          ? "bg-gray-100 dark:bg-gray-800/30 cursor-not-allowed opacity-50"
-                          : detailUseBuildup
-                            ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300 dark:ring-amber-700"
-                            : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            "font-medium",
-                            isRiseDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
-                          )}>
-                            {isFirstExercise ? "Rise countdown" : "Rise from rest"}
-                          </p>
-                          <p className={cn(
-                            "text-sm mt-0.5",
-                            isRiseDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"
-                          )}>
-                            {isFirstExercise
-                              ? "Buildup → 3-2-1 → Drop into high energy"
-                              : isRiseDisabled
-                                ? isRiseFromRestAvailable.reason
-                                : "Music plays during rest, drop hits when exercise starts"}
-                          </p>
-                        </div>
-                        <div
-                          className={cn(
-                            "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                            isRiseDisabled
-                              ? "bg-gray-200 dark:bg-gray-700"
-                              : detailUseBuildup
-                                ? "bg-amber-500"
-                                : "bg-gray-200 dark:bg-gray-700"
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                              detailUseBuildup && !isRiseDisabled ? "translate-x-6" : "translate-x-1"
-                            )}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Info section */}
-                      {detailUseBuildup && !isRiseDisabled && (
-                        <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
-                          <div className="flex items-start gap-2">
-                            <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <p className="text-sm text-amber-700 dark:text-amber-300">
-                              {isFirstExercise
-                                ? "Music starts at the buildup, countdown appears at 3 seconds before the drop"
-                                : `Music seeks so the drop hits exactly when the ${restDuration}s rest ends`}
-                            </p>
-                          </div>
-                          {!isFirstExercise && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 ml-6">
-                              {riseFromRestCompatibleTracks.length} compatible track{riseFromRestCompatibleTracks.length !== 1 ? 's' : ''} available
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })()}
-
-                {/* High Countdown - Only for exercise phases (index 0 = first exercise), auto-selects High energy */}
-                {viewState.phase.phaseType === "exercise" && viewState.phase.index === 0 && (
-                  <button
-                    onClick={() => {
-                      const newValue = !detailShowHighCountdown;
-                      setDetailShowHighCountdown(newValue);
-                      // Auto-select High energy when enabling High countdown
-                      if (newValue) {
-                        setDetailEnergy("high");
-                        // Disable Rise countdown (mutually exclusive)
-                        setDetailUseBuildup(false);
-                      }
-                    }}
-                    className={cn(
-                      "w-full p-4 rounded-xl transition-all text-left",
-                      detailShowHighCountdown
-                        ? "bg-orange-50 dark:bg-orange-900/20 ring-1 ring-orange-300 dark:ring-orange-700"
-                        : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          High countdown
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                          Duck current music → 3-2-1 → Drop into high energy
-                        </p>
-                      </div>
-                      <div
-                        className={cn(
-                          "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                          detailShowHighCountdown ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                            detailShowHighCountdown ? "translate-x-6" : "translate-x-1"
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    {/* High countdown info */}
-                    {detailShowHighCountdown && (
-                      <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-800">
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <p className="text-sm text-orange-700 dark:text-orange-300">
-                            Current music ducks to 40%, countdown displays, then drops into high energy
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                )}
-
-                {/* Natural Ending */}
+            {repeatTimes > 1 && (viewState.phase.phaseType === "exercise" || viewState.phase.phaseType === "rest") && (
+              <div className="mb-6">
                 <button
-                  onClick={() => setDetailNaturalEnding(!detailNaturalEnding)}
-                  className={cn(
-                    "w-full p-4 rounded-xl transition-all text-left",
-                    detailNaturalEnding
-                      ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300 dark:ring-amber-700"
-                      : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  )}
+                  onClick={() => setDetailRepeatOnAllSets(!detailRepeatOnAllSets)}
+                  className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 text-left">
                       <p className="font-medium text-gray-900 dark:text-white">
-                        Natural ending
+                        Play every set
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                        Music ends when the set completes
+                        {detailRepeatOnAllSets
+                          ? `Triggers on all ${repeatTimes} sets`
+                          : "Only triggers on first set"}
                       </p>
                     </div>
                     <div
                       className={cn(
                         "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                        detailNaturalEnding ? "bg-amber-500" : "bg-gray-200 dark:bg-gray-700"
+                        detailRepeatOnAllSets ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
                       )}
                     >
                       <div
                         className={cn(
                           "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                          detailNaturalEnding ? "translate-x-6" : "translate-x-1"
+                          detailRepeatOnAllSets ? "translate-x-6" : "translate-x-1"
                         )}
                       />
                     </div>
                   </div>
-
-                  {/* Natural ending info/warning */}
-                  {detailNaturalEnding && (
-                    <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
-                      {trackMode === "random" ? (
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <p className="text-sm text-amber-700 dark:text-amber-300">
-                            A compatible track will be auto-selected based on set duration
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            "{detailTrackName}" will play and end with the set
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -1538,6 +1641,9 @@ export function RoundMusicDrawer({
             ) : (
               filteredTracks.map((track) => {
                 const energyLevels = getTrackEnergyLevels(track);
+                const highSegments = getHighSegments(track);
+                const hasMultipleHighSegments = highSegments.length > 1;
+                const isExpanded = expandedTrackId === track.id;
 
                 // Determine compatibility based on active mode
                 const isRiseFromRest = detailUseBuildup &&
@@ -1554,89 +1660,164 @@ export function RoundMusicDrawer({
                   isDisabled = !compatibility.compatible;
                 } else if (isRiseFromRest) {
                   // Rise from Rest compatibility (exercise 2+)
-                  // Must be unused AND have valid high segment timing
-                  if (usedTrackIds.has(track.id)) {
-                    compatibility = { compatible: false, reason: "Already used in workout" };
-                    isDisabled = true;
-                  } else {
-                    const riseCompat = getTrackRiseFromRestCompatibility(track);
-                    compatibility = {
-                      compatible: riseCompat.compatible,
-                      reason: riseCompat.reason
-                    };
-                    isDisabled = !riseCompat.compatible;
-                  }
+                  // Check timing compatibility only - trainers can select any track
+                  // (usedTrackIds is still used for random selection to avoid repeats)
+                  const riseCompat = getTrackRiseFromRestCompatibility(track);
+                  compatibility = {
+                    compatible: riseCompat.compatible,
+                    reason: riseCompat.reason
+                  };
+                  isDisabled = !riseCompat.compatible;
                 } else {
                   compatibility = { compatible: true };
                   isDisabled = false;
                 }
 
+                // Handle track click
+                const handleTrackClick = () => {
+                  if (isDisabled) return;
+
+                  if (hasMultipleHighSegments) {
+                    // Toggle expansion for tracks with multiple high segments
+                    setExpandedTrackId(isExpanded ? null : track.id);
+                  } else {
+                    // Direct selection for tracks with 0-1 high segments
+                    setDetailTrackId(track.id);
+                    setDetailTrackName(track.name);
+                    setDetailSegmentTimestamp(null); // Random/default
+                    if (energyLevels.length > 0 && !energyLevels.includes(detailEnergy)) {
+                      setDetailEnergy(energyLevels[0]!);
+                    }
+                    setExpandedTrackId(null);
+                    setViewState({ type: "phase-detail", phase: viewState.phase });
+                  }
+                };
+
+                // Handle segment selection
+                const handleSegmentSelect = (timestamp: number | null) => {
+                  setDetailTrackId(track.id);
+                  setDetailTrackName(track.name);
+                  setDetailSegmentTimestamp(timestamp);
+                  if (energyLevels.length > 0 && !energyLevels.includes(detailEnergy)) {
+                    setDetailEnergy(energyLevels[0]!);
+                  }
+                  setExpandedTrackId(null);
+                  setViewState({ type: "phase-detail", phase: viewState.phase });
+                };
+
                 return (
-                  <button
-                    key={track.id}
-                    onClick={() => {
-                      if (isDisabled) return;
-                      setDetailTrackId(track.id);
-                      setDetailTrackName(track.name);
-                      // Auto-select first available energy if current isn't available
-                      if (energyLevels.length > 0 && !energyLevels.includes(detailEnergy)) {
-                        setDetailEnergy(energyLevels[0]!);
-                      }
-                      setViewState({ type: "phase-detail", phase: viewState.phase });
-                    }}
-                    disabled={isDisabled}
-                    className={cn(
-                      "w-full p-4 rounded-xl text-left transition-all",
-                      isDisabled && "opacity-50 cursor-not-allowed",
-                      !isDisabled && detailTrackId === track.id
-                        ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
-                        : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "font-medium truncate",
-                          isDisabled
-                            ? "text-gray-400 dark:text-gray-500"
-                            : "text-gray-900 dark:text-white"
-                        )}>
-                          {track.name}
-                        </p>
-                        {isDisabled && compatibility.reason ? (
-                          <p className="text-xs text-red-400 mt-1">
-                            {compatibility.reason}
-                          </p>
-                        ) : energyLevels.length > 0 ? (
-                          <div className="flex gap-1 mt-1">
-                            {energyLevels.map((e) => (
-                              <span
-                                key={e}
-                                className={cn(
-                                  "text-xs font-medium",
-                                  e === "low" && "text-blue-500",
-                                  e === "medium" && "text-amber-500",
-                                  e === "high" && "text-orange-500"
-                                )}
-                              >
-                                {ENERGY_DISPLAY[e]}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                      {!isDisabled && detailTrackId === track.id && (
-                        <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
+                  <div key={track.id} className="space-y-1">
+                    <button
+                      onClick={handleTrackClick}
+                      disabled={isDisabled}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-left transition-all",
+                        isDisabled && "opacity-50 cursor-not-allowed",
+                        isExpanded
+                          ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                          : !isDisabled && detailTrackId === track.id
+                          ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                          : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
                       )}
-                    </div>
-                  </button>
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "font-medium truncate",
+                            isDisabled
+                              ? "text-gray-400 dark:text-gray-500"
+                              : "text-gray-900 dark:text-white"
+                          )}>
+                            {track.name}
+                          </p>
+                          {isDisabled && compatibility.reason ? (
+                            <p className="text-xs text-red-400 mt-1">
+                              {compatibility.reason}
+                            </p>
+                          ) : (
+                            <div className="flex items-center gap-2 mt-1">
+                              {energyLevels.length > 0 && (
+                                <div className="flex gap-1">
+                                  {energyLevels.map((e) => (
+                                    <span
+                                      key={e}
+                                      className={cn(
+                                        "text-xs font-medium",
+                                        e === "low" && "text-blue-500",
+                                        e === "medium" && "text-amber-500",
+                                        e === "high" && "text-orange-500"
+                                      )}
+                                    >
+                                      {ENERGY_DISPLAY[e]}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {hasMultipleHighSegments && (
+                                <span className="text-xs text-gray-400">
+                                  · {highSegments.length} drops
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {!isDisabled && (
+                          hasMultipleHighSegments ? (
+                            <svg
+                              className={cn(
+                                "w-5 h-5 text-gray-400 flex-shrink-0 transition-transform",
+                                isExpanded && "rotate-180"
+                              )}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          ) : detailTrackId === track.id ? (
+                            <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          ) : null
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Expanded segment picker */}
+                    {isExpanded && hasMultipleHighSegments && (
+                      <div className="ml-4 pl-4 border-l-2 border-purple-200 dark:border-purple-800 space-y-1">
+                        {/* Random option */}
+                        <button
+                          onClick={() => handleSegmentSelect(null)}
+                          className="w-full px-3 py-2 rounded-lg text-left text-sm flex items-center justify-between hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                        >
+                          <span className="text-gray-700 dark:text-gray-300">Random</span>
+                          <span className="text-xs text-gray-400">any drop</span>
+                        </button>
+
+                        {/* Individual segments */}
+                        {highSegments.map((timestamp, idx) => (
+                          <button
+                            key={timestamp}
+                            onClick={() => handleSegmentSelect(timestamp)}
+                            className="w-full px-3 py-2 rounded-lg text-left text-sm flex items-center justify-between hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                          >
+                            <span className="text-gray-700 dark:text-gray-300">
+                              Drop {idx + 1}
+                            </span>
+                            <span className="text-xs font-mono text-orange-500">
+                              {formatTimestamp(timestamp)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })
             )}
