@@ -37,6 +37,10 @@ export interface WorkoutContext {
   // When true, countdown triggers (Rise/High) are allowed
   // When false (manual mid-workout enable), countdowns are skipped - just play music
   musicStartedFromPreview: boolean;
+
+  // Flag to track if we skipped from one preview to another
+  // When true, preview triggers without explicit trackId should keep current music
+  skippedFromPreview: boolean;
 }
 
 export type WorkoutEvent =
@@ -83,6 +87,8 @@ export const workoutMachine = createMachine({
     musicEnabled: false,
     // Music started from preview - gates countdown triggers
     musicStartedFromPreview: false,
+    // Skipped from preview - when true, keep current music unless explicit trackId
+    skippedFromPreview: false,
   },
   states: {
     roundPreview: {
@@ -122,7 +128,9 @@ export const workoutMachine = createMachine({
             actions: assign({
               currentRoundIndex: ({ context }) => context.currentRoundIndex + 1,
               currentExerciseIndex: 0,
-              currentSetNumber: 1
+              currentSetNumber: 1,
+              // Mark that we skipped from preview to preview - keep current music
+              skippedFromPreview: true
             }),
             reenter: true
           },
@@ -182,6 +190,8 @@ export const workoutMachine = createMachine({
     
     exercise: {
       entry: assign({
+        // Clear the skip flag when entering exercise - no longer in preview-to-preview flow
+        skippedFromPreview: false,
         timeRemaining: ({ context }) => {
           // Get work duration from current round template
           const config = context.circuitConfig?.config;

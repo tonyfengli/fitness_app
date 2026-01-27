@@ -32,6 +32,7 @@ export interface MusicTrack {
   genre?: string | null;
   downloadUrl?: string | null;
   segments: MusicSegment[];
+  recommendedForNaturalEnding?: boolean | null;
 }
 
 interface MusicConfig {

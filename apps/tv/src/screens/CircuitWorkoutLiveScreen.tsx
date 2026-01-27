@@ -359,14 +359,21 @@ export function CircuitWorkoutLiveScreen() {
 
   // Sync music state from overview screen on mount
   // If music is already playing (started on overview), sync XState to match
+  // Also consume preview phase to prevent re-triggering (music already playing)
   const hasSyncedMusicState = useRef(false);
   useEffect(() => {
     if (!hasSyncedMusicState.current && isMusicPlaying && !state.context.musicEnabled) {
       console.log('[CircuitWorkoutLiveScreen] Syncing music state from overview - music already playing');
+
+      // Consume preview phase to prevent re-triggering when music is enabled
+      // Music is already playing from overview, no need to fire preview trigger again
+      const previewPhaseKey = `preview-${state.context.currentRoundIndex}-0-${state.context.currentSetNumber}`;
+      send({ type: 'CONSUME_PHASE', phaseKey: previewPhaseKey });
+
       send({ type: 'SET_MUSIC_ENABLED', enabled: true });
       hasSyncedMusicState.current = true;
     }
-  }, [isMusicPlaying, state.context.musicEnabled, send]);
+  }, [isMusicPlaying, state.context.musicEnabled, state.context.currentRoundIndex, state.context.currentSetNumber, send]);
 
   // Check if rise countdown should be shown for the current round's first exercise
   // Rise countdown triggers when transitioning from preview to exercise with useBuildup: true
@@ -401,8 +408,8 @@ export function CircuitWorkoutLiveScreen() {
       return { hasCountdown: false, type: null, riseDuration: null };
     }
 
-    // Rise countdown: useBuildup is true AND energy is medium (Rise = buildup from medium to high)
-    const hasRise = exercise1Trigger?.useBuildup === true && exercise1Trigger?.energy === 'medium';
+    // Rise countdown: useBuildup is true (medium energy is deprecated)
+    const hasRise = exercise1Trigger?.useBuildup === true;
     // High countdown: showHighCountdown is true and energy is high
     const hasHigh = exercise1Trigger?.showHighCountdown === true && exercise1Trigger?.energy === 'high';
 
@@ -416,25 +423,8 @@ export function CircuitWorkoutLiveScreen() {
       return { hasCountdown: false, type: null, riseDuration: null };
     }
 
-    // Calculate rise duration if it's a Rise countdown with a specific track
-    // For random tracks, we don't show duration since it's unknown until play time
-    let riseDuration: number | null = null;
-    if (hasRise) {
-      const trackId = exercise1Trigger?.trackId;
-      if (trackId) {
-        // Specific track - calculate from segments
-        const track = tracks.find(t => t.id === trackId);
-        if (track) {
-          const segments = track.segments || [];
-          const mediumSegment = segments.find((s: any) => s.energy === 'medium');
-          const highSegment = segments.find((s: any) => s.energy === 'high');
-          if (mediumSegment && highSegment) {
-            riseDuration = Math.round(highSegment.timestamp - mediumSegment.timestamp);
-          }
-        }
-      }
-      // For random tracks (no trackId), riseDuration stays null - we just show orange styling
-    }
+    // Rise duration is now fixed at 5 seconds
+    const riseDuration: number | null = hasRise ? 5 : null;
 
     return {
       hasCountdown: true,
@@ -638,10 +628,9 @@ export function CircuitWorkoutLiveScreen() {
     );
     const exercise1Trigger = currentRoundConfig?.music?.exercises?.[0];
 
-    // Rise: useBuildup is true AND energy is medium
+    // Rise: useBuildup is true (medium energy is deprecated)
     const hasRiseConfigured = exercise1Trigger?.enabled &&
-                              exercise1Trigger?.useBuildup === true &&
-                              exercise1Trigger?.energy === 'medium';
+                              exercise1Trigger?.useBuildup === true;
 
     // High: showHighCountdown is true AND energy is high
     const hasHighConfigured = exercise1Trigger?.enabled &&
@@ -673,7 +662,7 @@ export function CircuitWorkoutLiveScreen() {
       console.log('[CircuitWorkoutLiveScreen] Timer trigger: Rise countdown');
       setRiseCountdownActive(true);
       playWithTrigger({
-        energy: 'medium',
+        energy: 'high',
         useBuildup: true,
         trackId,
       });
@@ -791,10 +780,9 @@ export function CircuitWorkoutLiveScreen() {
     // Countdown is configured on exercise 1 (transition INTO exercise)
     const exercise1Trigger = currentRoundConfig?.music?.exercises?.[0];
 
-    // Rise: useBuildup is true AND energy is medium (buildup from medium to high)
+    // Rise: useBuildup is true (medium energy is deprecated)
     const hasRiseConfigured = exercise1Trigger?.enabled &&
-                              exercise1Trigger?.useBuildup === true &&
-                              exercise1Trigger?.energy === 'medium';
+                              exercise1Trigger?.useBuildup === true;
 
     // High: showHighCountdown is true AND energy is high
     const hasHighConfigured = exercise1Trigger?.enabled &&
@@ -837,7 +825,7 @@ export function CircuitWorkoutLiveScreen() {
 
       // Play with trigger (will select random track if no trackId specified)
       playWithTrigger({
-        energy: 'medium',
+        energy: 'high',
         useBuildup: true,
         trackId,
       });

@@ -9,7 +9,7 @@
 // Energy & Segment Types
 // =============================================================================
 
-export type PlayableEnergy = 'low' | 'medium' | 'high';
+export type PlayableEnergy = 'low' | 'high';
 export type EnergyLevel = PlayableEnergy | 'outro';
 
 export interface MusicSegment {
@@ -217,7 +217,8 @@ export function inferCountdownType(trigger: MusicTrigger): CountdownType | null 
   }
 
   // Infer from legacy flags
-  if (trigger.useBuildup && trigger.energy === 'medium') {
+  // Rise countdown: useBuildup is true (medium energy is deprecated)
+  if (trigger.useBuildup) {
     return 'rise';
   }
   if (trigger.showHighCountdown && trigger.energy === 'high') {

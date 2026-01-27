@@ -9,6 +9,7 @@ import {
   type PhaseType,
   type PhaseKey,
   type RoundMusicConfig,
+  type MusicTrigger,
 } from '../music';
 
 // Re-export shared trigger state for use by other screens (e.g., CircuitWorkoutOverviewScreen)
@@ -30,6 +31,12 @@ export { useMusic } from '../providers/MusicProvider';
 const TRANSITION_DELAY_SEC = 0.2;   // Overhead per state transition
 const DRIFT_RATE = 0.04;            // 4% drift per second of phase duration
 const CURRENT_PHASE_DELAY_SEC = 1.0; // Effect scheduling + music loading delay
+
+/**
+ * Minimum duration (seconds) a track should play before the next trigger fires.
+ * Used to prevent very short plays (e.g., 10 seconds) before a transition.
+ */
+const MIN_PLAY_DURATION_SEC = 30;
 
 /**
  * Intentional overshoot for natural ending tracks.
@@ -161,6 +168,181 @@ function calculatePrecisionRoundEndTime(
   return roundEndTime;
 }
 
+// =============================================================================
+// Next Trigger Time Calculation
+// =============================================================================
+
+/**
+ * Calculates the absolute timestamp (ms) when the next music trigger will fire.
+ * Used for the 30-second minimum play duration rule.
+ *
+ * Logic:
+ * 1. Get current phase end time (now + timeRemaining)
+ * 2. Iterate through remaining phases in round
+ * 3. For each phase, check if trigger is enabled
+ * 4. If enabled: return phase start time
+ * 5. If no triggers found: return round end time (next preview)
+ *
+ * For AMRAP: Skip to step 5 (no internal phases with triggers)
+ */
+function calculateNextTriggerTime(
+  circuitConfig: CircuitConfig | null | undefined,
+  roundIndex: number,
+  currentExerciseIndex: number,
+  phaseType: PhaseType,
+  actualTimeRemaining: number | undefined,
+  currentSetNumber: number,
+  musicConfig: RoundMusicConfig | null
+): number | undefined {
+  if (actualTimeRemaining === undefined || actualTimeRemaining < 0) {
+    return undefined;
+  }
+
+  if (!circuitConfig?.config?.roundTemplates) return undefined;
+
+  const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
+    (rt) => rt.roundNumber === roundIndex + 1
+  );
+  if (!roundConfig?.template) return undefined;
+
+  const template = roundConfig.template;
+  const exerciseCount = template.exercisesPerRound || 0;
+  const workDuration = template.workDuration || 0;
+  const restDuration = template.restDuration || 0;
+  const totalSets = template.repeatTimes || 1;
+
+  // For AMRAP rounds, next trigger is always round end (next preview)
+  if (template.type === 'amrap_round') {
+    const amrapDuration = template.amrapDuration || 0;
+    let remainingInRound = actualTimeRemaining;
+    if (phaseType !== 'exercise') {
+      // If in preview, add AMRAP duration
+      remainingInRound = actualTimeRemaining + amrapDuration;
+    }
+    return Date.now() + (remainingInRound * 1000);
+  }
+
+  // For circuit/stations rounds, iterate through remaining phases
+  const now = Date.now();
+  let accumulatedTime = actualTimeRemaining * 1000; // Start with current phase remaining
+
+  // Helper to check if a trigger is enabled for a phase
+  const isTriggerEnabled = (type: PhaseType, index: number, setNum: number): boolean => {
+    if (!musicConfig) return false;
+
+    let trigger: MusicTrigger | undefined;
+    switch (type) {
+      case 'preview':
+        trigger = musicConfig.roundPreview;
+        break;
+      case 'exercise':
+        trigger = musicConfig.exercises?.[index];
+        break;
+      case 'rest':
+        // Check for Rise from Rest (next exercise has useBuildup)
+        const nextExerciseTrigger = musicConfig.exercises?.[index + 1];
+        if (nextExerciseTrigger?.enabled && nextExerciseTrigger.useBuildup) {
+          return true; // Rise from Rest fires on rest entry
+        }
+        trigger = musicConfig.rests?.[index];
+        break;
+      case 'setBreak':
+        trigger = musicConfig.setBreaks?.[index];
+        break;
+    }
+
+    if (!trigger?.enabled) return false;
+
+    // Check multi-set logic
+    if (type === 'exercise' || type === 'rest') {
+      const isLastSet = setNum >= totalSets;
+      if (trigger.naturalEnding && !isLastSet) return false;
+      if (!trigger.naturalEnding && setNum > 1 && !trigger.repeatOnAllSets) return false;
+    }
+
+    return true;
+  };
+
+  // Phases after current phase in current set
+  // Order: exercise -> rest -> exercise -> rest -> ... (no rest after last exercise)
+  let setNum = currentSetNumber;
+  let exIndex = currentExerciseIndex;
+
+  // Move to next phase based on current phase type
+  if (phaseType === 'exercise') {
+    // After exercise: check rest (if not last exercise) or next exercise
+    if (exIndex < exerciseCount - 1) {
+      // Check rest trigger
+      accumulatedTime += 0; // We're at end of exercise, rest starts now
+      if (isTriggerEnabled('rest', exIndex, setNum)) {
+        return now + accumulatedTime;
+      }
+      accumulatedTime += restDuration * 1000;
+      exIndex++;
+    } else {
+      // Last exercise in set - check for set break or next set
+      exIndex = 0;
+      setNum++;
+      if (setNum > totalSets) {
+        // Round complete - next trigger is next round's preview
+        return now + accumulatedTime;
+      }
+      // Check setBreak trigger
+      if (isTriggerEnabled('setBreak', 0, setNum)) {
+        return now + accumulatedTime;
+      }
+      // Add setBreak duration if configured
+      const setBreakDuration = template.setBreakDuration || restDuration;
+      accumulatedTime += setBreakDuration * 1000;
+    }
+  } else if (phaseType === 'rest') {
+    // After rest: next exercise
+    exIndex++;
+    accumulatedTime += 0; // Rest just ended
+  } else if (phaseType === 'setBreak') {
+    // After setBreak: first exercise of new set
+    exIndex = 0;
+    accumulatedTime += 0;
+  } else if (phaseType === 'preview') {
+    // After preview: first exercise
+    exIndex = 0;
+    accumulatedTime += 0;
+  }
+
+  // Now iterate through remaining phases
+  while (setNum <= totalSets) {
+    // Check exercise trigger
+    if (isTriggerEnabled('exercise', exIndex, setNum)) {
+      return now + accumulatedTime;
+    }
+    accumulatedTime += workDuration * 1000;
+
+    // After exercise: rest (if not last exercise)
+    if (exIndex < exerciseCount - 1) {
+      if (isTriggerEnabled('rest', exIndex, setNum)) {
+        return now + accumulatedTime;
+      }
+      accumulatedTime += restDuration * 1000;
+      exIndex++;
+    } else {
+      // Last exercise - move to next set
+      exIndex = 0;
+      setNum++;
+      if (setNum > totalSets) break;
+
+      // Check setBreak trigger
+      if (isTriggerEnabled('setBreak', 0, setNum)) {
+        return now + accumulatedTime;
+      }
+      const setBreakDuration = template.setBreakDuration || restDuration;
+      accumulatedTime += setBreakDuration * 1000;
+    }
+  }
+
+  // No more triggers in round - return round end time
+  return now + accumulatedTime;
+}
+
 // ============================================================================
 
 interface WorkoutState {
@@ -258,6 +440,8 @@ export function useWorkoutMusic({
     setRiseCountdownActive,
     isNaturalEndingActive,
     playRiseFromRest,
+    setAutoProgressEnergy,
+    setNextTriggerTime,
   } = useMusic();
 
   // musicEnabled now comes from XState context - atomic with trigger state
@@ -280,6 +464,7 @@ export function useWorkoutMusic({
       consumedPhases,
       musicEnabled,
       musicStartedFromPreview,
+      skippedFromPreview,
     } = context;
 
     console.log('[useWorkoutMusic] State changed:', {
@@ -290,6 +475,7 @@ export function useWorkoutMusic({
       isPaused,
       musicEnabled,
       musicStartedFromPreview,
+      skippedFromPreview,
       triggeredPhases: triggeredPhases.length,
       consumedPhases: consumedPhases.length,
     });
@@ -300,6 +486,18 @@ export function useWorkoutMusic({
       console.log('[useWorkoutMusic] No phase type for state:', stateValue);
       return;
     }
+
+    // Set auto-progress energy based on phase type
+    // - 'low' for previews (background music during intro)
+    // - 'high' for exercise/rest/setBreak (keep energy up during workout)
+    const autoProgressEnergy = phaseType === 'preview' ? 'low' : 'high';
+    setAutoProgressEnergy(autoProgressEnergy);
+    console.log('[useWorkoutMusic] Set autoProgressEnergy:', autoProgressEnergy, 'for phase:', phaseType);
+
+    // Calculate next trigger time for 30-second minimum play duration rule
+    // This needs to happen BEFORE we get the music config since the calculation
+    // needs the config but we want to store it for auto-progression
+    // We'll recalculate after getting music config below
 
     // Determine the phase index based on the phase type
     let phaseIndex = 0;
@@ -319,6 +517,20 @@ export function useWorkoutMusic({
 
     // Get music config for this round
     const musicConfig = getRoundMusicConfig(circuitConfig, currentRoundIndex);
+
+    // Calculate and store next trigger time for 30-second minimum play duration rule
+    const nextTriggerTime = calculateNextTriggerTime(
+      circuitConfig,
+      currentRoundIndex,
+      currentExerciseIndex,
+      phaseType,
+      context.timeRemaining,
+      currentSetNumber,
+      musicConfig
+    );
+    setNextTriggerTime(nextTriggerTime);
+    console.log('[useWorkoutMusic] Next trigger time calculated:', nextTriggerTime,
+      nextTriggerTime ? `(${Math.round((nextTriggerTime - Date.now()) / 1000)}s from now)` : '');
 
     // Get round config for timing info
     const roundConfig = (circuitConfig?.config?.roundTemplates as any[])?.find(
@@ -377,10 +589,10 @@ export function useWorkoutMusic({
         console.log('[useWorkoutMusic] FIRING play for phase:', phaseKey);
         markTriggered(phaseKey);
 
-        // Skip if preview with same energy already playing (optimization)
-        // BUT don't skip if natural ending is active - let it queue in playWithTrigger
-        if (phaseType === 'preview' && isPlaying && currentEnergy === action.energy && !action.trackId && !action.useBuildup && !isNaturalEndingActive) {
-          console.log('[useWorkoutMusic] SKIPPED - preview with same energy already playing');
+        // Skip preview when skipped from another preview (unless explicit trackId)
+        // This keeps current music playing when user skips between round previews
+        if (phaseType === 'preview' && skippedFromPreview && !action.trackId) {
+          console.log('[useWorkoutMusic] SKIPPED - skipped from preview, keeping current music');
           return;
         }
 
@@ -413,7 +625,7 @@ export function useWorkoutMusic({
         markTriggered(phaseKey);
         setRiseCountdownActive(true);
         playWithTrigger({
-          energy: 'medium',
+          energy: 'high',
           useBuildup: true,
           trackId: action.trackId,
         });
@@ -490,10 +702,13 @@ export function useWorkoutMusic({
     workoutState.context.consumedPhases,
     workoutState.context.musicEnabled,
     workoutState.context.musicStartedFromPreview,
+    workoutState.context.skippedFromPreview,
     circuitConfig,
     playWithTrigger,
     startHighCountdown,
     setRiseCountdownActive,
+    setAutoProgressEnergy,
+    setNextTriggerTime,
     isPlaying,
     currentEnergy,
     isNaturalEndingActive,

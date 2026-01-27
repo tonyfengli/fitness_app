@@ -257,6 +257,28 @@ export function RoundMusicDrawer({
   }, [circuitConfig, roundNumber]);
 
   /**
+   * Get work/exercise duration for the current round (in seconds).
+   */
+  const workDuration = useMemo((): number => {
+    if (!circuitConfig?.config?.roundTemplates) return 0;
+    const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
+      (rt) => rt.roundNumber === roundNumber
+    );
+    return roundConfig?.template?.workDuration ?? 0;
+  }, [circuitConfig, roundNumber]);
+
+  /**
+   * Get total exercise count for the current round.
+   */
+  const exerciseCount = useMemo((): number => {
+    if (!circuitConfig?.config?.roundTemplates) return 0;
+    const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
+      (rt) => rt.roundNumber === roundNumber
+    );
+    return roundData?.exercises?.length || roundConfig?.template?.exercisesPerRound || 0;
+  }, [circuitConfig, roundNumber, roundData]);
+
+  /**
    * Get all track IDs used in any phase across the ENTIRE workout (all rounds).
    * Used to determine "unused" tracks for Rise from Rest selection.
    */
@@ -350,6 +372,120 @@ export function RoundMusicDrawer({
     }
     return { available: true };
   }, [restDuration, riseFromRestCompatibleTracks]);
+
+  /**
+   * Calculate filler track warning for exercise triggers.
+   * Returns the number of seconds before next trigger that the track will end,
+   * or null if no warning needed (track fills all time or leaves >= 30s).
+   *
+   * Supports three modes with different seek calculations:
+   * - riseFromRest: highSegment - restDuration - 0.75s (Ex 2+)
+   * - rise: highSegment - 5s (Ex 1 buildup)
+   * - high: highSegment - 2.5s (any exercise)
+   */
+  const calculateFillerWarning = useCallback((
+    track: MusicTrack,
+    mode: PlaybackMode,
+    exerciseIndex: number,
+    segmentTimestamp?: number | null
+  ): { secondsBeforeNextTrigger: number } | null => {
+    const MIN_FILLER_DURATION_SEC = 30;
+
+    // Only applies to exercise modes that seek to high segments
+    if (mode !== "riseFromRest" && mode !== "rise" && mode !== "high") return null;
+
+    // Find high segments in the track
+    const highSegments = track.segments?.filter(s => s.energy === "high") || [];
+    if (highSegments.length === 0) return null;
+
+    // Determine which high segment to use
+    let highSegmentTimestamp: number;
+    if (segmentTimestamp != null) {
+      highSegmentTimestamp = segmentTimestamp;
+    } else if (mode === "riseFromRest") {
+      // For Rise from Rest, need segment where timestamp >= restDuration
+      const validSegments = highSegments.filter(s => s.timestamp >= restDuration);
+      if (validSegments.length === 0) return null;
+      highSegmentTimestamp = validSegments[0]!.timestamp;
+    } else {
+      // For Rise and High, use first high segment
+      highSegmentTimestamp = highSegments[0]!.timestamp;
+    }
+
+    // Calculate seek point based on mode
+    let seekPoint: number;
+    let timeFromMusicStartToExerciseEnd: number;
+
+    switch (mode) {
+      case "riseFromRest":
+        // Music starts during REST, drop hits at exercise start
+        seekPoint = highSegmentTimestamp - restDuration - 0.75;
+        timeFromMusicStartToExerciseEnd = restDuration + workDuration;
+        break;
+      case "rise":
+        // Music starts 5s before exercise (buildup during preview countdown)
+        seekPoint = highSegmentTimestamp - 5;
+        timeFromMusicStartToExerciseEnd = 5 + workDuration;
+        break;
+      case "high":
+        // Music starts at exercise start, synced 2.5s before beat
+        seekPoint = highSegmentTimestamp - 2.5;
+        timeFromMusicStartToExerciseEnd = 2.5 + workDuration;
+        break;
+      default:
+        return null;
+    }
+
+    // Calculate track play duration
+    const trackDurationSec = track.durationMs / 1000;
+    const trackPlayDuration = trackDurationSec - Math.max(0, seekPoint);
+
+    // Calculate time until next trigger
+    let timeUntilNextTrigger = timeFromMusicStartToExerciseEnd;
+
+    // Check if any trigger is enabled after this exercise
+    const isLastExercise = exerciseIndex >= exerciseCount - 1;
+
+    if (!isLastExercise) {
+      // Check rest trigger after this exercise
+      const restTrigger = localConfig?.rests?.[exerciseIndex];
+      if (restTrigger?.enabled) {
+        // Next trigger is at rest start (end of exercise)
+        // timeUntilNextTrigger already covers this
+      } else {
+        // Check next exercise trigger
+        const nextExerciseTrigger = localConfig?.exercises?.[exerciseIndex + 1];
+        if (nextExerciseTrigger?.enabled) {
+          // Next trigger is at next exercise start (after rest)
+          timeUntilNextTrigger += restDuration;
+        } else {
+          // No immediate next trigger - extend to round end
+          const remainingExercises = exerciseCount - exerciseIndex - 1;
+          const remainingRests = Math.max(0, remainingExercises - 1);
+          timeUntilNextTrigger += (workDuration * remainingExercises) + (restDuration * (remainingRests + 1));
+        }
+      }
+    } else {
+      // Last exercise - check set break or round end
+      if (repeatTimes > 1) {
+        const setBreakTrigger = localConfig?.setBreaks?.[0];
+        if (!setBreakTrigger?.enabled) {
+          // No set break trigger - music continues until next set starts
+          // For simplicity, just use current timing
+        }
+      }
+    }
+
+    // Calculate remaining time after track ends
+    const remainingAfterTrack = timeUntilNextTrigger - trackPlayDuration;
+
+    // Warning needed if: track doesn't fill all time AND leaves < 30s
+    if (remainingAfterTrack > 0 && remainingAfterTrack < MIN_FILLER_DURATION_SEC) {
+      return { secondsBeforeNextTrigger: Math.round(remainingAfterTrack) };
+    }
+
+    return null;
+  }, [restDuration, workDuration, exerciseCount, repeatTimes, localConfig]);
 
   // Generate phases
   const phases = useMemo((): Phase[] => {
@@ -1460,6 +1596,36 @@ export function RoundMusicDrawer({
                     )}
                   </div>
                 </div>
+
+                {/* Filler track warning for exercise modes (Rise from Rest, Rise, High) */}
+                {(() => {
+                  // Only show for exercise phases with specific track selected
+                  if (viewState.type !== "phase-detail") return null;
+                  if (viewState.phase.phaseType !== "exercise") return null;
+                  if (!detailTrackId) return null;
+
+                  // Only applies to modes that seek to high segments
+                  if (detailMode !== "riseFromRest" && detailMode !== "rise" && detailMode !== "high") return null;
+
+                  const selectedTrack = tracks ? (tracks as MusicTrack[]).find(t => t.id === detailTrackId) : null;
+                  if (!selectedTrack) return null;
+
+                  const warning = calculateFillerWarning(
+                    selectedTrack,
+                    detailMode,
+                    viewState.phase.index,
+                    detailSegmentTimestamp
+                  );
+                  if (!warning) return null;
+
+                  return (
+                    <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Track ends {warning.secondsBeforeNextTrigger}s before next trigger — a filler track will play briefly
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

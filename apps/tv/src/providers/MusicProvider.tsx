@@ -11,13 +11,13 @@ const DOWNLOADED_FILENAMES_KEY = '@music_downloaded_filenames';
 
 const TRACKS_CACHE_KEY = '@music_tracks_cache';
 
-// Playable energy levels (excludes 'outro')
-type PlayableEnergy = 'low' | 'medium' | 'high';
+// Playable energy levels (excludes 'outro' and deprecated 'medium')
+type PlayableEnergy = 'low' | 'high';
 
 // Pre-selected rise track info (for random buildup tracks)
 interface PreSelectedRiseTrack {
   track: MusicTrack;
-  riseDuration: number; // high.timestamp - medium.timestamp
+  riseDuration: number; // fixed duration for Rise countdown
 }
 
 // Pending high countdown trigger (stored while countdown runs)
@@ -44,6 +44,13 @@ const HIGH_COUNTDOWN_DURATION_MS = 4500;
 
 // Volume level when ducking for high countdown (40% of normal)
 const DUCKED_VOLUME_RATIO = 0.4;
+
+/**
+ * Minimum duration (seconds) a track should play before the next trigger fires.
+ * Used to prevent very short plays (e.g., 10 seconds) before a transition.
+ * This is a soft filter - if no tracks meet the criteria, any track is allowed.
+ */
+const MIN_PLAY_DURATION_SEC = 30;
 
 interface MusicContextValue {
   // State
@@ -106,6 +113,15 @@ interface MusicContextValue {
 
   // Clear natural ending state (call when entering a new round)
   clearNaturalEnding: () => void;
+
+  // Set auto-progress energy for track progressions based on phase type
+  // - 'low' for previews
+  // - 'high' for exercise/rest/setBreak
+  setAutoProgressEnergy: (energy: PlayableEnergy) => void;
+
+  // Set next trigger time for 30-second minimum play duration rule
+  // Called by useWorkoutMusic when calculating the next trigger point
+  setNextTriggerTime: (time: number | undefined) => void;
 
   // TODO: TEMPORARY - Remove once segment timestamps are finalized
   // Refresh tracks from API to get updated segment timestamps for testing
@@ -176,6 +192,128 @@ function applyHighBeatDelay(segment: MusicSegment | null, energy: PlayableEnergy
   return segment.timestamp;
 }
 
+/**
+ * Type for per-energy track history
+ */
+type EnergyHistoryMap = {
+  low: MusicTrack[];
+  high: MusicTrack[];
+};
+
+/**
+ * Checks if a track has sufficient play duration for the 30-second rule.
+ *
+ * A track is valid if:
+ * 1. Track plays long enough to fill all time until next trigger, OR
+ * 2. Track ends with at least MIN_PLAY_DURATION_SEC (30s) before next trigger
+ *
+ * @param track - The track to check
+ * @param energy - Target energy level (used to estimate seek position)
+ * @param nextTriggerTime - Absolute timestamp (ms) when next trigger fires
+ * @param estimatedSeekSec - Optional estimated seek position in seconds
+ * @returns true if track meets the 30-second rule
+ */
+function meetsMinPlayDuration(
+  track: MusicTrack,
+  energy: PlayableEnergy,
+  nextTriggerTime: number | undefined,
+  estimatedSeekSec?: number
+): boolean {
+  // If no next trigger time, all tracks are valid
+  if (!nextTriggerTime) return true;
+
+  // If track has no duration metadata, be conservative and include it
+  if (!track.durationMs || track.durationMs <= 0) return true;
+
+  const trackDurationSec = track.durationMs / 1000;
+  const timeUntilNextTriggerMs = nextTriggerTime - Date.now();
+  const timeUntilNextTriggerSec = timeUntilNextTriggerMs / 1000;
+
+  // If next trigger is imminent or in the past, all tracks are valid
+  if (timeUntilNextTriggerSec <= 0) return true;
+
+  // Estimate seek position if not provided
+  let seekSec = estimatedSeekSec ?? 0;
+  if (seekSec === 0 && energy === 'high') {
+    // For high energy, we typically seek to near the first high segment
+    // Use the first high segment timestamp as an estimate
+    const highSegment = track.segments?.find(s => s.energy === 'high');
+    if (highSegment) {
+      // Account for HIGH_BEAT_DELAY_SEC (2.5s) that we seek before the segment
+      seekSec = Math.max(0, highSegment.timestamp - 2.5);
+    }
+  }
+
+  // Calculate how long the track will play
+  const trackPlayDurationSec = trackDurationSec - seekSec;
+
+  // Calculate how much time remains after track ends
+  const remainingAfterTrackSec = timeUntilNextTriggerSec - trackPlayDurationSec;
+
+  // Track is valid if:
+  // 1. Track fills all time until next trigger (remainingAfterTrack <= 0), OR
+  // 2. Track ends with at least 30 seconds before next trigger
+  const isValid = remainingAfterTrackSec <= 0 || remainingAfterTrackSec >= MIN_PLAY_DURATION_SEC;
+
+  return isValid;
+}
+
+/**
+ * Select a track from the pool using per-energy history.
+ * - Exhaust all tracks for an energy level before allowing repeats
+ * - When exhausted, pick least-recently-played (first in history that's still in pool)
+ *
+ * @param trackPool - Available tracks to select from
+ * @param energy - Energy level being selected for
+ * @param historyByEnergy - Per-energy history map (mutated to add selected track)
+ * @param addToHistory - Whether to add selected track to history (false for explicit trackId)
+ * @returns Selected track or null if pool is empty
+ */
+function selectTrackWithEnergyHistory(
+  trackPool: MusicTrack[],
+  energy: PlayableEnergy,
+  historyByEnergy: EnergyHistoryMap,
+  addToHistory: boolean = true
+): MusicTrack | null {
+  if (trackPool.length === 0) return null;
+
+  const history = historyByEnergy[energy];
+  const playedIds = new Set(history.map(t => t.id));
+
+  // Try to find unplayed tracks
+  const unplayedTracks = trackPool.filter(t => !playedIds.has(t.id));
+
+  let selectedTrack: MusicTrack | null = null;
+
+  if (unplayedTracks.length > 0) {
+    // Random selection from unplayed tracks
+    selectedTrack = unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)]!;
+    console.log(`[MusicProvider] selectTrack(${energy}): picked unplayed track, ${unplayedTracks.length} remaining unplayed`);
+  } else {
+    // All exhausted - pick least-recently-played (earliest in history still in pool)
+    const poolIds = new Set(trackPool.map(t => t.id));
+    for (const historyTrack of history) {
+      if (poolIds.has(historyTrack.id)) {
+        selectedTrack = historyTrack;
+        console.log(`[MusicProvider] selectTrack(${energy}): all exhausted, picked LRU: ${historyTrack.name}`);
+        break;
+      }
+    }
+    // Fallback to random if somehow no match in history
+    if (!selectedTrack) {
+      selectedTrack = trackPool[Math.floor(Math.random() * trackPool.length)]!;
+      console.log(`[MusicProvider] selectTrack(${energy}): LRU fallback failed, picked random`);
+    }
+  }
+
+  // Add to history (unless bypassed for explicit trackId)
+  if (selectedTrack && addToHistory) {
+    historyByEnergy[energy].push(selectedTrack);
+  }
+
+  return selectedTrack;
+}
+
 export function MusicProvider({ children }: { children: React.ReactNode }) {
   // Core playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -234,13 +372,24 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, [syncResult, isSyncing]);
 
   // Track history for skip back (persists across screen transitions)
-  const playedTracksHistory = useRef<{ track: MusicTrack; segment: MusicSegment | null }[]>([]);
+  // Per-energy tracking to prevent repeats until all songs for that energy are exhausted
+  const playedTracksHistoryByEnergy = useRef<{
+    low: MusicTrack[];
+    high: MusicTrack[];
+  }>({ low: [], high: [] });
   const isStartingRef = useRef(false);
   const isSwitchingTrackRef = useRef(false);
   const pendingStart = useRef(false);
   const buildupIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Track if current track was played with natural ending (suppress auto-play on end)
   const naturalEndingActiveRef = useRef(false);
+  // Energy level for automatic track progressions (when track ends naturally)
+  // Set by useWorkoutMusic based on phase type: 'low' for previews, 'high' for exercise/rest/setBreak
+  const autoProgressEnergyRef = useRef<PlayableEnergy>('high');
+
+  // Next trigger time (absolute timestamp in ms) for 30-second minimum play duration rule
+  // Set by useWorkoutMusic when a trigger fires or phase changes
+  const nextTriggerTimeRef = useRef<number | undefined>(undefined);
 
   // Queue for triggers that arrive while natural ending is playing
   // Only the latest trigger is kept (replaces previous)
@@ -344,6 +493,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Pre-select a random track for buildup (used to show rise info before trigger fires)
+  // Note: Does NOT add to history - that happens when track is actually played
   const preSelectRiseTrack = useCallback((energy: PlayableEnergy) => {
     if (!downloadedTracks || downloadedTracks.length === 0) return;
 
@@ -351,17 +501,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     const trackPool = downloadedTracks.filter(isValidForRiseCountdown);
     if (trackPool.length === 0) return;
 
-    // Get IDs of recently played tracks
-    const recentlyPlayedIds = new Set(
-      playedTracksHistory.current.slice(-Math.max(0, trackPool.length - 1)).map(h => h.track.id)
+    // Select track using per-energy history (don't add to history yet - that's done on actual play)
+    const track = selectTrackWithEnergyHistory(
+      trackPool,
+      'high', // Rise countdown always targets high energy
+      playedTracksHistoryByEnergy.current,
+      false // Don't add to history - just for UI preview
     );
-
-    let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
-    if (availableTracks.length === 0) availableTracks = trackPool;
-
-    // Pick a random track
-    const randomIndex = Math.floor(Math.random() * availableTracks.length);
-    const track = availableTracks[randomIndex];
     if (!track) return;
 
     // Rise duration is now fixed at RISE_COUNTDOWN_DURATION_SEC
@@ -428,30 +574,63 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // For natural ending, also filter by tracks that have duration metadata
-    if (naturalEnding && roundEndTime) {
-      const tracksWithDuration = trackPool.filter(t => t.durationMs && t.durationMs > 0);
-      if (tracksWithDuration.length > 0) {
-        trackPool = tracksWithDuration;
+    // Apply 30-second minimum play duration rule (soft filter)
+    // Only apply when not using natural ending (natural ending has its own duration logic)
+    if (!naturalEnding && nextTriggerTimeRef.current) {
+      const minDurationTracks = trackPool.filter(t =>
+        meetsMinPlayDuration(t, targetEnergy || 'high', nextTriggerTimeRef.current)
+      );
+      if (minDurationTracks.length > 0) {
+        console.log('[MusicProvider] playNextTrack - 30s rule filter:', {
+          originalPoolSize: trackPool.length,
+          filteredPoolSize: minDurationTracks.length,
+          nextTriggerInSec: Math.round((nextTriggerTimeRef.current - Date.now()) / 1000),
+        });
+        trackPool = minDurationTracks;
+      } else {
+        console.log('[MusicProvider] playNextTrack - 30s rule: no tracks meet criteria, using full pool');
       }
     }
 
-    // Fallback to all downloaded tracks if no tracks match the energy
-    if (trackPool.length === 0) trackPool = downloadedTracks;
+    // For natural ending, apply hard requirements:
+    // 1. recommendedForNaturalEnding: true
+    // 2. durationMs > 0
+    // 3. track duration >= remaining time in round
+    if (naturalEnding && roundEndTime) {
+      const remainingMs = roundEndTime - Date.now();
+      const remainingSec = remainingMs / 1000;
 
-    // Get IDs of recently played tracks
-    const recentlyPlayedIds = new Set(
-      playedTracksHistory.current.slice(-Math.max(0, trackPool.length - 1)).map(h => h.track.id)
-    );
+      const naturalEndingTracks = trackPool.filter(t =>
+        t.recommendedForNaturalEnding === true &&
+        t.durationMs &&
+        t.durationMs > 0 &&
+        (t.durationMs / 1000) >= remainingSec
+      );
 
-    let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
-    if (availableTracks.length === 0) {
-      playedTracksHistory.current = [];
-      availableTracks = trackPool;
+      if (naturalEndingTracks.length === 0) {
+        console.warn('[MusicProvider] playNextTrack - SKIPPING natural ending: no tracks meet requirements', {
+          poolSize: trackPool.length,
+          remainingSec,
+          requirements: 'recommendedForNaturalEnding + durationMs > 0 + duration >= remaining',
+        });
+        isStartingRef.current = false;
+        return;
+      }
+
+      trackPool = naturalEndingTracks;
     }
 
-    const randomIndex = Math.floor(Math.random() * availableTracks.length);
-    const track = availableTracks[randomIndex];
+    // Fallback to all downloaded tracks if no tracks match the energy (non-natural-ending only)
+    if (trackPool.length === 0) trackPool = downloadedTracks;
+
+    // Select track using per-energy history (exhaust all before repeat, LRU fallback)
+    const historyEnergy = targetEnergy || 'high'; // Default to high if no energy specified
+    const track = selectTrackWithEnergyHistory(
+      trackPool,
+      historyEnergy,
+      playedTracksHistoryByEnergy.current,
+      true // Add to history
+    );
 
     if (track) {
       // Select a segment with the target energy (or first segment as fallback)
@@ -485,7 +664,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        playedTracksHistory.current.push({ track, segment });
+        // History already added by selectTrackWithEnergyHistory
         setIsPaused(false);
         setCurrentEnergy(segment?.energy || null);
         isSwitchingTrackRef.current = true;
@@ -642,6 +821,49 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         if (!downloadedFilenames.has(specificTrack.filename)) {
           // Fall through to random selection below
         } else {
+        // Validate natural ending requirements for specific trackId
+        if (naturalEnding && roundEndTime) {
+          const remainingMs = roundEndTime - Date.now();
+          const remainingSec = remainingMs / 1000;
+          const trackDurationSec = (specificTrack.durationMs || 0) / 1000;
+
+          const isValid =
+            specificTrack.recommendedForNaturalEnding === true &&
+            specificTrack.durationMs &&
+            specificTrack.durationMs > 0 &&
+            trackDurationSec >= remainingSec;
+
+          if (!isValid) {
+            console.warn('[MusicProvider] playWithTrigger - SKIPPING natural ending: specific track does not meet requirements', {
+              trackId,
+              trackName: specificTrack.name,
+              recommendedForNaturalEnding: specificTrack.recommendedForNaturalEnding,
+              durationMs: specificTrack.durationMs,
+              trackDurationSec,
+              remainingSec,
+              requirements: 'recommendedForNaturalEnding + durationMs > 0 + duration >= remaining',
+            });
+            return;
+          }
+        }
+
+        // Check 30-second minimum play duration rule for explicit trackId (warning only)
+        if (!naturalEnding && nextTriggerTimeRef.current) {
+          const meetsRule = meetsMinPlayDuration(specificTrack, energy, nextTriggerTimeRef.current);
+          if (!meetsRule) {
+            const timeUntilNextTriggerSec = Math.round((nextTriggerTimeRef.current - Date.now()) / 1000);
+            const trackDurationSec = (specificTrack.durationMs || 0) / 1000;
+            console.warn('[MusicProvider] playWithTrigger - WARNING: explicit trackId may violate 30s rule', {
+              trackId,
+              trackName: specificTrack.name,
+              trackDurationSec,
+              timeUntilNextTriggerSec,
+              minPlayDurationSec: MIN_PLAY_DURATION_SEC,
+              note: 'Track will still play (explicit trackId bypasses filter)',
+            });
+          }
+        }
+
         isStartingRef.current = true;
         try {
           let segment: MusicSegment | null = null;
@@ -689,7 +911,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
-          playedTracksHistory.current.push({ track: specificTrack, segment });
+          // Explicit trackId bypasses repeat prevention - don't add to history
+          // This allows explicitly selected tracks to be played anytime
           setIsPaused(false);
           setCurrentEnergy(segment?.energy || energy);
           setIsEnabled(true);
@@ -769,7 +992,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           const seekPosition = highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC;
           const playSegment = { ...highSegment, timestamp: seekPosition };
 
-          playedTracksHistory.current.push({ track: preSelectedTrack, segment: playSegment });
+          // Add to per-energy history (Rise always uses 'high')
+          playedTracksHistoryByEnergy.current.high.push(preSelectedTrack);
           setIsPaused(false);
           setCurrentEnergy('high'); // Will transition to high
           setIsEnabled(true);
@@ -857,9 +1081,25 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         console.warn('[MusicProvider] playRiseFromRest - specific track not found:', trackId);
         return;
       }
+      // Check 30-second rule for explicit trackId (warning only)
+      if (nextTriggerTimeRef.current) {
+        const meetsRule = meetsMinPlayDuration(track, 'high', nextTriggerTimeRef.current);
+        if (!meetsRule) {
+          const timeUntilNextTriggerSec = Math.round((nextTriggerTimeRef.current - Date.now()) / 1000);
+          const trackDurationSec = (track.durationMs || 0) / 1000;
+          console.warn('[MusicProvider] playRiseFromRest - WARNING: explicit trackId may violate 30s rule', {
+            trackId,
+            trackName: track.name,
+            trackDurationSec,
+            timeUntilNextTriggerSec,
+            minPlayDurationSec: MIN_PLAY_DURATION_SEC,
+            note: 'Track will still play (explicit trackId bypasses filter)',
+          });
+        }
+      }
     } else {
       // Pick random track from compatible pool (needs high segment at >= totalDuration for positive seek)
-      const compatibleTracks = downloadedTracks.filter(t => {
+      let compatibleTracks = downloadedTracks.filter(t => {
         const highSegments = t.segments?.filter(s => s.energy === 'high') || [];
         return highSegments.some(s => s.timestamp >= totalDuration);
       });
@@ -869,17 +1109,31 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Exclude recently played tracks to avoid repeats
-      const recentlyPlayedIds = new Set(
-        playedTracksHistory.current.slice(-Math.max(0, compatibleTracks.length - 1)).map(h => h.track.id)
-      );
-      let availableTracks = compatibleTracks.filter(t => !recentlyPlayedIds.has(t.id));
-      if (availableTracks.length === 0) {
-        // All tracks recently played, reset history and use full pool
-        availableTracks = compatibleTracks;
+      // Apply 30-second minimum play duration rule (soft filter)
+      if (nextTriggerTimeRef.current) {
+        const minDurationTracks = compatibleTracks.filter(t =>
+          meetsMinPlayDuration(t, 'high', nextTriggerTimeRef.current)
+        );
+        if (minDurationTracks.length > 0) {
+          console.log('[MusicProvider] playRiseFromRest - 30s rule filter:', {
+            originalPoolSize: compatibleTracks.length,
+            filteredPoolSize: minDurationTracks.length,
+            nextTriggerInSec: Math.round((nextTriggerTimeRef.current - Date.now()) / 1000),
+          });
+          compatibleTracks = minDurationTracks;
+        } else {
+          console.log('[MusicProvider] playRiseFromRest - 30s rule: no tracks meet criteria, using full pool');
+        }
       }
 
-      track = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+      // Select track using per-energy history (exhaust all before repeat, LRU fallback)
+      // Rise from Rest always targets 'high' energy
+      track = selectTrackWithEnergyHistory(
+        compatibleTracks,
+        'high',
+        playedTracksHistoryByEnergy.current,
+        true // Add to history
+      );
     }
 
     if (!track) {
@@ -947,8 +1201,14 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setCurrentSegment(playSegment);
     setCurrentEnergy(segmentAtSeek?.energy || 'high');
 
+    // Set switching flag to prevent 'stopped' event from disabling music
+    isSwitchingTrackRef.current = true;
+
     await musicService.play(track, { segment: playSegment, useBuildup: false });
-    playedTracksHistory.current.push({ track, segment: playSegment });
+
+    isSwitchingTrackRef.current = false;
+    // History already added by selectTrackWithEnergyHistory for random selection
+    // Explicit trackId bypasses history (not added)
     setIsPlaying(true);
     setIsPaused(false);
 
@@ -1077,6 +1337,20 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clearPendingTriggerTimeout]);
 
+  // Set auto-progress energy for track progressions
+  // Called by useWorkoutMusic when a phase trigger fires
+  const setAutoProgressEnergy = useCallback((energy: PlayableEnergy) => {
+    console.log('[MusicProvider] setAutoProgressEnergy:', energy);
+    autoProgressEnergyRef.current = energy;
+  }, []);
+
+  // Set next trigger time for 30-second minimum play duration rule
+  // Called by useWorkoutMusic when calculating the next trigger point
+  const setNextTriggerTime = useCallback((time: number | undefined) => {
+    console.log('[MusicProvider] setNextTriggerTime:', time, time ? `(${Math.round((time - Date.now()) / 1000)}s from now)` : '');
+    nextTriggerTimeRef.current = time;
+  }, []);
+
   // TODO: TEMPORARY - Remove once segment timestamps are finalized
   // Refresh tracks from API to get updated segment timestamps for testing
   const refreshTracks = useCallback(async () => {
@@ -1127,6 +1401,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
             hasPendingTrigger: !!pendingTriggerRef.current,
             isEnabled,
             currentEnergy,
+            autoProgressEnergy: autoProgressEnergyRef.current,
           });
           setCurrentTrack(null);
           setCurrentSegment(null);
@@ -1146,16 +1421,20 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
               playWithTrigger(pending);
             } else if (isEnabled) {
               // Natural ending finished but still in same round (edge case: workout paused)
-              // Music is still enabled, so play a new track at high energy
-              console.log('[MusicProvider] Natural ending complete in same round - playing new track at high energy');
-              playNextTrack({ energy: 'high' });
+              // Music is still enabled, so play a new track using autoProgressEnergy
+              console.log('[MusicProvider] Natural ending complete in same round - playing new track at autoProgressEnergy:', autoProgressEnergyRef.current);
+              playNextTrack({ energy: autoProgressEnergyRef.current });
             } else {
               console.log('[MusicProvider] Natural ending complete - music disabled, stopping playback');
               setIsPlaying(false);
             }
           } else if (isEnabled && currentEnergy && currentEnergy !== 'outro') {
-            console.log('[MusicProvider] Track ended - playing next at energy:', currentEnergy);
-            playNextTrack({ energy: currentEnergy as PlayableEnergy });
+            // Use autoProgressEnergy for automatic progressions (phase-based rule)
+            // - 'low' for previews
+            // - 'high' for exercise/rest/setBreak
+            const progressEnergy = autoProgressEnergyRef.current;
+            console.log('[MusicProvider] Track ended - playing next at autoProgressEnergy:', progressEnergy);
+            playNextTrack({ energy: progressEnergy });
           } else {
             console.log('[MusicProvider] Track ended - stopping (disabled or outro energy)');
             setIsPlaying(false);
@@ -1448,6 +1727,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     playRiseFromRest,
     seekToHighSegment,
     clearNaturalEnding,
+    setAutoProgressEnergy,
+    setNextTriggerTime,
     refreshTracks, // TODO: TEMPORARY - Remove once segment timestamps are finalized
   };
 
