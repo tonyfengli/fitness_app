@@ -163,7 +163,8 @@ export interface RiseFromRestAction {
   energy: PlayableEnergy;
   trackId?: string;
   segmentTimestamp?: number;
-  restDurationSec: number;
+  /** Absolute timestamp (ms) when exercise starts - used for precision timing */
+  exerciseStartTime: number;
 }
 
 /**

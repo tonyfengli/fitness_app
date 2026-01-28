@@ -52,12 +52,15 @@ const NATURAL_ENDING_OVERSHOOT_SEC = 2.0;
  *
  * For natural ending, we need: actualTimeRemaining + futurePhasesDuration + buffer
  * The buffer compensates for setInterval drift and state transition overhead.
+ *
+ * @param actualExerciseCount - Actual exercise count from workout machine (defensive source of truth)
  */
 function calculateFuturePhasesDuration(
   circuitConfig: CircuitConfig | null | undefined,
   roundIndex: number,
   currentExerciseIndex: number,
-  phaseType: PhaseType
+  phaseType: PhaseType,
+  actualExerciseCount?: number
 ): { duration: number; phaseCount: number } {
   if (!circuitConfig?.config?.roundTemplates) return { duration: 0, phaseCount: 0 };
 
@@ -67,7 +70,21 @@ function calculateFuturePhasesDuration(
   if (!roundConfig?.template) return { duration: 0, phaseCount: 0 };
 
   const template = roundConfig.template;
-  const exerciseCount = template.exercisesPerRound || 0;
+  const templateExerciseCount = template.exercisesPerRound || 0;
+
+  // DEFENSIVE: Use actual exercise count from workout machine as source of truth
+  // Falls back to template.exercisesPerRound if actual count not available
+  // This prevents bugs when config's exercisesPerRound is stale (e.g., exercises added after round creation)
+  const exerciseCount = actualExerciseCount ?? templateExerciseCount;
+
+  // Log if there's a mismatch (helps debug config issues)
+  if (actualExerciseCount !== undefined && templateExerciseCount !== actualExerciseCount) {
+    console.warn('[useWorkoutMusic] Exercise count mismatch (using actual):', {
+      templateExercisesPerRound: templateExerciseCount,
+      actualExerciseCount,
+      usingActual: exerciseCount,
+    });
+  }
 
   if (template.type === 'circuit_round' || template.type === 'stations_round') {
     const workDuration = template.workDuration || 0;
@@ -117,6 +134,8 @@ function calculateFuturePhasesDuration(
  * 2. State transition overhead (~200ms per transition)
  * 3. Effect scheduling + music loading delay (~1s)
  * 4. Natural ending overshoot (optional 3s for queue-based transitions)
+ *
+ * @param actualExerciseCount - Actual exercise count from workout machine (defensive source of truth)
  */
 function calculatePrecisionRoundEndTime(
   circuitConfig: CircuitConfig | null | undefined,
@@ -124,7 +143,8 @@ function calculatePrecisionRoundEndTime(
   currentExerciseIndex: number,
   phaseType: PhaseType,
   actualTimeRemaining: number | undefined,
-  includeNaturalEndingOvershoot: boolean = false
+  includeNaturalEndingOvershoot: boolean = false,
+  actualExerciseCount?: number
 ): number | undefined {
   // If no actual timer value, we can't calculate precision timing
   if (actualTimeRemaining === undefined || actualTimeRemaining < 0) {
@@ -135,7 +155,8 @@ function calculatePrecisionRoundEndTime(
     circuitConfig,
     roundIndex,
     currentExerciseIndex,
-    phaseType
+    phaseType,
+    actualExerciseCount
   );
 
   // Calculate smart drift buffer based on future phase characteristics
@@ -184,6 +205,8 @@ function calculatePrecisionRoundEndTime(
  * 5. If no triggers found: return round end time (next preview)
  *
  * For AMRAP: Skip to step 5 (no internal phases with triggers)
+ *
+ * @param actualExerciseCount - Actual exercise count from workout machine (defensive source of truth)
  */
 function calculateNextTriggerTime(
   circuitConfig: CircuitConfig | null | undefined,
@@ -192,7 +215,8 @@ function calculateNextTriggerTime(
   phaseType: PhaseType,
   actualTimeRemaining: number | undefined,
   currentSetNumber: number,
-  musicConfig: RoundMusicConfig | null
+  musicConfig: RoundMusicConfig | null,
+  actualExerciseCount?: number
 ): number | undefined {
   if (actualTimeRemaining === undefined || actualTimeRemaining < 0) {
     return undefined;
@@ -206,7 +230,9 @@ function calculateNextTriggerTime(
   if (!roundConfig?.template) return undefined;
 
   const template = roundConfig.template;
-  const exerciseCount = template.exercisesPerRound || 0;
+  const templateExerciseCount = template.exercisesPerRound || 0;
+  // DEFENSIVE: Use actual exercise count from workout machine as source of truth
+  const exerciseCount = actualExerciseCount ?? templateExerciseCount;
   const workDuration = template.workDuration || 0;
   const restDuration = template.restDuration || 0;
   const totalSets = template.repeatTimes || 1;
@@ -364,6 +390,8 @@ interface WorkoutState {
     musicEnabled: boolean;
     /** Whether music was enabled from preview (true) vs mid-workout (false) */
     musicStartedFromPreview: boolean;
+    /** Actual rounds data from workout machine - used for defensive exercise count */
+    rounds?: { exercises: any[] }[];
   };
 }
 
@@ -441,6 +469,7 @@ export function useWorkoutMusic({
     isNaturalEndingActive,
     playRiseFromRest,
     setAutoProgressEnergy,
+    setAutoProgressPhaseCategory,
     setNextTriggerTime,
   } = useMusic();
 
@@ -465,7 +494,12 @@ export function useWorkoutMusic({
       musicEnabled,
       musicStartedFromPreview,
       skippedFromPreview,
+      rounds,
     } = context;
+
+    // DEFENSIVE: Get actual exercise count from workout machine's rounds data
+    // This is the source of truth - actual exercises in the workout, not stale config
+    const actualExerciseCount = rounds?.[currentRoundIndex]?.exercises?.length;
 
     console.log('[useWorkoutMusic] State changed:', {
       stateValue,
@@ -478,6 +512,7 @@ export function useWorkoutMusic({
       skippedFromPreview,
       triggeredPhases: triggeredPhases.length,
       consumedPhases: consumedPhases.length,
+      actualExerciseCount,
     });
 
     // Map state to phase type
@@ -487,12 +522,14 @@ export function useWorkoutMusic({
       return;
     }
 
-    // Set auto-progress energy based on phase type
-    // - 'low' for previews (background music during intro)
-    // - 'high' for exercise/rest/setBreak (keep energy up during workout)
+    // Set auto-progress energy and phase category based on phase type
+    // Energy: 'low' for previews (background music during intro), 'high' for exercise/rest/setBreak
+    // Phase category: 'preview' for roundPreview, 'workout' for exercise/rest/setBreak
     const autoProgressEnergy = phaseType === 'preview' ? 'low' : 'high';
+    const autoProgressPhaseCategory = phaseType === 'preview' ? 'preview' : 'workout';
     setAutoProgressEnergy(autoProgressEnergy);
-    console.log('[useWorkoutMusic] Set autoProgressEnergy:', autoProgressEnergy, 'for phase:', phaseType);
+    setAutoProgressPhaseCategory(autoProgressPhaseCategory);
+    console.log('[useWorkoutMusic] Set autoProgress:', { energy: autoProgressEnergy, phaseCategory: autoProgressPhaseCategory, phase: phaseType });
 
     // Calculate next trigger time for 30-second minimum play duration rule
     // This needs to happen BEFORE we get the music config since the calculation
@@ -526,7 +563,8 @@ export function useWorkoutMusic({
       phaseType,
       context.timeRemaining,
       currentSetNumber,
-      musicConfig
+      musicConfig,
+      actualExerciseCount
     );
     setNextTriggerTime(nextTriggerTime);
     console.log('[useWorkoutMusic] Next trigger time calculated:', nextTriggerTime,
@@ -554,13 +592,15 @@ export function useWorkoutMusic({
     // This uses actualTimeRemaining (from state machine) + futurePhases (from config)
     // Much more accurate than calculating everything from config due to setInterval drift
     // For natural ending, adds 3-second overshoot so music plays past round end
+    // Uses actualExerciseCount from workout machine for defensive exercise counting
     const roundEndTime = calculatePrecisionRoundEndTime(
       circuitConfig,
       currentRoundIndex,
       currentExerciseIndex,
       phaseType,
       context.timeRemaining,
-      hasNaturalEnding
+      hasNaturalEnding,
+      actualExerciseCount
     );
 
     // Evaluate trigger using stateless function with machine context
@@ -583,6 +623,16 @@ export function useWorkoutMusic({
     switch (action.type) {
       case 'none':
         console.log('[useWorkoutMusic] No action:', action.reason);
+        // Fallback: If phase is consumed but music is enabled and not playing,
+        // start playback anyway. This handles mid-workout music activation where
+        // the phase was already triggered/consumed before music was enabled.
+        if (action.reason === 'Phase consumed' && musicEnabled && !isPlaying) {
+          console.log('[useWorkoutMusic] Fallback: phase consumed but music enabled and not playing, triggering playback');
+          playWithTrigger({
+            energy: autoProgressEnergy,
+            phaseCategory: autoProgressPhaseCategory,
+          });
+        }
         break;
 
       case 'play': {
@@ -603,6 +653,7 @@ export function useWorkoutMusic({
           naturalEnding: action.naturalEnding,
           roundEndTime: action.roundEndTime,
           segmentTimestamp: action.segmentTimestamp,
+          phaseCategory: autoProgressPhaseCategory,
         });
         break;
       }
@@ -618,6 +669,7 @@ export function useWorkoutMusic({
             useBuildup: false,
             trackId: action.trackId,
             segmentTimestamp: action.segmentTimestamp,
+            phaseCategory: 'workout', // Rise countdown is always during exercise start
           });
           break;
         }
@@ -628,6 +680,7 @@ export function useWorkoutMusic({
           energy: 'high',
           useBuildup: true,
           trackId: action.trackId,
+          phaseCategory: 'workout', // Rise countdown is always during exercise start
         });
         break;
 
@@ -642,6 +695,7 @@ export function useWorkoutMusic({
             useBuildup: false,
             trackId: action.trackId,
             segmentTimestamp: action.segmentTimestamp,
+            phaseCategory: 'workout', // High countdown is always during exercise start
           });
           break;
         }
@@ -677,16 +731,17 @@ export function useWorkoutMusic({
             useBuildup: false,
             trackId: action.trackId,
             segmentTimestamp: action.segmentTimestamp,
+            phaseCategory: 'workout', // Rise from Rest is during rest/exercise phases
           });
           break;
         }
-        console.log('[useWorkoutMusic] FIRING Rise from Rest for phase:', phaseKey, 'restDuration:', action.restDurationSec);
+        console.log('[useWorkoutMusic] FIRING Rise from Rest for phase:', phaseKey, 'exerciseStartTime:', action.exerciseStartTime);
         console.log('[useWorkoutMusic] Also consuming next exercise phase:', nextExerciseKey);
         markTriggered(phaseKey);
         send({ type: 'CONSUME_PHASE', phaseKey: nextExerciseKey });
         playRiseFromRest({
           trackId: action.trackId,
-          restDurationSec: action.restDurationSec,
+          exerciseStartTime: action.exerciseStartTime,
           segmentTimestamp: action.segmentTimestamp,
         });
         break;
@@ -703,11 +758,13 @@ export function useWorkoutMusic({
     workoutState.context.musicEnabled,
     workoutState.context.musicStartedFromPreview,
     workoutState.context.skippedFromPreview,
+    workoutState.context.rounds,
     circuitConfig,
     playWithTrigger,
     startHighCountdown,
     setRiseCountdownActive,
     setAutoProgressEnergy,
+    setAutoProgressPhaseCategory,
     setNextTriggerTime,
     isPlaying,
     currentEnergy,

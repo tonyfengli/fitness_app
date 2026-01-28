@@ -22,6 +22,16 @@ import type {
 import { serializePhaseKey, inferCountdownType } from './types';
 
 // =============================================================================
+// Timing Constants
+// =============================================================================
+
+/**
+ * Timer drift rate - compensates for setInterval drift accumulation.
+ * Observed ~4% drift per second of phase duration from real-world testing.
+ */
+const DRIFT_RATE = 0.04;
+
+// =============================================================================
 // Phase Key Utilities
 // =============================================================================
 
@@ -130,10 +140,20 @@ export function evaluateTrigger(
   // Energy is always 'high' - Rise from Rest seeks to the high/drop segment
   if (phase.type === 'rest' && context.nextExerciseTrigger) {
     const nextTrigger = context.nextExerciseTrigger;
+    const restDurationSec = context.restDurationSec ?? 0;
+
+    // Calculate exerciseStartTime with drift compensation
+    // Timer drift accumulates proportionally with duration (~4% per second)
+    // This absolute timestamp allows playRiseFromRest to compute remaining time at playback
+    const expectedRestWallClock = restDurationSec * (1 + DRIFT_RATE);
+    const exerciseStartTime = Date.now() + (expectedRestWallClock * 1000);
+
     console.log('[MusicTrigger] Checking Rise from Rest:', {
       nextTriggerEnabled: nextTrigger.enabled,
       useBuildup: nextTrigger.useBuildup,
-      restDurationSec: context.restDurationSec,
+      restDurationSec,
+      expectedRestWallClock: expectedRestWallClock.toFixed(2),
+      exerciseStartTime,
     });
     if (nextTrigger.enabled && nextTrigger.useBuildup) {
       return {
@@ -141,7 +161,7 @@ export function evaluateTrigger(
         energy: 'high',
         trackId: nextTrigger.trackId,
         segmentTimestamp: nextTrigger.segmentTimestamp,
-        restDurationSec: context.restDurationSec ?? 0,
+        exerciseStartTime,
       };
     }
   }

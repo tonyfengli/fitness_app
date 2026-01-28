@@ -14,6 +14,13 @@ const TRACKS_CACHE_KEY = '@music_tracks_cache';
 // Playable energy levels (excludes 'outro' and deprecated 'medium')
 type PlayableEnergy = 'low' | 'high';
 
+/**
+ * Phase category for track history.
+ * - 'preview': roundPreview phases only
+ * - 'workout': exercise, rest, setBreak phases
+ */
+type PhaseCategory = 'preview' | 'workout';
+
 // Pre-selected rise track info (for random buildup tracks)
 interface PreSelectedRiseTrack {
   track: MusicTrack;
@@ -33,6 +40,7 @@ interface PendingTrigger {
   trackId?: string;
   naturalEnding?: boolean;
   roundEndTime?: number;
+  phaseCategory?: PhaseCategory;
 }
 
 // Configurable render latency offset (time from transition trigger to screen visible)
@@ -96,6 +104,8 @@ interface MusicContextValue {
     roundEndTime?: number;
     /** Specific segment timestamp to play (for tracks with multiple high segments) */
     segmentTimestamp?: number;
+    /** Phase category for history tracking ('preview' or 'workout') */
+    phaseCategory?: 'preview' | 'workout';
   }) => Promise<void>;
 
   // High countdown methods
@@ -105,7 +115,7 @@ interface MusicContextValue {
   cancelHighCountdown: () => void;
 
   // Rise from Rest - music plays during rest, drop hits when exercise starts
-  playRiseFromRest: (options: { trackId?: string; restDurationSec: number; segmentTimestamp?: number }) => Promise<void>;
+  playRiseFromRest: (options: { trackId?: string; exerciseStartTime: number; segmentTimestamp?: number }) => Promise<void>;
 
   // Rise countdown methods (for screen-level overlay)
   setRiseCountdownActive: (active: boolean) => void;
@@ -118,6 +128,11 @@ interface MusicContextValue {
   // - 'low' for previews
   // - 'high' for exercise/rest/setBreak
   setAutoProgressEnergy: (energy: PlayableEnergy) => void;
+
+  // Set auto-progress phase category for track history based on phase type
+  // - 'preview' for roundPreview
+  // - 'workout' for exercise/rest/setBreak
+  setAutoProgressPhaseCategory: (category: 'preview' | 'workout') => void;
 
   // Set next trigger time for 30-second minimum play duration rule
   // Called by useWorkoutMusic when calculating the next trigger point
@@ -193,11 +208,16 @@ function applyHighBeatDelay(segment: MusicSegment | null, energy: PlayableEnergy
 }
 
 /**
- * Type for per-energy track history
+ * Type for phase-based track history with energy sub-histories for workout.
+ * - Preview: single history (no energy split, typically plays low energy)
+ * - Workout: per-energy histories to prevent same-song repeats within energy level
  */
-type EnergyHistoryMap = {
-  low: MusicTrack[];
-  high: MusicTrack[];
+type PhaseHistoryMap = {
+  preview: MusicTrack[];    // Single history for preview phases
+  workout: {                // Workout phases have energy sub-histories
+    low: MusicTrack[];
+    high: MusicTrack[];
+  };
 };
 
 /**
@@ -233,7 +253,10 @@ function meetsMinPlayDuration(
   if (timeUntilNextTriggerSec <= 0) return true;
 
   // Estimate seek position if not provided
+  // BUG WARNING: This uses the FIRST high segment, but actual playback uses a RANDOM segment
+  // If the track has multiple high segments, this estimate may be wrong!
   let seekSec = estimatedSeekSec ?? 0;
+  let estimationMethod = 'provided';
   if (seekSec === 0 && energy === 'high') {
     // For high energy, we typically seek to near the first high segment
     // Use the first high segment timestamp as an estimate
@@ -241,6 +264,9 @@ function meetsMinPlayDuration(
     if (highSegment) {
       // Account for HIGH_BEAT_DELAY_SEC (2.5s) that we seek before the segment
       seekSec = Math.max(0, highSegment.timestamp - 2.5);
+      estimationMethod = `first-high-segment@${highSegment.timestamp}s`;
+    } else {
+      estimationMethod = 'no-high-segment';
     }
   }
 
@@ -255,29 +281,65 @@ function meetsMinPlayDuration(
   // 2. Track ends with at least 30 seconds before next trigger
   const isValid = remainingAfterTrackSec <= 0 || remainingAfterTrackSec >= MIN_PLAY_DURATION_SEC;
 
+  // Log details for debugging 30-second rule violations
+  const allHighSegments = track.segments?.filter(s => s.energy === 'high').map(s => s.timestamp) || [];
+  console.log('[MusicProvider] 30s rule check:', {
+    track: track.name,
+    trackDurationSec: trackDurationSec.toFixed(1),
+    timeUntilNextTriggerSec: timeUntilNextTriggerSec.toFixed(1),
+    estimatedSeekSec: seekSec.toFixed(1),
+    estimationMethod,
+    allHighSegments: allHighSegments.length > 1 ? allHighSegments : 'single-or-none',
+    estimatedPlayDurationSec: trackPlayDurationSec.toFixed(1),
+    remainingAfterTrackSec: remainingAfterTrackSec.toFixed(1),
+    isValid,
+    reason: remainingAfterTrackSec <= 0 ? 'fills-all-time' :
+            remainingAfterTrackSec >= MIN_PLAY_DURATION_SEC ? 'leaves-30s+' : 'VIOLATION',
+  });
+
   return isValid;
 }
 
 /**
- * Select a track from the pool using per-energy history.
- * - Exhaust all tracks for an energy level before allowing repeats
+ * Get the history array for a given phase category and energy.
+ * - Preview: single history (ignores energy)
+ * - Workout: per-energy histories
+ */
+function getHistoryForPhase(
+  historyMap: PhaseHistoryMap,
+  phaseCategory: PhaseCategory,
+  energy: PlayableEnergy
+): MusicTrack[] {
+  if (phaseCategory === 'preview') {
+    return historyMap.preview;
+  }
+  return historyMap.workout[energy];
+}
+
+/**
+ * Select a track from the pool using phase-based history.
+ * - Preview phases use a single history (no energy split)
+ * - Workout phases use per-energy histories
+ * - Exhaust all tracks for a history before allowing repeats
  * - When exhausted, pick least-recently-played (first in history that's still in pool)
  *
  * @param trackPool - Available tracks to select from
+ * @param phaseCategory - Phase category ('preview' or 'workout')
  * @param energy - Energy level being selected for
- * @param historyByEnergy - Per-energy history map (mutated to add selected track)
+ * @param historyMap - Phase history map (mutated to add selected track)
  * @param addToHistory - Whether to add selected track to history (false for explicit trackId)
  * @returns Selected track or null if pool is empty
  */
-function selectTrackWithEnergyHistory(
+function selectTrackWithPhaseHistory(
   trackPool: MusicTrack[],
+  phaseCategory: PhaseCategory,
   energy: PlayableEnergy,
-  historyByEnergy: EnergyHistoryMap,
+  historyMap: PhaseHistoryMap,
   addToHistory: boolean = true
 ): MusicTrack | null {
   if (trackPool.length === 0) return null;
 
-  const history = historyByEnergy[energy];
+  const history = getHistoryForPhase(historyMap, phaseCategory, energy);
   const playedIds = new Set(history.map(t => t.id));
 
   // Try to find unplayed tracks
@@ -285,30 +347,44 @@ function selectTrackWithEnergyHistory(
 
   let selectedTrack: MusicTrack | null = null;
 
+  const logPrefix = phaseCategory === 'preview' ? 'preview' : `workout.${energy}`;
+
   if (unplayedTracks.length > 0) {
     // Random selection from unplayed tracks
     selectedTrack = unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)]!;
-    console.log(`[MusicProvider] selectTrack(${energy}): picked unplayed track, ${unplayedTracks.length} remaining unplayed`);
+    console.log(`[MusicProvider] selectTrack(${logPrefix}): picked unplayed track, ${unplayedTracks.length} remaining unplayed`);
+
+    // Add new track to history
+    if (addToHistory) {
+      history.push(selectedTrack);
+    }
   } else {
     // All exhausted - pick least-recently-played (earliest in history still in pool)
     const poolIds = new Set(trackPool.map(t => t.id));
-    for (const historyTrack of history) {
-      if (poolIds.has(historyTrack.id)) {
-        selectedTrack = historyTrack;
-        console.log(`[MusicProvider] selectTrack(${energy}): all exhausted, picked LRU: ${historyTrack.name}`);
+    let lruIndex = -1;
+    for (let i = 0; i < history.length; i++) {
+      if (poolIds.has(history[i]!.id)) {
+        selectedTrack = history[i]!;
+        lruIndex = i;
+        console.log(`[MusicProvider] selectTrack(${logPrefix}): all exhausted, picked LRU: ${selectedTrack.name}`);
         break;
       }
     }
+
+    // Move LRU track to end of history (remove from current position, push to end)
+    if (selectedTrack && lruIndex >= 0 && addToHistory) {
+      history.splice(lruIndex, 1);
+      history.push(selectedTrack);
+    }
+
     // Fallback to random if somehow no match in history
     if (!selectedTrack) {
       selectedTrack = trackPool[Math.floor(Math.random() * trackPool.length)]!;
-      console.log(`[MusicProvider] selectTrack(${energy}): LRU fallback failed, picked random`);
+      console.log(`[MusicProvider] selectTrack(${logPrefix}): LRU fallback failed, picked random`);
+      if (addToHistory) {
+        history.push(selectedTrack);
+      }
     }
-  }
-
-  // Add to history (unless bypassed for explicit trackId)
-  if (selectedTrack && addToHistory) {
-    historyByEnergy[energy].push(selectedTrack);
   }
 
   return selectedTrack;
@@ -372,11 +448,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, [syncResult, isSyncing]);
 
   // Track history for skip back (persists across screen transitions)
-  // Per-energy tracking to prevent repeats until all songs for that energy are exhausted
-  const playedTracksHistoryByEnergy = useRef<{
-    low: MusicTrack[];
-    high: MusicTrack[];
-  }>({ low: [], high: [] });
+  // Phase-based tracking: preview vs workout (with energy sub-histories)
+  // - Preview: single history for roundPreview phases
+  // - Workout: per-energy histories for exercise/rest/setBreak phases
+  const playedTracksHistoryByPhase = useRef<PhaseHistoryMap>({
+    preview: [],
+    workout: { low: [], high: [] },
+  });
   const isStartingRef = useRef(false);
   const isSwitchingTrackRef = useRef(false);
   const pendingStart = useRef(false);
@@ -386,6 +464,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // Energy level for automatic track progressions (when track ends naturally)
   // Set by useWorkoutMusic based on phase type: 'low' for previews, 'high' for exercise/rest/setBreak
   const autoProgressEnergyRef = useRef<PlayableEnergy>('high');
+
+  // Phase category for automatic track progressions (when track ends naturally)
+  // Set by useWorkoutMusic based on phase type: 'preview' for roundPreview, 'workout' for others
+  const autoProgressPhaseCategoryRef = useRef<PhaseCategory>('workout');
 
   // Next trigger time (absolute timestamp in ms) for 30-second minimum play duration rule
   // Set by useWorkoutMusic when a trigger fires or phase changes
@@ -501,11 +583,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     const trackPool = downloadedTracks.filter(isValidForRiseCountdown);
     if (trackPool.length === 0) return;
 
-    // Select track using per-energy history (don't add to history yet - that's done on actual play)
-    const track = selectTrackWithEnergyHistory(
+    // Select track using phase-based history (don't add to history yet - that's done on actual play)
+    // Rise countdown happens at exercise start, so use 'workout' category
+    const track = selectTrackWithPhaseHistory(
       trackPool,
+      'workout',
       'high', // Rise countdown always targets high energy
-      playedTracksHistoryByEnergy.current,
+      playedTracksHistoryByPhase.current,
       false // Don't add to history - just for UI preview
     );
     if (!track) return;
@@ -544,6 +628,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     naturalEnding?: boolean;
     /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
     roundEndTime?: number;
+    /** Phase category for history tracking ('preview' or 'workout') */
+    phaseCategory?: PhaseCategory;
   }) => {
     // Guard against concurrent play calls
     if (isStartingRef.current) return;
@@ -623,12 +709,17 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     // Fallback to all downloaded tracks if no tracks match the energy (non-natural-ending only)
     if (trackPool.length === 0) trackPool = downloadedTracks;
 
-    // Select track using per-energy history (exhaust all before repeat, LRU fallback)
+    // Determine phase category for history tracking
+    // Default to autoProgressPhaseCategoryRef (set by useWorkoutMusic based on current phase)
+    const phaseCategory = options?.phaseCategory ?? autoProgressPhaseCategoryRef.current;
+
+    // Select track using phase-based history (exhaust all before repeat, LRU fallback)
     const historyEnergy = targetEnergy || 'high'; // Default to high if no energy specified
-    const track = selectTrackWithEnergyHistory(
+    const track = selectTrackWithPhaseHistory(
       trackPool,
+      phaseCategory,
       historyEnergy,
-      playedTracksHistoryByEnergy.current,
+      playedTracksHistoryByPhase.current,
       true // Add to history
     );
 
@@ -637,6 +728,17 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       let segment = targetEnergy
         ? getRandomSegmentByEnergy(track.segments || [], targetEnergy)
         : track.segments?.[0] || null;
+
+      // Log actual segment selection for 30-second rule debugging
+      const allHighSegments = track.segments?.filter(s => s.energy === 'high').map(s => s.timestamp) || [];
+      if (targetEnergy === 'high' && allHighSegments.length > 1) {
+        console.log('[MusicProvider] 30s rule - ACTUAL segment selected:', {
+          track: track.name,
+          selectedSegmentTimestamp: segment?.timestamp,
+          allHighSegments,
+          warning: 'Multiple high segments - filter estimate may differ from actual!',
+        });
+      }
 
       // Handle natural ending - calculate seek point using precision timing
       // Note: roundEndTime already includes smart drift buffer from useWorkoutMusic,
@@ -664,7 +766,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        // History already added by selectTrackWithEnergyHistory
+        // History already added by selectTrackWithPhaseHistory
         setIsPaused(false);
         setCurrentEnergy(segment?.energy || null);
         isSwitchingTrackRef.current = true;
@@ -742,10 +844,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     roundEndTime?: number;
     /** Specific segment timestamp to play (for tracks with multiple high segments) */
     segmentTimestamp?: number;
+    /** Phase category for history tracking ('preview' or 'workout') */
+    phaseCategory?: PhaseCategory;
     /** Internal: retry count to prevent infinite loops */
     _retryCount?: number;
   }) => {
-    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, segmentTimestamp, _retryCount = 0 } = options;
+    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, segmentTimestamp, phaseCategory, _retryCount = 0 } = options;
 
     // Prevent infinite retry loops (max 2 retries = 200ms total)
     const MAX_RETRIES = 2;
@@ -772,7 +876,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       clearPendingTriggerTimeout();
 
       // Queue the trigger (replaces any previous queued trigger - only keep latest)
-      pendingTriggerRef.current = { energy, useBuildup, trackId, naturalEnding, roundEndTime };
+      pendingTriggerRef.current = { energy, useBuildup, trackId, naturalEnding, roundEndTime, phaseCategory };
 
       // Safety net: if trackEnd never fires, process queue after timeout
       const SAFETY_NET_TIMEOUT_MS = 10000; // 10 seconds should be more than enough
@@ -992,8 +1096,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           const seekPosition = highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC;
           const playSegment = { ...highSegment, timestamp: seekPosition };
 
-          // Add to per-energy history (Rise always uses 'high')
-          playedTracksHistoryByEnergy.current.high.push(preSelectedTrack);
+          // Add to workout history (Rise always uses 'high' energy in 'workout' category)
+          playedTracksHistoryByPhase.current.workout.high.push(preSelectedTrack);
           setIsPaused(false);
           setCurrentEnergy('high'); // Will transition to high
           setIsEnabled(true);
@@ -1019,7 +1123,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
     // Play random track with energy filter (includes natural ending support)
     setIsEnabled(true);
-    await playNextTrack({ energy, useBuildup, naturalEnding, roundEndTime });
+    await playNextTrack({ energy, useBuildup, naturalEnding, roundEndTime, phaseCategory });
   }, [tracks, downloadedFilenames, playNextTrack, startBuildupCountdown, clearBuildupCountdown, clearPendingTriggerTimeout, findSegmentAtTimestamp, preSelectedRiseTrack]);
 
   // Start high countdown - ducks volume and prepares for high energy drop
@@ -1053,17 +1157,29 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Rise from Rest - music plays during rest, drop hits 0.75s after exercise starts (syncs with rise countdown)
-  // Seeks to: highSegment.timestamp - restDurationSec - DROP_DELAY_SEC
-  const playRiseFromRest = useCallback(async (options: { trackId?: string; restDurationSec: number; segmentTimestamp?: number }) => {
-    const { trackId, restDurationSec, segmentTimestamp } = options;
+  // Uses absolute timestamp (exerciseStartTime) for precision timing that compensates for timer drift
+  const playRiseFromRest = useCallback(async (options: { trackId?: string; exerciseStartTime: number; segmentTimestamp?: number }) => {
+    const { trackId, exerciseStartTime, segmentTimestamp } = options;
     // Drop hits 0.75s after exercise starts to sync with rise countdown timing
     const DROP_DELAY_SEC = 0.75;
-    const totalDuration = restDurationSec + DROP_DELAY_SEC;
 
-    console.log('[MusicProvider] playRiseFromRest called:', { trackId, restDurationSec, dropDelaySec: DROP_DELAY_SEC });
+    // Calculate remaining time to exercise start at playback time
+    // This compensates for any delay between trigger and actual playback (fade out, load, etc.)
+    const now = Date.now();
+    const remainingToExerciseSec = (exerciseStartTime - now) / 1000;
+    const totalDuration = remainingToExerciseSec + DROP_DELAY_SEC;
 
-    if (restDurationSec <= 0) {
-      console.warn('[MusicProvider] playRiseFromRest - invalid rest duration:', restDurationSec);
+    console.log('[MusicProvider] playRiseFromRest called:', {
+      trackId,
+      exerciseStartTime,
+      now,
+      remainingToExerciseSec: remainingToExerciseSec.toFixed(2),
+      dropDelaySec: DROP_DELAY_SEC,
+      totalDuration: totalDuration.toFixed(2),
+    });
+
+    if (remainingToExerciseSec <= 0) {
+      console.warn('[MusicProvider] playRiseFromRest - exercise already started, skipping:', remainingToExerciseSec);
       return;
     }
 
@@ -1126,12 +1242,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Select track using per-energy history (exhaust all before repeat, LRU fallback)
-      // Rise from Rest always targets 'high' energy
-      track = selectTrackWithEnergyHistory(
+      // Select track using phase-based history (exhaust all before repeat, LRU fallback)
+      // Rise from Rest is during rest phase → 'workout' category, 'high' energy
+      track = selectTrackWithPhaseHistory(
         compatibleTracks,
+        'workout',
         'high',
-        playedTracksHistoryByEnergy.current,
+        playedTracksHistoryByPhase.current,
         true // Add to history
       );
     }
@@ -1181,9 +1298,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     console.log('[MusicProvider] playRiseFromRest - precision calc:', {
       track: track.name,
       highSegmentTimestamp: highSegment.timestamp,
-      restDurationSec,
+      remainingToExerciseSec: remainingToExerciseSec.toFixed(2),
       dropDelaySec: DROP_DELAY_SEC,
-      seekTimestamp,
+      totalDuration: totalDuration.toFixed(2),
+      seekTimestamp: seekTimestamp.toFixed(2),
     });
 
     // Find the segment at the seek point (for energy state tracking)
@@ -1207,7 +1325,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     await musicService.play(track, { segment: playSegment, useBuildup: false });
 
     isSwitchingTrackRef.current = false;
-    // History already added by selectTrackWithEnergyHistory for random selection
+    // History already added by selectTrackWithPhaseHistory for random selection
     // Explicit trackId bypasses history (not added)
     setIsPlaying(true);
     setIsPaused(false);
@@ -1344,6 +1462,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     autoProgressEnergyRef.current = energy;
   }, []);
 
+  // Set auto-progress phase category for track history
+  // Called by useWorkoutMusic when a phase trigger fires
+  const setAutoProgressPhaseCategory = useCallback((category: PhaseCategory) => {
+    console.log('[MusicProvider] setAutoProgressPhaseCategory:', category);
+    autoProgressPhaseCategoryRef.current = category;
+  }, []);
+
   // Set next trigger time for 30-second minimum play duration rule
   // Called by useWorkoutMusic when calculating the next trigger point
   const setNextTriggerTime = useCallback((time: number | undefined) => {
@@ -1388,6 +1513,22 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       switch (event.type) {
         case 'trackStart':
           isSwitchingTrackRef.current = false;
+
+          // Bug fix: If music was disabled while track was loading (race condition),
+          // immediately stop the track instead of letting it play
+          if (!isEnabled) {
+            console.log('[MusicProvider] trackStart - music disabled, stopping track immediately');
+            musicService.stop(true); // Immediate stop
+            return;
+          }
+
+          // Bug fix: Clear isPaused when a new track starts to prevent invalid state
+          // where both isPlaying=true and isPaused=true
+          if (isPaused) {
+            console.log('[MusicProvider] trackStart - clearing stale isPaused state');
+            setIsPaused(false);
+          }
+
           setIsPlaying(true);
           setCurrentTrack(event.track || null);
           setCurrentSegment(event.segment || null);
@@ -1396,12 +1537,26 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           }
           break;
         case 'trackEnd':
+          // Log 30-second rule verification: how much time until next trigger when track ended?
+          const timeUntilNextTriggerMs = nextTriggerTimeRef.current
+            ? nextTriggerTimeRef.current - Date.now()
+            : null;
           console.log('[MusicProvider] trackEnd event', {
             naturalEndingActive: naturalEndingActiveRef.current,
             hasPendingTrigger: !!pendingTriggerRef.current,
             isEnabled,
             currentEnergy,
             autoProgressEnergy: autoProgressEnergyRef.current,
+            // 30-second rule verification
+            nextTriggerTimeSet: !!nextTriggerTimeRef.current,
+            timeUntilNextTriggerSec: timeUntilNextTriggerMs !== null
+              ? (timeUntilNextTriggerMs / 1000).toFixed(1)
+              : 'not-set',
+            thirtySecRuleStatus: timeUntilNextTriggerMs !== null
+              ? (timeUntilNextTriggerMs / 1000 < MIN_PLAY_DURATION_SEC
+                  ? `VIOLATION: only ${(timeUntilNextTriggerMs / 1000).toFixed(1)}s until next trigger`
+                  : 'OK')
+              : 'unknown',
           });
           setCurrentTrack(null);
           setCurrentSegment(null);
@@ -1421,20 +1576,21 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
               playWithTrigger(pending);
             } else if (isEnabled) {
               // Natural ending finished but still in same round (edge case: workout paused)
-              // Music is still enabled, so play a new track using autoProgressEnergy
-              console.log('[MusicProvider] Natural ending complete in same round - playing new track at autoProgressEnergy:', autoProgressEnergyRef.current);
-              playNextTrack({ energy: autoProgressEnergyRef.current });
+              // Music is still enabled, so play a new track using autoProgressEnergy/PhaseCategory
+              console.log('[MusicProvider] Natural ending complete in same round - playing new track at autoProgressEnergy:', autoProgressEnergyRef.current, 'phaseCategory:', autoProgressPhaseCategoryRef.current);
+              playNextTrack({ energy: autoProgressEnergyRef.current, phaseCategory: autoProgressPhaseCategoryRef.current });
             } else {
               console.log('[MusicProvider] Natural ending complete - music disabled, stopping playback');
               setIsPlaying(false);
             }
           } else if (isEnabled && currentEnergy && currentEnergy !== 'outro') {
-            // Use autoProgressEnergy for automatic progressions (phase-based rule)
-            // - 'low' for previews
-            // - 'high' for exercise/rest/setBreak
+            // Use autoProgressEnergy/PhaseCategory for automatic progressions (phase-based rule)
+            // - 'low' for previews (phaseCategory: 'preview')
+            // - 'high' for exercise/rest/setBreak (phaseCategory: 'workout')
             const progressEnergy = autoProgressEnergyRef.current;
-            console.log('[MusicProvider] Track ended - playing next at autoProgressEnergy:', progressEnergy);
-            playNextTrack({ energy: progressEnergy });
+            const progressPhaseCategory = autoProgressPhaseCategoryRef.current;
+            console.log('[MusicProvider] Track ended - playing next at autoProgressEnergy:', progressEnergy, 'phaseCategory:', progressPhaseCategory);
+            playNextTrack({ energy: progressEnergy, phaseCategory: progressPhaseCategory });
           } else {
             console.log('[MusicProvider] Track ended - stopping (disabled or outro energy)');
             setIsPlaying(false);
@@ -1466,7 +1622,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     });
 
     return unsubscribe;
-  }, [isEnabled, playNextTrack, playWithTrigger, currentEnergy, clearBuildupCountdown, clearPendingTriggerTimeout]);
+  }, [isEnabled, isPaused, playNextTrack, playWithTrigger, currentEnergy, clearBuildupCountdown, clearPendingTriggerTimeout]);
 
   // Start music
   const start = useCallback(async () => {
@@ -1576,14 +1732,14 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isPaused, currentTrack]);
 
-  // Play or Resume - smart function that resumes if paused, or enables music if stopped
-  // When starting fresh, just enables music and lets the trigger system (useWorkoutMusic) handle playback
+  // Play or Resume - smart function that resumes if paused, or starts fresh playback
   const playOrResume = useCallback(async () => {
     console.log('[MusicProvider] playOrResume() called', {
       isPaused,
       currentTrack: currentTrack?.name ?? null,
       currentEnergy,
       isEnabled,
+      isStarting: isStartingRef.current,
     });
 
     // Try to resume if we have a paused track
@@ -1599,15 +1755,16 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Resume failed - fall through to enable music
-      console.log('[MusicProvider] playOrResume() - resume failed, enabling music for trigger system');
+      // Resume failed - fall through to start fresh
+      console.log('[MusicProvider] playOrResume() - resume failed, starting fresh playback');
     }
 
-    // Enable music and let the trigger system (useWorkoutMusic) handle playback
-    // This prevents double-play when both playOrResume and the trigger system try to play
-    console.log('[MusicProvider] playOrResume() - enabling music, trigger system will handle playback');
+    // Enable music - trigger system (useWorkoutMusic) will handle playback
+    // This prevents double-play race conditions. If the phase is consumed (mid-workout),
+    // useWorkoutMusic will detect this and trigger playback as a fallback.
     setIsEnabled(true);
     setIsPaused(false);
+    console.log('[MusicProvider] playOrResume() - enabled music, trigger system will handle playback');
   }, [isPaused, currentTrack, currentEnergy, isEnabled]);
 
   // Toggle music
@@ -1632,7 +1789,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setIsEnabled(true);
     setIsPaused(false);
     clearBuildupCountdown();
-    await playNextTrack({ energy: (currentEnergy as PlayableEnergy) || 'low' });
+    await playNextTrack({ energy: (currentEnergy as PlayableEnergy) || 'low', phaseCategory: autoProgressPhaseCategoryRef.current });
   }, [playNextTrack, currentEnergy, clearBuildupCountdown, clearPendingTriggerTimeout]);
 
   // Skip back (Back)
@@ -1728,6 +1885,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     seekToHighSegment,
     clearNaturalEnding,
     setAutoProgressEnergy,
+    setAutoProgressPhaseCategory,
     setNextTriggerTime,
     refreshTracks, // TODO: TEMPORARY - Remove once segment timestamps are finalized
   };
