@@ -340,7 +340,7 @@ export function CircuitWorkoutLiveScreen() {
       // Transition music to low energy if enabled, otherwise leave it off
       // Use XState musicEnabled as source of truth
       if (state.context.musicEnabled) {
-        playWithTrigger({ energy: 'low' });
+        playWithTrigger({ energy: 'low', phaseCategory: 'preview' }); // Going back to overview
       }
       // Close settings panel before navigating
       setIsSettingsPanelOpen(false);
@@ -665,6 +665,7 @@ export function CircuitWorkoutLiveScreen() {
         energy: 'high',
         useBuildup: true,
         trackId,
+        phaseCategory: 'workout', // Ensure track is added to workout history, not preview
       });
     } else if (hasHighConfigured) {
       console.log('[CircuitWorkoutLiveScreen] Timer trigger: High countdown (6s duration)');
@@ -828,6 +829,7 @@ export function CircuitWorkoutLiveScreen() {
         energy: 'high',
         useBuildup: true,
         trackId,
+        phaseCategory: 'workout', // Ensure track is added to workout history, not preview
       });
     } else if (hasHighConfigured && !isHighCountdownActive) {
       console.log('[CircuitWorkoutLiveScreen] High configured, triggering High countdown');

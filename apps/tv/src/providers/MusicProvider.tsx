@@ -208,36 +208,83 @@ function applyHighBeatDelay(segment: MusicSegment | null, energy: PlayableEnergy
 }
 
 /**
- * Type for phase-based track history with energy sub-histories for workout.
- * - Preview: single history (no energy split, typically plays low energy)
- * - Workout: per-energy histories to prevent same-song repeats within energy level
+ * Type for phase-based track history.
+ * - Preview: single history for roundPreview phases
+ * - Workout: single history for exercise/rest/setBreak phases (no energy split)
+ *
+ * Both categories use a single shared history to prevent the same song
+ * from playing twice within that phase category, regardless of energy level.
  */
 type PhaseHistoryMap = {
   preview: MusicTrack[];    // Single history for preview phases
-  workout: {                // Workout phases have energy sub-histories
-    low: MusicTrack[];
-    high: MusicTrack[];
-  };
+  workout: MusicTrack[];    // Single history for workout phases (no energy split)
 };
 
 /**
- * Checks if a track has sufficient play duration for the 30-second rule.
- *
- * A track is valid if:
- * 1. Track plays long enough to fill all time until next trigger, OR
- * 2. Track ends with at least MIN_PLAY_DURATION_SEC (30s) before next trigger
+ * Gets segments that satisfy the 30-second rule for a track.
+ * A segment is valid if playing from it either:
+ * 1. Fills all time until next trigger, OR
+ * 2. Leaves at least MIN_PLAY_DURATION_SEC (30s) before next trigger
  *
  * @param track - The track to check
- * @param energy - Target energy level (used to estimate seek position)
+ * @param energy - Target energy level
  * @param nextTriggerTime - Absolute timestamp (ms) when next trigger fires
- * @param estimatedSeekSec - Optional estimated seek position in seconds
- * @returns true if track meets the 30-second rule
+ * @returns Array of valid segments (empty if none pass or no constraint)
+ */
+function getSegmentsValidFor30sRule(
+  track: MusicTrack,
+  energy: PlayableEnergy,
+  nextTriggerTime: number | undefined
+): MusicSegment[] {
+  const segments = track.segments?.filter(s => s.energy === energy) || [];
+
+  // If no constraint or no duration info, all segments are valid
+  if (!nextTriggerTime || !track.durationMs || track.durationMs <= 0) {
+    return segments;
+  }
+
+  const trackDurationSec = track.durationMs / 1000;
+  const timeUntilNextTriggerMs = nextTriggerTime - Date.now();
+  const timeUntilNextTriggerSec = timeUntilNextTriggerMs / 1000;
+
+  // If next trigger is imminent or past, all segments are valid
+  if (timeUntilNextTriggerSec <= 0) {
+    return segments;
+  }
+
+  // Filter segments that satisfy the 30s rule
+  const validSegments = segments.filter(segment => {
+    // Calculate seek position (with HIGH_BEAT_DELAY_SEC for high energy)
+    const seekSec = energy === 'high'
+      ? Math.max(0, segment.timestamp - 2.5)
+      : segment.timestamp;
+
+    const playDurationSec = trackDurationSec - seekSec;
+    const remainingAfterSec = timeUntilNextTriggerSec - playDurationSec;
+
+    // Valid if fills all time OR leaves 30s+
+    return remainingAfterSec <= 0 || remainingAfterSec >= MIN_PLAY_DURATION_SEC;
+  });
+
+  return validSegments;
+}
+
+/**
+ * Checks if a track has ANY segment that satisfies the 30-second rule.
+ *
+ * A segment is valid if playing from it either:
+ * 1. Fills all time until next trigger, OR
+ * 2. Leaves at least MIN_PLAY_DURATION_SEC (30s) before next trigger
+ *
+ * @param track - The track to check
+ * @param energy - Target energy level (used to filter segments)
+ * @param nextTriggerTime - Absolute timestamp (ms) when next trigger fires
+ * @returns true if track has at least one valid segment
  */
 function meetsMinPlayDuration(
   track: MusicTrack,
   energy: PlayableEnergy,
-  nextTriggerTime: number | undefined,
-  estimatedSeekSec?: number
+  nextTriggerTime: number | undefined
 ): boolean {
   // If no next trigger time, all tracks are valid
   if (!nextTriggerTime) return true;
@@ -252,80 +299,68 @@ function meetsMinPlayDuration(
   // If next trigger is imminent or in the past, all tracks are valid
   if (timeUntilNextTriggerSec <= 0) return true;
 
-  // Estimate seek position if not provided
-  // BUG WARNING: This uses the FIRST high segment, but actual playback uses a RANDOM segment
-  // If the track has multiple high segments, this estimate may be wrong!
-  let seekSec = estimatedSeekSec ?? 0;
-  let estimationMethod = 'provided';
-  if (seekSec === 0 && energy === 'high') {
-    // For high energy, we typically seek to near the first high segment
-    // Use the first high segment timestamp as an estimate
-    const highSegment = track.segments?.find(s => s.energy === 'high');
-    if (highSegment) {
-      // Account for HIGH_BEAT_DELAY_SEC (2.5s) that we seek before the segment
-      seekSec = Math.max(0, highSegment.timestamp - 2.5);
-      estimationMethod = `first-high-segment@${highSegment.timestamp}s`;
-    } else {
-      estimationMethod = 'no-high-segment';
-    }
+  // Get all segments matching the energy
+  const segments = track.segments?.filter(s => s.energy === energy) || [];
+  if (segments.length === 0) return true; // No segments to check
+
+  // Check each segment - track is valid if ANY segment passes
+  const validSegments: { timestamp: number; valid: boolean; reason: string }[] = [];
+
+  for (const segment of segments) {
+    const seekSec = energy === 'high'
+      ? Math.max(0, segment.timestamp - 2.5)
+      : segment.timestamp;
+
+    const playDurationSec = trackDurationSec - seekSec;
+    const remainingAfterSec = timeUntilNextTriggerSec - playDurationSec;
+    const isValid = remainingAfterSec <= 0 || remainingAfterSec >= MIN_PLAY_DURATION_SEC;
+
+    validSegments.push({
+      timestamp: segment.timestamp,
+      valid: isValid,
+      reason: remainingAfterSec <= 0 ? 'fills-all-time' :
+              remainingAfterSec >= MIN_PLAY_DURATION_SEC ? 'leaves-30s+' :
+              `VIOLATION(${remainingAfterSec.toFixed(1)}s)`,
+    });
   }
 
-  // Calculate how long the track will play
-  const trackPlayDurationSec = trackDurationSec - seekSec;
+  const hasValidSegment = validSegments.some(s => s.valid);
 
-  // Calculate how much time remains after track ends
-  const remainingAfterTrackSec = timeUntilNextTriggerSec - trackPlayDurationSec;
-
-  // Track is valid if:
-  // 1. Track fills all time until next trigger (remainingAfterTrack <= 0), OR
-  // 2. Track ends with at least 30 seconds before next trigger
-  const isValid = remainingAfterTrackSec <= 0 || remainingAfterTrackSec >= MIN_PLAY_DURATION_SEC;
-
-  // Log details for debugging 30-second rule violations
-  const allHighSegments = track.segments?.filter(s => s.energy === 'high').map(s => s.timestamp) || [];
+  // Log details for debugging
   console.log('[MusicProvider] 30s rule check:', {
     track: track.name,
     trackDurationSec: trackDurationSec.toFixed(1),
     timeUntilNextTriggerSec: timeUntilNextTriggerSec.toFixed(1),
-    estimatedSeekSec: seekSec.toFixed(1),
-    estimationMethod,
-    allHighSegments: allHighSegments.length > 1 ? allHighSegments : 'single-or-none',
-    estimatedPlayDurationSec: trackPlayDurationSec.toFixed(1),
-    remainingAfterTrackSec: remainingAfterTrackSec.toFixed(1),
-    isValid,
-    reason: remainingAfterTrackSec <= 0 ? 'fills-all-time' :
-            remainingAfterTrackSec >= MIN_PLAY_DURATION_SEC ? 'leaves-30s+' : 'VIOLATION',
+    segments: validSegments,
+    hasValidSegment,
   });
 
-  return isValid;
+  return hasValidSegment;
 }
 
 /**
- * Get the history array for a given phase category and energy.
- * - Preview: single history (ignores energy)
- * - Workout: per-energy histories
+ * Get the history array for a given phase category.
+ * Both preview and workout use single shared histories (no energy split).
  */
 function getHistoryForPhase(
   historyMap: PhaseHistoryMap,
-  phaseCategory: PhaseCategory,
-  energy: PlayableEnergy
+  phaseCategory: PhaseCategory
 ): MusicTrack[] {
   if (phaseCategory === 'preview') {
     return historyMap.preview;
   }
-  return historyMap.workout[energy];
+  return historyMap.workout;
 }
 
 /**
  * Select a track from the pool using phase-based history.
- * - Preview phases use a single history (no energy split)
- * - Workout phases use per-energy histories
+ * - Both preview and workout use single shared histories (no energy split)
  * - Exhaust all tracks for a history before allowing repeats
  * - When exhausted, pick least-recently-played (first in history that's still in pool)
  *
  * @param trackPool - Available tracks to select from
  * @param phaseCategory - Phase category ('preview' or 'workout')
- * @param energy - Energy level being selected for
+ * @param energy - Energy level being selected for (used for logging only)
  * @param historyMap - Phase history map (mutated to add selected track)
  * @param addToHistory - Whether to add selected track to history (false for explicit trackId)
  * @returns Selected track or null if pool is empty
@@ -339,7 +374,7 @@ function selectTrackWithPhaseHistory(
 ): MusicTrack | null {
   if (trackPool.length === 0) return null;
 
-  const history = getHistoryForPhase(historyMap, phaseCategory, energy);
+  const history = getHistoryForPhase(historyMap, phaseCategory);
   const playedIds = new Set(history.map(t => t.id));
 
   // Try to find unplayed tracks
@@ -347,7 +382,7 @@ function selectTrackWithPhaseHistory(
 
   let selectedTrack: MusicTrack | null = null;
 
-  const logPrefix = phaseCategory === 'preview' ? 'preview' : `workout.${energy}`;
+  const logPrefix = phaseCategory;
 
   if (unplayedTracks.length > 0) {
     // Random selection from unplayed tracks
@@ -448,12 +483,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, [syncResult, isSyncing]);
 
   // Track history for skip back (persists across screen transitions)
-  // Phase-based tracking: preview vs workout (with energy sub-histories)
+  // Phase-based tracking: preview vs workout (single history each, no energy split)
   // - Preview: single history for roundPreview phases
-  // - Workout: per-energy histories for exercise/rest/setBreak phases
+  // - Workout: single history for exercise/rest/setBreak phases
   const playedTracksHistoryByPhase = useRef<PhaseHistoryMap>({
     preview: [],
-    workout: { low: [], high: [] },
+    workout: [],
   });
   const isStartingRef = useRef(false);
   const isSwitchingTrackRef = useRef(false);
@@ -724,20 +759,35 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (track) {
-      // Select a segment with the target energy (or first segment as fallback)
-      let segment = targetEnergy
-        ? getRandomSegmentByEnergy(track.segments || [], targetEnergy)
-        : track.segments?.[0] || null;
+      // Select a segment with the target energy, filtered by 30s rule if applicable
+      let segment: MusicSegment | null = null;
+      if (targetEnergy) {
+        // Get segments that satisfy 30s rule (or all if no constraint)
+        const validSegments = !naturalEnding && nextTriggerTimeRef.current
+          ? getSegmentsValidFor30sRule(track, targetEnergy, nextTriggerTimeRef.current)
+          : (track.segments?.filter(s => s.energy === targetEnergy) || []);
 
-      // Log actual segment selection for 30-second rule debugging
-      const allHighSegments = track.segments?.filter(s => s.energy === 'high').map(s => s.timestamp) || [];
-      if (targetEnergy === 'high' && allHighSegments.length > 1) {
-        console.log('[MusicProvider] 30s rule - ACTUAL segment selected:', {
-          track: track.name,
-          selectedSegmentTimestamp: segment?.timestamp,
-          allHighSegments,
-          warning: 'Multiple high segments - filter estimate may differ from actual!',
-        });
+        // Pick random from valid segments, fallback to any segment with target energy
+        if (validSegments.length > 0) {
+          segment = validSegments[Math.floor(Math.random() * validSegments.length)] ?? null;
+        } else {
+          // Fallback: if no segments pass 30s rule, use any matching segment
+          segment = getRandomSegmentByEnergy(track.segments || [], targetEnergy);
+        }
+
+        // Log segment selection with 30s rule context
+        const allHighSegments = track.segments?.filter(s => s.energy === targetEnergy).map(s => s.timestamp) || [];
+        if (allHighSegments.length > 1) {
+          console.log('[MusicProvider] 30s rule - segment selected:', {
+            track: track.name,
+            selectedSegmentTimestamp: segment?.timestamp,
+            allSegments: allHighSegments,
+            validFor30sRule: validSegments.map(s => s.timestamp),
+            usedFallback: validSegments.length === 0,
+          });
+        }
+      } else {
+        segment = track.segments?.[0] || null;
       }
 
       // Handle natural ending - calculate seek point using precision timing
@@ -1009,7 +1059,26 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
             }
           } else {
             // Standard behavior - try to get segment with requested energy
-            segment = getRandomSegmentByEnergy(specificTrack.segments || [], energy);
+            // Apply 30s rule filtering when applicable
+            if (!naturalEnding && nextTriggerTimeRef.current) {
+              const validSegments = getSegmentsValidFor30sRule(specificTrack, energy, nextTriggerTimeRef.current);
+              if (validSegments.length > 0) {
+                segment = validSegments[Math.floor(Math.random() * validSegments.length)] ?? null;
+                const allSegments = specificTrack.segments?.filter(s => s.energy === energy).map(s => s.timestamp) || [];
+                if (allSegments.length > 1) {
+                  console.log('[MusicProvider] playWithTrigger - 30s rule segment selection:', {
+                    track: specificTrack.name,
+                    selectedSegment: segment?.timestamp,
+                    allSegments,
+                    validFor30sRule: validSegments.map(s => s.timestamp),
+                  });
+                }
+              }
+            }
+            // Fallback if no valid segments or no constraint
+            if (!segment) {
+              segment = getRandomSegmentByEnergy(specificTrack.segments || [], energy);
+            }
             if (!segment) {
               segment = { timestamp: 0, energy } as MusicSegment;
             }
@@ -1096,8 +1165,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           const seekPosition = highSegment.timestamp - RISE_COUNTDOWN_DURATION_SEC;
           const playSegment = { ...highSegment, timestamp: seekPosition };
 
-          // Add to workout history (Rise always uses 'high' energy in 'workout' category)
-          playedTracksHistoryByPhase.current.workout.high.push(preSelectedTrack);
+          // Add to workout history (single shared history, no energy split)
+          playedTracksHistoryByPhase.current.workout.push(preSelectedTrack);
           setIsPaused(false);
           setCurrentEnergy('high'); // Will transition to high
           setIsEnabled(true);
@@ -1280,12 +1349,38 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
     // If no specific segment or it wasn't valid, find valid high segments
     if (!highSegment) {
-      const validHighSegments = (track.segments || [])
+      // First filter: segments must be late enough for positive seek (timestamp >= totalDuration)
+      let validHighSegments = (track.segments || [])
         .filter(s => s.energy === 'high' && s.timestamp >= totalDuration);
 
       if (validHighSegments.length === 0) {
         console.warn('[MusicProvider] playRiseFromRest - no valid high segments for track:', track.name);
         return;
+      }
+
+      // Second filter: apply 30s rule to segments
+      // For Rise from Rest, play duration from segment = trackDuration - segment.timestamp + totalDuration
+      // But since we drop at segment.timestamp, remaining after drop = trackDuration - segment.timestamp
+      if (nextTriggerTimeRef.current && track.durationMs) {
+        const trackDurationSec = track.durationMs / 1000;
+        const timeUntilNextTriggerSec = (nextTriggerTimeRef.current - Date.now()) / 1000;
+
+        const segmentsPassingRule = validHighSegments.filter(s => {
+          const remainingAfterSegment = trackDurationSec - s.timestamp;
+          const remainingAfterTrack = timeUntilNextTriggerSec - remainingAfterSegment - totalDuration;
+          return remainingAfterTrack <= 0 || remainingAfterTrack >= MIN_PLAY_DURATION_SEC;
+        });
+
+        if (segmentsPassingRule.length > 0) {
+          console.log('[MusicProvider] playRiseFromRest - 30s rule segment filter:', {
+            track: track.name,
+            allValidSegments: validHighSegments.map(s => s.timestamp),
+            segmentsPassingRule: segmentsPassingRule.map(s => s.timestamp),
+          });
+          validHighSegments = segmentsPassingRule;
+        } else {
+          console.log('[MusicProvider] playRiseFromRest - 30s rule: no segments pass, using all valid');
+        }
       }
 
       // Pick random from valid high segments
@@ -1359,6 +1454,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       energy: pendingHighTrigger.energy,
       trackId: pendingHighTrigger.trackId,
       useBuildup: false, // No buildup - we want immediate HIGH
+      phaseCategory: 'workout', // High countdown is always during exercise start
     });
 
     console.log('[MusicProvider] Audio prepared and playing');
@@ -1397,6 +1493,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       energy: triggerToPlay.energy,
       trackId: triggerToPlay.trackId,
       useBuildup: false, // No buildup - we want immediate HIGH
+      phaseCategory: 'workout', // High countdown is always during exercise start
     });
   }, [pendingHighTrigger, playWithTrigger]);
 
