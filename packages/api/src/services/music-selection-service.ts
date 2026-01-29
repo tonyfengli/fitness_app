@@ -7,7 +7,8 @@ import type { RoundTemplate } from "@acme/db";
  */
 
 // Default energy levels by phase type
-const PHASE_ENERGY_DEFAULTS: Record<string, 'high' | 'low'> = {
+type PhaseType = 'exercise' | 'rest' | 'roundPreview' | 'setBreak';
+const PHASE_ENERGY_DEFAULTS: Record<PhaseType, 'high' | 'low'> = {
   exercise: 'high',
   rest: 'low',
   roundPreview: 'low',
@@ -146,10 +147,13 @@ export function mergeWithDefaultMusicConfig(
 
 /**
  * Gets the effective energy level for a trigger, applying defaults if not specified.
+ * Note: 'medium' energy is mapped to 'high' for backwards compatibility.
  */
 export function getEffectiveEnergy(
   trigger: MusicTrigger,
   phaseType: 'exercise' | 'rest' | 'roundPreview' | 'setBreak'
 ): 'high' | 'low' {
-  return trigger.energy ?? PHASE_ENERGY_DEFAULTS[phaseType];
+  const energy = trigger.energy ?? PHASE_ENERGY_DEFAULTS[phaseType];
+  // Map 'medium' to 'high' for backwards compatibility
+  return energy === 'medium' ? 'high' : energy;
 }

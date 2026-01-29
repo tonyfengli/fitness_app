@@ -759,7 +759,7 @@ export const circuitConfigRouter = createTRPCRouter({
               continue;
             }
 
-            const roundNum = parseInt(match[1], 10);
+            const roundNum = parseInt(match[1]!, 10);
 
             if (roundNum === input.roundNumber) {
               // Skip deleted round's config
@@ -1120,9 +1120,10 @@ export const circuitConfigRouter = createTRPCRouter({
 
       // Update the music config for this round
       const updatedRoundTemplates = [...existingConfig.config.roundTemplates];
+      const existingRound = updatedRoundTemplates[roundIndex]!;
       updatedRoundTemplates[roundIndex] = {
-        ...updatedRoundTemplates[roundIndex],
-        music: input.musicConfig,
+        ...existingRound,
+        music: input.musicConfig as typeof existingRound.music,
       };
 
       const updatedConfig = {

@@ -1,6 +1,6 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 import { eq } from "@acme/db";
 import { musicTracks, CreateMusicTrackSchema, UpdateMusicTrackSchema, MusicSegmentSchema } from "@acme/db/schema";
