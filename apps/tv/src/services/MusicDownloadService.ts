@@ -145,10 +145,20 @@ class MusicDownloadService {
       if (downloadResult.statusCode === 200) {
         return true;
       } else {
+        console.error(
+          `[MusicDownloadService] Download failed for "${track.filename}":`,
+          `HTTP ${downloadResult.statusCode}`,
+          `URL: ${track.downloadUrl}`
+        );
         await RNFS.unlink(localPath).catch(() => {});
         return false;
       }
     } catch (error) {
+      console.error(
+        `[MusicDownloadService] Download error for "${track.filename}":`,
+        error instanceof Error ? error.message : error,
+        `URL: ${track.downloadUrl}`
+      );
       await RNFS.unlink(localPath).catch(() => {});
       return false;
     }

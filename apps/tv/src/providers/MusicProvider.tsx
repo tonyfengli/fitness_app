@@ -106,6 +106,8 @@ interface MusicContextValue {
     segmentTimestamp?: number;
     /** Phase category for history tracking ('preview' or 'workout') */
     phaseCategory?: 'preview' | 'workout';
+    /** Target volume for the new track (use when restoring from ducked volume) */
+    targetVolume?: number;
   }) => Promise<void>;
 
   // High countdown methods
@@ -896,10 +898,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     segmentTimestamp?: number;
     /** Phase category for history tracking ('preview' or 'workout') */
     phaseCategory?: PhaseCategory;
+    /** Target volume for the new track (use when restoring from ducked volume) */
+    targetVolume?: number;
     /** Internal: retry count to prevent infinite loops */
     _retryCount?: number;
   }) => {
-    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, segmentTimestamp, phaseCategory, _retryCount = 0 } = options;
+    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime, segmentTimestamp, phaseCategory, targetVolume, _retryCount = 0 } = options;
 
     // Prevent infinite retry loops (max 2 retries = 200ms total)
     const MAX_RETRIES = 2;
@@ -1135,7 +1139,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           }
 
           // For buildup, we handle the countdown ourselves, so don't pass useBuildup to MusicService
-          await musicService.play(specificTrack, { segment: playSegment || undefined, useBuildup: false });
+          await musicService.play(specificTrack, { segment: playSegment || undefined, useBuildup: false, targetVolume });
           setError(null);
           return;
         } catch (err) {
@@ -1177,7 +1181,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           startBuildupCountdown(RISE_COUNTDOWN_DURATION_SEC);
           console.log('[MusicProvider] Rise countdown (preselected) - seeking to:', seekPosition, 'drop at:', highSegment.timestamp);
 
-          await musicService.play(preSelectedTrack, { segment: playSegment, useBuildup: false });
+          await musicService.play(preSelectedTrack, { segment: playSegment, useBuildup: false, targetVolume });
           setError(null);
           setPreSelectedRiseTrack(null);
           return;
@@ -1445,16 +1449,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     // Mark as prepared BEFORE async operation to prevent double-triggering
     isHighAudioPreparedRef.current = true;
 
-    // Restore volume to normal (needed for the new track)
-    musicService.setVolume(originalVolumeRef.current);
-    console.log('[MusicProvider] Volume restored for audio prepare to:', originalVolumeRef.current);
+    // NOTE: Don't restore volume here! The old track is still playing at ducked volume.
+    // playWithTrigger() will stop the old track (with fade-out) and start the new track
+    // with its own fade-in from 0 to target volume. Restoring volume here would cause
+    // the old track to jump from 32% to 80% before being stopped.
 
     // Start playing the track now (async) - this accounts for loading latency
+    // Pass targetVolume to restore from ducked state - new track will fade in to full volume
     await playWithTrigger({
       energy: pendingHighTrigger.energy,
       trackId: pendingHighTrigger.trackId,
       useBuildup: false, // No buildup - we want immediate HIGH
       phaseCategory: 'workout', // High countdown is always during exercise start
+      targetVolume: originalVolumeRef.current, // Restore to original volume with new track
     });
 
     console.log('[MusicProvider] Audio prepared and playing');
@@ -1484,16 +1491,15 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Restore volume to normal
-    musicService.setVolume(originalVolumeRef.current);
-    console.log('[MusicProvider] Volume restored to:', originalVolumeRef.current);
-
     // Play the new track at HIGH energy (async, but state already cleared)
+    // Pass targetVolume to restore from ducked state - new track will fade in to full volume
+    // NOTE: Don't restore volume here - let playWithTrigger handle it via targetVolume
     await playWithTrigger({
       energy: triggerToPlay.energy,
       trackId: triggerToPlay.trackId,
       useBuildup: false, // No buildup - we want immediate HIGH
       phaseCategory: 'workout', // High countdown is always during exercise start
+      targetVolume: originalVolumeRef.current, // Restore to original volume with new track
     });
   }, [pendingHighTrigger, playWithTrigger]);
 

@@ -105,8 +105,11 @@ class MusicService {
    * @param options - Playback options
    * @param options.segment - The segment to seek to (uses segment.timestamp)
    * @param options.useBuildup - If true and segment has buildupDuration, starts earlier for buildup
+   * @param options.targetVolume - Volume to fade in to (defaults to config.volume). Use this when
+   *                               config.volume has been temporarily ducked but you want to restore
+   *                               to normal volume with the new track.
    */
-  async play(track: MusicTrack, options?: { segment?: MusicSegment; useBuildup?: boolean }): Promise<void> {
+  async play(track: MusicTrack, options?: { segment?: MusicSegment; useBuildup?: boolean; targetVolume?: number }): Promise<void> {
     console.log('[MusicService] play() called:', track.filename, 'enabled:', this.config.enabled);
     if (!this.config.enabled) {
       console.log('[MusicService] play() skipped - not enabled');
@@ -119,6 +122,7 @@ class MusicService {
 
     const segment = options?.segment;
     const useBuildup = options?.useBuildup ?? false;
+    const targetVolume = options?.targetVolume ?? this.config.volume;
 
     // Helper to start playback once sound is loaded
     const startPlayback = (sound: Sound): void => {
@@ -184,8 +188,11 @@ class MusicService {
         this.currentSegment = null;
       });
 
-      // Fade in the volume
-      const { cancel } = fadeIn(sound, this.config.volume, FADE_IN_DURATION);
+      // Fade in the volume (and restore config.volume if targetVolume was specified)
+      if (targetVolume !== this.config.volume) {
+        this.config.volume = targetVolume;
+      }
+      const { cancel } = fadeIn(sound, targetVolume, FADE_IN_DURATION);
       this.currentFadeCancel = cancel;
 
       // Start checking for track end (backup for callback)
