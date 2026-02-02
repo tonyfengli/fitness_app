@@ -78,6 +78,7 @@ interface MusicContextValue {
   isHighCountdownActive: boolean; // Whether high countdown overlay is active
   isRiseCountdownActive: boolean; // Whether rise countdown overlay is active
   isNaturalEndingActive: boolean; // Whether a natural ending track is currently playing
+  volume: number; // Current volume level (0.0 to 1.0)
 
   // Actions
   start: () => Promise<void>;
@@ -93,6 +94,7 @@ interface MusicContextValue {
   clearLocalTracks: () => Promise<void>;
   preSelectRiseTrack: (energy: PlayableEnergy) => void; // Pre-select a random track for buildup
   clearPreSelectedRiseTrack: () => void;
+  setVolume: (volume: number) => void; // Set volume (0.0 to 1.0)
 
   // Trigger-based playback
   playWithTrigger: (options: {
@@ -446,6 +448,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
   // Pre-selected rise track for random buildup
   const [preSelectedRiseTrack, setPreSelectedRiseTrack] = useState<PreSelectedRiseTrack | null>(null);
+
+  // Volume state
+  const [volume, setVolumeState] = useState(0.8); // Default volume 80%
 
   // High countdown state
   const [isHighCountdownActive, setIsHighCountdownActive] = useState(false);
@@ -1794,6 +1799,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   }, []);
 
+  // Set volume (0.0 to 1.0)
+  const setVolume = useCallback((newVolume: number) => {
+    const clampedVolume = Math.max(0, Math.min(1, newVolume));
+    setVolumeState(clampedVolume);
+    originalVolumeRef.current = clampedVolume; // Update ref so ducking restores to new volume
+
+    // Only set music service volume if not in ducked state (high countdown)
+    if (!isHighCountdownActive) {
+      musicService.setVolume(clampedVolume);
+    }
+    console.log('[MusicProvider] setVolume:', clampedVolume);
+  }, [isHighCountdownActive]);
+
   // Pause music - sets isEnabled=false so triggers won't fire while paused
   // Triggers that would fire are NOT consumed, so they can fire when user navigates back
   const pause = useCallback(() => {
@@ -1965,6 +1983,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     isHighCountdownActive,
     isRiseCountdownActive,
     isNaturalEndingActive,
+    volume,
     setRiseCountdownActive: setIsRiseCountdownActive,
     start,
     stop,
@@ -1979,6 +1998,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     clearLocalTracks,
     preSelectRiseTrack,
     clearPreSelectedRiseTrack,
+    setVolume,
     playWithTrigger,
     startHighCountdown,
     prepareHighAudio,

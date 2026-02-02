@@ -4679,7 +4679,7 @@ Set your goals and preferences for today's session.`;
       sessionDetails: z.object({
         name: z.string().optional(),
         scheduledAt: z.date().optional(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "unassigned"]).optional(),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "unassigned"]).optional(),
       }).optional()
     }))
     .mutation(async ({ ctx, input }) => {
@@ -4707,7 +4707,7 @@ Set your goals and preferences for today's session.`;
         const updateData: Partial<{
           name: string;
           scheduledAt: Date;
-          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned";
+          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned";
           updatedAt: Date;
         }> = {
           updatedAt: new Date(),
@@ -5319,7 +5319,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         sessionId: z.string().uuid(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "unassigned"]),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "unassigned"]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -5382,6 +5382,7 @@ Set your goals and preferences for today's session.`;
         { id: 'coach_frank', label: 'Coach Frank' },
         { id: 'coach_steph', label: 'Coach Steph' },
         { id: 'coach_kyle', label: 'Coach Kyle' },
+        { id: 'strength', label: 'Strength' },
       ];
 
       return programs;
@@ -5392,7 +5393,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         businessId: z.string().uuid(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle"]),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength"]),
         includeTemplateConfig: z.boolean().optional().default(false),
       }),
     )

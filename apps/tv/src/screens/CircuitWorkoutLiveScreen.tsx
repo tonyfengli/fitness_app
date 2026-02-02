@@ -17,6 +17,7 @@ import { MattePanel } from '../components/workout-live/MattePanel';
 import { WorkoutHeader } from '../components/workout-live/WorkoutHeader';
 import { WorkoutControls } from '../components/workout-live/WorkoutControls';
 import { MusicPlayPauseButton } from '../components/workout-live/MusicPlayPauseButton';
+import { VolumeControl } from '../components/workout-live/VolumeControl';
 import { WorkoutContent } from '../components/workout-live/WorkoutContent';
 import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/useWorkoutMachineWithLighting';
 import { useLightingControl } from '../hooks/useLightingControl';
@@ -150,8 +151,8 @@ export function CircuitWorkoutLiveScreen() {
     console.log('[CircuitWorkoutLiveScreen] Music stopped - triggers reset via machine event');
   }, [stopMusicBase, send]);
 
-  // Get high countdown state from music provider
-  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, startHighCountdown, seekToHighSegment, tracks, clearNaturalEnding } = useMusic();
+  // Get high countdown state and volume from music provider
+  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, startHighCountdown, seekToHighSegment, tracks, clearNaturalEnding, volume, setVolume } = useMusic();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -1249,6 +1250,23 @@ export function CircuitWorkoutLiveScreen() {
                           playOrResume={playOrResume}
                           focusable={isSettingsPanelOpen}
                         />
+
+                        {/* Volume Control */}
+                        <>
+                          {/* Subtle divider before volume */}
+                          <View style={{
+                            width: 1,
+                            height: 20,
+                            backgroundColor: 'rgba(255,255,255,0.1)',
+                            marginHorizontal: 4,
+                          }} />
+                          <VolumeControl
+                            volume={volume}
+                            onVolumeChange={setVolume}
+                            focusable={isSettingsPanelOpen}
+                            isMusicPlaying={isMusicPlaying}
+                          />
+                        </>
                       </View>
                     )}
                   </>
@@ -1513,6 +1531,23 @@ export function CircuitWorkoutLiveScreen() {
                         </MattePanel>
                       )}
                     </Pressable>
+
+                    {/* Volume Control */}
+                    <>
+                      {/* Subtle divider before volume */}
+                      <View style={{
+                        width: 1,
+                        height: 20,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        marginHorizontal: 4,
+                      }} />
+                      <VolumeControl
+                        volume={volume}
+                        onVolumeChange={setVolume}
+                        focusable={isSettingsPanelOpen}
+                        isMusicPlaying={isMusicPlaying}
+                      />
+                    </>
                   </View>
                 )}
                 </View>
@@ -1672,6 +1707,9 @@ export function CircuitWorkoutLiveScreen() {
               currentTrack={currentTrack}
               pauseMusic={pauseMusic}
               playOrResume={playOrResume}
+              // Volume props
+              volume={volume}
+              onVolumeChange={setVolume}
               onManualNavigation={clearNaturalEnding}
             />
           </View>

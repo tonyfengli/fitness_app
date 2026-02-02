@@ -4,6 +4,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { TOKENS } from './types';
 import { MattePanel } from './MattePanel';
 import { MusicPlayPauseButton } from './MusicPlayPauseButton';
+import { VolumeControl } from './VolumeControl';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -28,6 +29,9 @@ interface WorkoutControlsProps {
   currentTrack?: any | null;
   pauseMusic?: () => void;
   playOrResume?: () => Promise<void>;
+  // Volume props
+  volume?: number;
+  onVolumeChange?: (volume: number) => void;
   // Navigation callback (called on manual skip/back to clear natural ending state)
   onManualNavigation?: () => void;
 }
@@ -48,6 +52,8 @@ export function WorkoutControls({
   currentTrack = null,
   pauseMusic,
   playOrResume,
+  volume = 0.8,
+  onVolumeChange,
   onManualNavigation,
 }: WorkoutControlsProps) {
   const handleBack = () => {
@@ -88,19 +94,17 @@ export function WorkoutControls({
     onToggleSettingsPanel?.();
   };
 
-  // Only show controls during exercise, rest, or setBreak states
-  if (state.value !== 'exercise' && state.value !== 'rest' && state.value !== 'setBreak') {
+  // Only show controls during exercise, rest, setBreak, or roundPreview states
+  if (state.value !== 'exercise' && state.value !== 'rest' && state.value !== 'setBreak' && state.value !== 'roundPreview') {
     return null;
   }
 
   // Check if we should show settings panel for this view
-  // Stations: rest, work (exercise), set break
-  // Circuit: rest, work (exercise), set break
-  // AMRAP: work (exercise) only
+  // All round types show settings in all applicable states (exercise, rest, setBreak)
   const shouldShowSettings =
     currentRoundType === 'stations_round' ||
     currentRoundType === 'circuit_round' ||
-    (currentRoundType === 'amrap_round' && state.value === 'exercise');
+    currentRoundType === 'amrap_round';
 
   // Theming for stations exercise state
   const isStationsExercise = currentRoundType === 'stations_round' && state.value === 'exercise';
@@ -335,7 +339,7 @@ export function WorkoutControls({
                 )}
               </Pressable>
 
-              {/* Music Play/Pause Button - always rightmost */}
+              {/* Music Play/Pause Button */}
               <MusicPlayPauseButton
                 send={send}
                 workoutStateValue={state.value}
@@ -350,6 +354,28 @@ export function WorkoutControls({
                 focusable={isSettingsPanelOpen}
                 isStationsExercise={isStationsExercise}
               />
+
+              {/* Volume Control - always show in settings panel */}
+              {onVolumeChange && (
+                <>
+                  {/* Subtle divider before volume */}
+                  <View style={{
+                    width: 1,
+                    height: 20,
+                    backgroundColor: isStationsExercise
+                      ? 'rgba(255,179,102,0.2)'
+                      : 'rgba(255,255,255,0.1)',
+                    marginHorizontal: 4,
+                  }} />
+                  <VolumeControl
+                    volume={volume}
+                    onVolumeChange={onVolumeChange}
+                    focusable={isSettingsPanelOpen}
+                    isStationsExercise={isStationsExercise}
+                    isMusicPlaying={isMusicPlaying}
+                  />
+                </>
+              )}
             </View>
           )}
         </>

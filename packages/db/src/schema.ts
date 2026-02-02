@@ -125,7 +125,7 @@ export const TrainingSession = pgTable("training_session", (t) => ({
   durationMinutes: t.integer(),
   maxParticipants: t.integer(), // null = unlimited
   status: sessionStatusEnum("status").notNull().default("open"),
-  program: t.varchar({ length: 50 }).default("unassigned").$type<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned">(), // Training program assignment
+  program: t.varchar({ length: 50 }).default("unassigned").$type<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned">(), // Training program assignment
   templateType: t.varchar({ length: 50 }).default("full_body_bmf").$type<"full_body_bmf" | "standard" | "circuit">(), // workout template type
   templateConfig: t.jsonb(), // Stores group workout blueprint and other template configuration
   workoutOrganization: t.jsonb(), // Stores Phase 2 round organization from LLM
@@ -146,7 +146,7 @@ export const CreateTrainingSessionSchema = createInsertSchema(TrainingSession, {
     .enum(["open", "in_progress", "completed", "cancelled"])
     .optional()
     .default("open"),
-  program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "unassigned"]).optional().default("unassigned"),
+  program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "unassigned"]).optional().default("unassigned"),
   templateType: z.enum(["full_body_bmf", "standard", "circuit"]).optional().default("full_body_bmf"),
 }).omit({
   id: true,

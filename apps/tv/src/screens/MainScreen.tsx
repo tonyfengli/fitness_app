@@ -30,6 +30,7 @@ const PROGRAM_LABELS: Record<string, string> = {
   'coach_frank': 'Coach Frank',
   'coach_steph': 'Coach Steph',
   'coach_kyle': 'Coach Kyle',
+  'strength': 'Strength',
   'unassigned': 'Unassigned'
 };
 

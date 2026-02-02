@@ -17,6 +17,7 @@ import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
 import { useMusic } from '../providers/MusicProvider';
 import { MusicPlayPauseButton } from '../components/workout-live/MusicPlayPauseButton';
+import { VolumeControl } from '../components/workout-live/VolumeControl';
 // Note: Music trigger state is now managed by the workout machine context.
 // The live screen's useWorkoutMusic hook handles deduplication via
 // "isPlaying && currentEnergy === action.energy" check for preview phase.
@@ -609,6 +610,9 @@ export function CircuitWorkoutOverviewScreen() {
     playOrResume,
   } = useMusicPlayer();
 
+  // Get volume control from music provider
+  const { volume, setVolume } = useMusic();
+
 
   // Ensure settings panel is closed when this screen mounts
   useEffect(() => {
@@ -1135,6 +1139,20 @@ export function CircuitWorkoutOverviewScreen() {
               pauseMusic={pauseMusic}
               playOrResume={playOrResume}
               focusable={isSettingsPanelOpen}
+            />
+
+            {/* Volume Control */}
+            <View style={{
+              width: 1,
+              height: 20,
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              marginHorizontal: 4,
+            }} />
+            <VolumeControl
+              volume={volume}
+              onVolumeChange={setVolume}
+              focusable={isSettingsPanelOpen}
+              isMusicPlaying={isMusicPlaying}
             />
           </View>
           )}

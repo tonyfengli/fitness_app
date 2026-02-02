@@ -55,6 +55,7 @@ const PROGRAM_LABELS: Record<string, string> = {
   'coach_frank': 'Coach Frank',
   'coach_steph': 'Coach Steph',
   'coach_kyle': 'Coach Kyle',
+  'strength': 'Strength',
   'unassigned': 'Unassigned'
 };
 
@@ -97,7 +98,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [editingSessionName, setEditingSessionName] = useState("");
-  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned">("unassigned");
+  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned">("unassigned");
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
@@ -1190,11 +1191,12 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                   { value: "coach_frank", label: "Coach Frank" },
                   { value: "coach_steph", label: "Coach Steph" },
                   { value: "coach_kyle", label: "Coach Kyle" },
+                  { value: "strength", label: "Strength" },
                   { value: "unassigned", label: "Unassigned" }
                 ].map((program) => (
                   <button
                     key={program.value}
-                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned")}
+                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned")}
                     className={`w-full px-4 py-2.5 rounded-lg border transition-all text-left ${
                       program.value === selectedProgram
                         ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"

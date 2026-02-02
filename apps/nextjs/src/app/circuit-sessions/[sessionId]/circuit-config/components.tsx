@@ -536,7 +536,8 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
     'monday_cg': 'Monday CG',
     'coach_frank': 'Coach Frank',
     'coach_steph': 'Coach Steph',
-    'coach_kyle': 'Coach Kyle'
+    'coach_kyle': 'Coach Kyle',
+    'strength': 'Strength'
   };
   
   const programLabel = PROGRAM_LABELS[program as keyof typeof PROGRAM_LABELS] || '';
@@ -2273,6 +2274,7 @@ export function SessionSetupStep({
     { value: 'coach_frank', label: 'Coach Frank' },
     { value: 'coach_steph', label: 'Coach Steph' },
     { value: 'coach_kyle', label: 'Coach Kyle' },
+    { value: 'strength', label: 'Strength' },
     { value: 'unassigned', label: 'Unassigned' }
   ];
 
