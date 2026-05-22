@@ -1,37 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { api } from '~/trpc/react';
 
-interface ClientRow {
-  clientId: string;
-  name: string;
-}
-
-interface ActiveClient {
-  id: string;
-  name: string;
-}
-
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const AVATAR_COLORS = [
-  'from-pink-400 to-rose-500',
-  'from-blue-400 to-indigo-500',
-  'from-emerald-400 to-teal-500',
-  'from-amber-400 to-orange-500',
-  'from-purple-400 to-fuchsia-500',
-];
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return ((parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase();
-}
 
 function formatTime(time: string): string {
   const [hStr, mStr] = time.split(':');
@@ -42,212 +16,38 @@ function formatTime(time: string): string {
   return `${displayH}:${m} ${period}`;
 }
 
-function addDays(date: Date, n: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-
 function toDateString(d: Date): string {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `${y}-${m}-${day}`;
 }
 
-// Given a Monday and a schedule's day_of_week (0=Sun ... 6=Sat), return that day's actual date.
-function dateForDayOfWeek(monday: Date, dayOfWeek: number): Date {
-  const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  return addDays(monday, offset);
+// Format YYYY-MM-DD → "Mon May 11" or similar
+function formatWeekLabel(weekStart: string): string {
+  // Treat the date as a date-only string (no TZ shift)
+  const [y, m, d] = weekStart.split('-').map(Number);
+  if (!y || !m || !d) return weekStart;
+  const date = new Date(y, m - 1, d);
+  const month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()];
+  return `${month} ${date.getDate()}, ${y}`;
 }
 
-interface ScheduleCardProps {
-  scheduleId: string;
-  title: string;
-  dayOfWeek: number;
-  startTime: string;
-  weekStart: Date;
-  addedClients: ClientRow[];
-  activeClients: ActiveClient[];
-  onAddClient: (client: ActiveClient) => void;
-  onRemoveClient: (clientId: string) => void;
-}
-
-function ScheduleCard({
-  title,
-  dayOfWeek,
-  startTime,
-  weekStart,
-  addedClients,
-  activeClients,
-  onAddClient,
-  onRemoveClient,
-}: ScheduleCardProps) {
-  const slotDate = dateForDayOfWeek(weekStart, dayOfWeek);
-  const slotDateLabel = `${DAY_SHORT[dayOfWeek] ?? '?'} ${MONTH_SHORT[slotDate.getMonth()]} ${slotDate.getDate()}`;
-
-  const clients = addedClients;
-
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!searchOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [searchOpen]);
-
-  const trimmedQuery = query.trim().toLowerCase();
-  const hasQuery = trimmedQuery.length > 0;
-
-  const dropdownOptions = useMemo(() => {
-    if (!hasQuery) return [];
-    const excludedNames = new Set(clients.map((c) => c.name.toLowerCase()));
-    const excludedIds = new Set(
-      clients.map((c) => c.clientId).filter((id): id is string => Boolean(id)),
-    );
-    return activeClients
-      .filter((c) => !excludedIds.has(c.id) && !excludedNames.has(c.name.toLowerCase()))
-      .filter((c) => c.name.toLowerCase().includes(trimmedQuery))
-      .slice(0, 8);
-  }, [activeClients, clients, hasQuery, trimmedQuery]);
-
-  const handleSelectClient = (client: ActiveClient) => {
-    onAddClient(client);
-    setQuery('');
-    setSearchOpen(false);
-  };
-  const hasAttendance = clients.length > 0;
-  const avatarClients = clients.slice(0, 3);
-  const extra = Math.max(clients.length - avatarClients.length, 0);
-
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 flex flex-col shadow-sm">
-      <div className="flex items-start justify-between mb-2">
-        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-        {hasAttendance && (
-          <span className="text-xs font-medium px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">
-            Logged
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 text-gray-600 text-sm mb-4">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>
-          {slotDateLabel} · {formatTime(startTime)}
-        </span>
-      </div>
-
-      <div ref={searchContainerRef} className="relative mb-4">
-        <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-100 transition-colors">
-          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h6m9-5l-3-3m0 0l-3 3m3-3v6" />
-          </svg>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSearchOpen(true);
-            }}
-            onFocus={() => setSearchOpen(true)}
-            placeholder="Quick add client..."
-            className="flex-1 bg-transparent outline-none text-sm text-gray-900 placeholder:text-gray-400"
-          />
-        </div>
-
-        {searchOpen && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10">
-            {!hasQuery ? (
-              <div className="px-3 py-2 text-sm text-gray-400 italic">
-                Type to search clients…
-              </div>
-            ) : dropdownOptions.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-gray-500">
-                No matching clients
-              </div>
-            ) : (
-              dropdownOptions.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleSelectClient(c)}
-                  className="block w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
-                >
-                  {c.name}
-                </button>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 space-y-3 mb-4">
-        {clients.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">No clients added yet</p>
-        ) : (
-          clients.map((client) => (
-            <div key={client.clientId} className="flex items-center justify-between gap-2">
-              <span className="text-sm flex-1 min-w-0 truncate text-gray-900">
-                {client.name}
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemoveClient(client.clientId)}
-                aria-label={`Remove ${client.name}`}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex -space-x-2">
-            {avatarClients.length > 0 ? (
-              avatarClients.map((c, i) => (
-                <div
-                  key={c.name}
-                  className={`w-7 h-7 rounded-full bg-gradient-to-br ${
-                    AVATAR_COLORS[i % AVATAR_COLORS.length]
-                  } border-2 border-white flex items-center justify-center text-[10px] font-bold text-white`}
-                >
-                  {getInitials(c.name)}
-                </div>
-              ))
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[10px] font-semibold text-gray-400">
-                0
-              </div>
-            )}
-            {extra > 0 && (
-              <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-gray-600">
-                +{extra}
-              </div>
-            )}
-          </div>
-          <span className="text-sm text-gray-700 font-medium">
-            {clients.length} Present
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+// Excel-style 3-color heatmap: red @ 0% → amber @ 50% → green @ 100%.
+function getHeatmapColor(pct: number): string {
+  const p = Math.max(0, Math.min(100, pct));
+  if (p <= 50) {
+    const t = p / 50;
+    const r = Math.round(220 + (245 - 220) * t);
+    const g = Math.round(38 + (158 - 38) * t);
+    const b = Math.round(38 + (11 - 38) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  const t = (p - 50) / 50;
+  const r = Math.round(245 + (22 - 245) * t);
+  const g = Math.round(158 + (163 - 158) * t);
+  const b = Math.round(11 + (74 - 11) * t);
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 interface SessionsTabProps {
@@ -257,104 +57,56 @@ interface SessionsTabProps {
 export function SessionsTab({ weekStart }: SessionsTabProps) {
   const trpc = api();
 
-  const { data: schedules, isLoading, error } = useQuery({
+  const { data: schedules } = useQuery({
     ...trpc.classSchedule.list.queryOptions(),
   });
-
-  const { data: allClientsData } = useQuery({
-    ...trpc.clients.listAll.queryOptions(),
+  const { data: stats, isLoading } = useQuery({
+    ...trpc.classAttendance.weeklyStats.queryOptions(),
   });
-  const activeClients = useMemo<ActiveClient[]>(
-    () => (allClientsData ?? []).map((u) => ({ id: u.id, name: u.name })),
-    [allClientsData],
-  );
 
-  const weekKey = toDateString(weekStart);
-  const queryClient = useQueryClient();
-  const attendanceQueryOptions = trpc.classAttendance.byWeek.queryOptions({ weekStart: weekKey });
-  const attendanceQueryKey = attendanceQueryOptions.queryKey;
-  const { data: attendanceRows = [] } = useQuery(attendanceQueryOptions);
+  // Sort schedules deterministically by day_of_week then start_time
+  const orderedSchedules = useMemo(() => {
+    if (!schedules) return [];
+    return [...schedules].sort((a, b) => {
+      // Treat Sunday (0) as the end of the week to match Mon-first layouts
+      const aDay = a.dayOfWeek === 0 ? 7 : a.dayOfWeek;
+      const bDay = b.dayOfWeek === 0 ? 7 : b.dayOfWeek;
+      if (aDay !== bDay) return aDay - bDay;
+      return a.startTime.localeCompare(b.startTime);
+    });
+  }, [schedules]);
 
-  type AttendanceRow = { classScheduleId: string; userId: string; date: string; name: string };
-
-  const markMutation = useMutation(trpc.classAttendance.mark.mutationOptions());
-  const unmarkMutation = useMutation(trpc.classAttendance.unmark.mutationOptions());
-
-  const handleAddClient = (scheduleId: string, dayOfWeek: number, client: ActiveClient) => {
-    const slotDate = toDateString(dateForDayOfWeek(weekStart, dayOfWeek));
-    const optimisticRow: AttendanceRow = {
-      classScheduleId: scheduleId,
-      userId: client.id,
-      date: slotDate,
-      name: client.name,
-    };
-
-    queryClient.setQueryData<AttendanceRow[]>(attendanceQueryKey, (old) => [
-      ...(old ?? []),
-      optimisticRow,
-    ]);
-
-    markMutation.mutate(
-      { classScheduleId: scheduleId, userId: client.id, date: slotDate },
-      {
-        onError: (err) => {
-          queryClient.setQueryData<AttendanceRow[]>(attendanceQueryKey, (old) =>
-            (old ?? []).filter(
-              (r) =>
-                !(
-                  r.classScheduleId === scheduleId &&
-                  r.userId === client.id &&
-                  r.date === slotDate
-                ),
-            ),
-          );
-          alert(`Failed to add ${client.name}: ${err.message}`);
-        },
-      },
-    );
-  };
-
-  const handleRemoveClient = (scheduleId: string, dayOfWeek: number, clientId: string) => {
-    const slotDate = toDateString(dateForDayOfWeek(weekStart, dayOfWeek));
-    const prevRows = queryClient.getQueryData<AttendanceRow[]>(attendanceQueryKey) ?? [];
-    const removedRow = prevRows.find(
-      (r) => r.classScheduleId === scheduleId && r.userId === clientId && r.date === slotDate,
-    );
-
-    queryClient.setQueryData<AttendanceRow[]>(attendanceQueryKey, (old) =>
-      (old ?? []).filter(
-        (r) => !(r.classScheduleId === scheduleId && r.userId === clientId && r.date === slotDate),
-      ),
-    );
-
-    unmarkMutation.mutate(
-      { classScheduleId: scheduleId, userId: clientId, date: slotDate },
-      {
-        onError: (err) => {
-          if (removedRow) {
-            queryClient.setQueryData<AttendanceRow[]>(attendanceQueryKey, (old) => [
-              ...(old ?? []),
-              removedRow,
-            ]);
-          }
-          alert(`Failed to remove client: ${err.message}`);
-        },
-      },
-    );
-  };
-
-  const addedByScheduleId = useMemo(() => {
-    const map = new Map<string, ClientRow[]>();
-    for (const row of attendanceRows as AttendanceRow[]) {
-      const existing = map.get(row.classScheduleId) ?? [];
-      existing.push({ clientId: row.userId, name: row.name });
-      map.set(row.classScheduleId, existing);
+  // Per-slot max for column-relative heatmap intensity.
+  const slotMaxes = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!stats) return m;
+    for (const row of stats) {
+      for (const [slotId, count] of Object.entries(row.bySlot)) {
+        const cur = m.get(slotId) ?? 0;
+        if (count > cur) m.set(slotId, count);
+      }
     }
-    return map;
-  }, [attendanceRows]);
+    return m;
+  }, [stats]);
 
-  const addedForCard = (scheduleId: string): ClientRow[] =>
-    addedByScheduleId.get(scheduleId) ?? [];
+  // Total / AvgClient / AvgClass maxes for those columns' heatmap shading.
+  const aggregateMaxes = useMemo(() => {
+    let totalMax = 0;
+    let avgClientMax = 0;
+    let avgClassMax = 0;
+    if (!stats) return { totalMax, avgClientMax, avgClassMax };
+    const classCount = Math.max(orderedSchedules.length, 1);
+    for (const row of stats) {
+      if (row.total > totalMax) totalMax = row.total;
+      const avgClient = row.activeClientCount > 0 ? row.total / row.activeClientCount : 0;
+      if (avgClient > avgClientMax) avgClientMax = avgClient;
+      const avgClass = row.total / classCount;
+      if (avgClass > avgClassMax) avgClassMax = avgClass;
+    }
+    return { totalMax, avgClientMax, avgClassMax };
+  }, [stats, orderedSchedules.length]);
+
+  const selectedWeekKey = toDateString(weekStart);
 
   if (isLoading) {
     return (
@@ -363,37 +115,121 @@ export function SessionsTab({ weekStart }: SessionsTabProps) {
       </div>
     );
   }
-  if (error) {
-    return (
-      <div className="text-center py-24 text-red-600">
-        Failed to load schedule: {error.message}
-      </div>
-    );
-  }
-  if (!schedules || schedules.length === 0) {
+
+  if (!stats || stats.length === 0) {
     return (
       <div className="text-center py-24 text-gray-500">
-        No class schedules configured yet.
+        No attendance recorded yet.
       </div>
     );
   }
 
+  const classCount = Math.max(orderedSchedules.length, 1);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-      {schedules.map((s) => (
-        <ScheduleCard
-          key={s.id}
-          scheduleId={s.id}
-          title={s.name}
-          dayOfWeek={s.dayOfWeek}
-          startTime={s.startTime}
-          weekStart={weekStart}
-          addedClients={addedForCard(s.id)}
-          activeClients={activeClients}
-          onAddClient={(client) => handleAddClient(s.id, s.dayOfWeek, client)}
-          onRemoveClient={(clientId) => handleRemoveClient(s.id, s.dayOfWeek, clientId)}
-        />
-      ))}
+    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 select-none">
+            <th className="text-left px-3 py-3 whitespace-nowrap sticky left-0 bg-white dark:bg-gray-800 z-10">Week Start</th>
+            <th className="text-center px-3 py-3 whitespace-nowrap">Total</th>
+            <th className="text-center px-3 py-3 whitespace-nowrap">Avg/Client</th>
+            {orderedSchedules.map((s) => (
+              <th key={s.id} className="text-center px-2 py-3 whitespace-nowrap">
+                <div className="flex flex-col items-center leading-tight">
+                  <span>{DAY_SHORT[s.dayOfWeek] ?? '?'}</span>
+                  <span className="text-gray-400 dark:text-gray-500 font-medium normal-case text-[10px]">
+                    {formatTime(s.startTime)}
+                  </span>
+                </div>
+              </th>
+            ))}
+            <th className="text-center px-3 py-3 whitespace-nowrap">Avg Class</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stats.map((row, i) => {
+            const isSelected = row.weekStart === selectedWeekKey;
+            const baseBg = i % 2 === 0
+              ? 'bg-white dark:bg-gray-800'
+              : 'bg-gray-50 dark:bg-gray-900/30';
+            const selectedBg = isSelected
+              ? 'bg-purple-50 dark:bg-purple-900/20'
+              : baseBg;
+            const stickyBg = isSelected
+              ? 'bg-purple-50 dark:bg-purple-900/20'
+              : i % 2 === 0
+              ? 'bg-white dark:bg-gray-800'
+              : 'bg-gray-50 dark:bg-gray-900/30';
+
+            const avgClient = row.activeClientCount > 0
+              ? row.total / row.activeClientCount
+              : 0;
+            const avgClass = row.total / classCount;
+
+            return (
+              <tr
+                key={row.weekStart}
+                className={`${selectedBg} border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${
+                  isSelected ? 'font-semibold' : ''
+                }`}
+              >
+                <td className={`px-3 py-2.5 text-gray-900 dark:text-gray-100 whitespace-nowrap sticky left-0 z-10 ${stickyBg} ${isSelected ? 'border-l-2 border-purple-500 dark:border-purple-400' : ''}`}>
+                  {formatWeekLabel(row.weekStart)}
+                </td>
+                <td
+                  className="px-3 py-2.5 text-center tabular-nums"
+                  style={{
+                    color: aggregateMaxes.totalMax > 0
+                      ? getHeatmapColor((row.total / aggregateMaxes.totalMax) * 100)
+                      : undefined,
+                  }}
+                >
+                  {row.total}
+                </td>
+                <td
+                  className="px-3 py-2.5 text-center tabular-nums"
+                  style={{
+                    color: aggregateMaxes.avgClientMax > 0
+                      ? getHeatmapColor((avgClient / aggregateMaxes.avgClientMax) * 100)
+                      : undefined,
+                  }}
+                >
+                  {avgClient.toFixed(1)}
+                </td>
+                {orderedSchedules.map((s) => {
+                  const count = row.bySlot[s.id] ?? 0;
+                  const max = slotMaxes.get(s.id) ?? 0;
+                  const color = count > 0 && max > 0
+                    ? getHeatmapColor((count / max) * 100)
+                    : undefined;
+                  return (
+                    <td
+                      key={s.id}
+                      className="px-2 py-2.5 text-center tabular-nums"
+                      style={{
+                        color: count === 0 ? 'rgb(156, 163, 175)' : color,
+                      }}
+                    >
+                      {count}
+                    </td>
+                  );
+                })}
+                <td
+                  className="px-3 py-2.5 text-center tabular-nums"
+                  style={{
+                    color: aggregateMaxes.avgClassMax > 0
+                      ? getHeatmapColor((avgClass / aggregateMaxes.avgClassMax) * 100)
+                      : undefined,
+                  }}
+                >
+                  {avgClass.toFixed(1)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

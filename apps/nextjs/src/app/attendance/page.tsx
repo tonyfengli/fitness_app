@@ -9,7 +9,7 @@ export default async function AttendancePage({
 }) {
   const sp = await searchParams;
   const params = new URLSearchParams();
-  params.set('tab', 'sessions');
+  params.set('tab', 'attendance');
   if (sp.week) params.set('week', sp.week);
   redirect(`/clients?${params.toString()}`);
 }

@@ -6,9 +6,10 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
+import { AttendanceTab } from './_components/AttendanceTab';
 import { SessionsTab } from './_components/SessionsTab';
 
-type ClientsTab = 'roster' | 'sessions';
+type ClientsTab = 'roster' | 'attendance' | 'sessions';
 
 
 // Week helpers — Monday-based weeks, matches /attendance convention.
@@ -165,10 +166,13 @@ function ClientsPageContent() {
   const weekFromUrl = parseWeekParam(searchParams.get('week'));
   const [weekStart, setWeekStart] = useState<Date>(weekFromUrl ?? todayMonday);
 
-  // Tab state: roster (table) vs sessions (cards). URL param `?tab=…`.
+  // Tab state: roster (table) | attendance (cards) | sessions (weekly stats).
+  // URL param `?tab=…`.
   const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<ClientsTab>(
-    tabFromUrl === 'sessions' ? 'sessions' : 'roster',
+    tabFromUrl === 'attendance' || tabFromUrl === 'sessions'
+      ? tabFromUrl
+      : 'roster',
   );
 
   const isCurrentWeek = isSameDay(weekStart, todayMonday);
@@ -424,12 +428,15 @@ function ClientsPageContent() {
           )}
         </div>
 
-        {/* Tab strip — Roster (table) vs Sessions (per-class cards) */}
+        {/* Tab strip — Roster (table) | Attendance (cards) | Sessions (weekly stats) */}
         <div className="mb-6 flex justify-center">
           <div className="inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-            {(['roster', 'sessions'] as ClientsTab[]).map((tab) => {
+            {(['roster', 'attendance', 'sessions'] as ClientsTab[]).map((tab) => {
               const isActive = activeTab === tab;
-              const label = tab === 'roster' ? 'Roster' : 'Sessions';
+              const label =
+                tab === 'roster' ? 'Roster' :
+                tab === 'attendance' ? 'Attendance' :
+                'Sessions';
               return (
                 <button
                   key={tab}
@@ -448,7 +455,9 @@ function ClientsPageContent() {
           </div>
         </div>
 
-        {activeTab === 'sessions' ? (
+        {activeTab === 'attendance' ? (
+          <AttendanceTab weekStart={weekStart} />
+        ) : activeTab === 'sessions' ? (
           <SessionsTab weekStart={weekStart} />
         ) : clientsWithPackages.length === 0 ? (
           <div className="text-center py-12">
