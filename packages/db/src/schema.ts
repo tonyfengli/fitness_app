@@ -614,6 +614,73 @@ export const ChangeUserPackageSchema = z.object({
   path: ["transitionDate"],
 });
 
+// Weekly recurring class schedule (decoupled from training_session)
+export const ClassSchedule = pgTable("class_schedule", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  businessId: t
+    .uuid()
+    .notNull()
+    .references(() => Business.id, { onDelete: "cascade" }),
+  name: t.varchar({ length: 255 }).notNull(),
+  dayOfWeek: t.smallint().notNull(), // 0=Sunday ... 6=Saturday
+  startTime: t.time().notNull(),
+  createdAt: t.timestamp().defaultNow().notNull(),
+  updatedAt: t
+    .timestamp({ mode: "date", withTimezone: true })
+    .$onUpdateFn(() => sql`now()`),
+}));
+
+export const CreateClassScheduleSchema = createInsertSchema(ClassSchedule, {
+  businessId: z.string().uuid(),
+  name: z.string().min(1).max(255),
+  dayOfWeek: z.number().int().min(0).max(6),
+  startTime: z.string(), // 'HH:MM' or 'HH:MM:SS'
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Per-date attendance facts for a recurring class slot
+export const ClassAttendance = pgTable(
+  "class_attendance",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    classScheduleId: t
+      .uuid()
+      .notNull()
+      .references(() => ClassSchedule.id, { onDelete: "cascade" }),
+    userId: t
+      .text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    date: t.date().notNull(),
+    status: t.text().notNull(), // 'present', 'absent', 'canceled'
+    createdAt: t.timestamp().defaultNow().notNull(),
+    updatedAt: t
+      .timestamp({ mode: "date", withTimezone: true })
+      .$onUpdateFn(() => sql`now()`),
+  }),
+  (table) => ({
+    uniqAttendance: unique("class_attendance_unique").on(
+      table.classScheduleId,
+      table.userId,
+      table.date,
+    ),
+  }),
+);
+
+export const CreateClassAttendanceSchema = createInsertSchema(ClassAttendance, {
+  classScheduleId: z.string().uuid(),
+  userId: z.string(),
+  date: z.string(), // ISO 'YYYY-MM-DD'
+  status: z.enum(["present", "absent", "canceled"]),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Export all relations from the relations file
 export * from "../drizzle/relations";
 

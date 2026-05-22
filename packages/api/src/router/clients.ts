@@ -2,8 +2,8 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { and, eq, gte, lte, ne, count, sql, or } from "@acme/db";
-import { user, UserTrainingPackage, TrainingPackage, UserTrainingSession, TrainingSession, ChangeUserPackageSchema } from "@acme/db/schema";
+import { and, asc, eq, gte, lte, count, sql, or } from "@acme/db";
+import { user, UserTrainingPackage, TrainingPackage, ClassAttendance, ClassSchedule, ChangeUserPackageSchema } from "@acme/db/schema";
 
 // Import week utility functions for package date alignment
 function getWeekStart(date: Date): Date {
@@ -75,31 +75,49 @@ export const clientsRouter = {
         throw new Error("Trainer must be associated with a business");
       }
 
-      // Fetch all training sessions the client attended in the date range
-      const attendanceHistory = await ctx.db
+      // Read attendance from class_attendance (the new source of truth).
+      // We synthesize the legacy `scheduledAt` field by combining date + start_time
+      // so existing frontend code that reads `scheduledAt` keeps working.
+      const startDateStr = startDate.slice(0, 10);
+      const endDateStr = endDate.slice(0, 10);
+
+      const rows = await ctx.db
         .select({
-          sessionId: TrainingSession.id,
-          sessionName: TrainingSession.name,
-          scheduledAt: TrainingSession.scheduledAt,
-          status: UserTrainingSession.status,
-          checkedInAt: UserTrainingSession.checkedInAt,
-          sessionStatus: TrainingSession.status,
-          templateType: TrainingSession.templateType,
+          attendanceId: ClassAttendance.id,
+          classScheduleId: ClassAttendance.classScheduleId,
+          scheduleName: ClassSchedule.name,
+          startTime: ClassSchedule.startTime,
+          attendanceDate: ClassAttendance.date,
+          attendanceStatus: ClassAttendance.status,
         })
-        .from(UserTrainingSession)
-        .leftJoin(TrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
+        .from(ClassAttendance)
+        .innerJoin(ClassSchedule, eq(ClassAttendance.classScheduleId, ClassSchedule.id))
         .where(
           and(
-            eq(UserTrainingSession.userId, clientId),
-            eq(TrainingSession.businessId, businessId),
-            gte(TrainingSession.scheduledAt, new Date(startDate)),
-            lte(TrainingSession.scheduledAt, new Date(endDate))
+            eq(ClassAttendance.userId, clientId),
+            eq(ClassSchedule.businessId, businessId),
+            gte(ClassAttendance.date, startDateStr),
+            lte(ClassAttendance.date, endDateStr)
           )
         )
-        .orderBy(TrainingSession.scheduledAt);
+        .orderBy(asc(ClassAttendance.date), asc(ClassSchedule.startTime));
 
-
-      return attendanceHistory;
+      // Shape the response to match the legacy structure so the detail page
+      // (filters/sorts on scheduledAt, sessionName, status) keeps compiling.
+      return rows.map((r) => {
+        // r.attendanceDate is a YYYY-MM-DD string; r.startTime is HH:MM:SS.
+        // Combine into a JS Date in UTC so timezone shifts don't reshape the day.
+        const scheduledAt = new Date(`${r.attendanceDate}T${r.startTime}Z`);
+        return {
+          sessionId: r.attendanceId,
+          sessionName: r.scheduleName,
+          scheduledAt,
+          status: r.attendanceStatus, // always 'present' for now
+          checkedInAt: null,
+          sessionStatus: 'completed' as const,
+          templateType: null,
+        };
+      });
     }),
 
   getClientsWithPackages: protectedProcedure
@@ -236,17 +254,22 @@ export const clientsRouter = {
           Math.max(...allPackageEnds)
         ));
         
-        // Count sessions attended in the overall effective date range
+        // Count attended class_attendance rows in the overall effective date range.
+        // class_attendance is the source of truth for attendance — user_training_session
+        // is no longer read here (see /attendance UX). Date comparisons use YYYY-MM-DD
+        // since class_attendance.date is a SQL date (no time component).
+        const overallStartDateStr = overallEffectiveStart.toISOString().slice(0, 10);
+        const overallEndDateStr = overallEffectiveEnd.toISOString().slice(0, 10);
         const attendanceResult = await ctx.db
           .select({ count: count() })
-          .from(UserTrainingSession)
-          .leftJoin(TrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
+          .from(ClassAttendance)
+          .innerJoin(ClassSchedule, eq(ClassAttendance.classScheduleId, ClassSchedule.id))
           .where(
             and(
-              eq(UserTrainingSession.userId, client.id),
-              ne(UserTrainingSession.status, 'no_show'),
-              gte(TrainingSession.scheduledAt, overallEffectiveStart),
-              lte(TrainingSession.scheduledAt, overallEffectiveEnd)
+              eq(ClassAttendance.userId, client.id),
+              eq(ClassSchedule.businessId, businessId),
+              gte(ClassAttendance.date, overallStartDateStr),
+              lte(ClassAttendance.date, overallEndDateStr)
             )
           );
 
@@ -293,6 +316,33 @@ export const clientsRouter = {
 
     // Filter out any clients without current packages for backward compatibility
     return clientsWithAttendance.filter(client => client.currentPackage !== null);
+  }),
+
+  // Lightweight: every client in the trainer's business (no package join).
+  // Used for the attendance search dropdown so historical/inactive clients are still selectable.
+  listAll: protectedProcedure.query(async ({ ctx }) => {
+    const currentUser = ctx.session?.user as SessionUser;
+    if (currentUser?.role !== "trainer") {
+      throw new Error("Only trainers can list clients");
+    }
+    const businessId = currentUser.businessId;
+    if (!businessId) {
+      throw new Error("Trainer must be associated with a business");
+    }
+
+    return ctx.db
+      .select({
+        id: user.id,
+        name: user.name,
+      })
+      .from(user)
+      .where(
+        and(
+          eq(user.businessId, businessId),
+          eq(user.role, "client"),
+        ),
+      )
+      .orderBy(user.name);
   }),
 
   getClientsWithActivePackages: protectedProcedure.query(async ({ ctx }) => {
