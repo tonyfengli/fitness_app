@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
@@ -179,6 +179,38 @@ function ClientsPageContent() {
   };
   const goToday = () => setWeekStart(todayMonday);
 
+  // Date-picker jump: any date selected snaps to its Monday. Future weeks are
+  // blocked via the `max` attribute on the input.
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  const openDatePicker = () => {
+    const input = dateInputRef.current;
+    if (!input) return;
+    // Chrome 99+ / Safari 16+ / Firefox 101+ all support showPicker, which is
+    // the only reliable way to open a date picker from arbitrary click areas.
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // Some browsers throw outside a user gesture; fall through.
+      }
+    }
+    input.click();
+    input.focus();
+  };
+
+  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    const parts = value.split('-').map(Number);
+    const picked = new Date(parts[0]!, parts[1]! - 1, parts[2]!);
+    if (isNaN(picked.getTime())) return;
+    const monday = getMonday(picked);
+    if (monday.getTime() > todayMonday.getTime()) return;
+    setWeekStart(monday);
+  };
+
   // Single-week date range: Monday → Sunday (inclusive)
   const dateRange = useMemo(() => {
     const start = new Date(weekStart);
@@ -326,8 +358,16 @@ function ClientsPageContent() {
               </svg>
             </button>
 
-            <div className="flex items-center gap-2 justify-center text-center">
-              <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+            <button
+              type="button"
+              onClick={openDatePicker}
+              title="Pick a week"
+              className="relative flex items-center gap-2 justify-center text-center group focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 rounded-md px-1"
+            >
+              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors border-b border-dashed border-transparent group-hover:border-purple-400">
                 {formatWeekRange(weekStart)}
               </span>
               {isCurrentWeek && (
@@ -335,7 +375,20 @@ function ClientsPageContent() {
                   This Week
                 </span>
               )}
-            </div>
+              {/* Hidden input positioned beneath the button — pointer-events-none lets
+                  the button receive the click, while keeping the native picker anchored
+                  to the visible location when showPicker() fires. */}
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={toDateString(weekStart)}
+                max={toDateString(todayMonday)}
+                onChange={handleDatePick}
+                aria-label="Jump to a specific week"
+                tabIndex={-1}
+                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+              />
+            </button>
 
             <button
               type="button"

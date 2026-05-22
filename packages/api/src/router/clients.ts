@@ -105,9 +105,14 @@ export const clientsRouter = {
       // Shape the response to match the legacy structure so the detail page
       // (filters/sorts on scheduledAt, sessionName, status) keeps compiling.
       return rows.map((r) => {
-        // r.attendanceDate is a YYYY-MM-DD string; r.startTime is HH:MM:SS.
-        // Combine into a JS Date in UTC so timezone shifts don't reshape the day.
-        const scheduledAt = new Date(`${r.attendanceDate}T${r.startTime}Z`);
+        // Anchor the synthetic scheduledAt at NOON UTC of the session's date.
+        // Previously we used the literal start_time as UTC, which caused
+        // early-morning slots (5/6/8 AM) to roll back to the prior calendar
+        // day for clients in negative-UTC timezones (e.g. PT). Noon UTC stays
+        // on the same calendar day in any reasonable zone (UTC-11 to UTC+11),
+        // which is all the calendar matching needs.
+        const [y, mo, da] = r.attendanceDate.split('-').map(Number);
+        const scheduledAt = new Date(Date.UTC(y!, mo! - 1, da!, 12, 0, 0));
         return {
           sessionId: r.attendanceId,
           sessionName: r.scheduleName,

@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
-import { processFilterSelection, formatLongDate, formatShortDate, getMostRecentCompleteMonth, type WeekRange } from '~/utils/weekUtils';
+import { formatShortDate } from '~/utils/weekUtils';
 import { OptionsDrawer } from '~/components/workout/OptionsDrawer';
 import { useScrollManager } from '~/hooks/useScrollManager';
 
@@ -33,91 +33,151 @@ function getProgressColor(percentage: number) {
   return 'bg-red-500';
 }
 
+// Week helpers — Monday-based weeks. Mirrors /attendance and /clients list page.
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d;
+}
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function toDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseWeekParam(value: string | null): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parts = value.split('-').map(Number);
+  const d = new Date(parts[0]!, parts[1]! - 1, parts[2]!);
+  if (isNaN(d.getTime())) return null;
+  return getMonday(d);
+}
+
+function formatWeekRange(monday: Date): string {
+  const sunday = addDays(monday, 6);
+  const sameMonth = monday.getMonth() === sunday.getMonth();
+  const sameYear = monday.getFullYear() === sunday.getFullYear();
+  const m1 = MONTH_SHORT[monday.getMonth()];
+  const m2 = MONTH_SHORT[sunday.getMonth()];
+  const d1 = monday.getDate();
+  const d2 = sunday.getDate();
+  const y1 = monday.getFullYear();
+  const y2 = sunday.getFullYear();
+  if (sameMonth && sameYear) return `${m1} ${d1} – ${d2}, ${y1}`;
+  if (sameYear) return `${m1} ${d1} – ${m2} ${d2}, ${y1}`;
+  return `${m1} ${d1}, ${y1} – ${m2} ${d2}, ${y2}`;
+}
+
 function ClientDetailPageContent({ params }: ClientDetailPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const trpc = api();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Get the most recent complete month as an additional filter option
-  const mostRecentCompleteMonth = useMemo(() => getMostRecentCompleteMonth(), []);
-  
-  // Get filter from URL params, fallback to 'Last 2 Weeks'
-  const filterFromUrl = searchParams.get('filter');
-  const [selectedFilter, setSelectedFilter] = useState(filterFromUrl || 'Last 2 Weeks');
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
-  const [customStartMonth, setCustomStartMonth] = useState('');
-  const [customEndMonth, setCustomEndMonth] = useState('');
-  
-  // State for the modal - separate from applied state
-  const [modalFilter, setModalFilter] = useState('');
-  const [modalStartMonth, setModalStartMonth] = useState('');
-  const [modalEndMonth, setModalEndMonth] = useState('');
-  const [filterType, setFilterType] = useState<'single' | 'range'>('single');
-  
+
+  // Week-based filter — URL param `?week=YYYY-MM-DD` carries the Monday.
+  const todayMonday = useMemo(() => getMonday(new Date()), []);
+  const weekFromUrl = parseWeekParam(searchParams.get('week'));
+  const [weekStart, setWeekStart] = useState<Date>(weekFromUrl ?? todayMonday);
+
+  const isCurrentWeek = isSameDay(weekStart, todayMonday);
+  const canGoForward = !isCurrentWeek;
+
   // Settings drawer state
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
-  
+
   // Unwrap the params Promise using React.use()
   const { clientId } = React.use(params);
 
   // iOS scroll management for settings drawer
-  useScrollManager({ 
-    isActive: showSettingsDrawer, 
-    priority: 1 
+  useScrollManager({
+    isActive: showSettingsDrawer,
+    priority: 1
   });
 
-  // Generate available historical months (up to 1 year back)
-  const availableMonths = useMemo(() => {
-    const months = [];
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth(); // 0-11 (November = 10)
-    
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    
-    // Start from previous month (skip current month since it's not fully historical)
-    // Go back 12 months from previous month
-    for (let i = 1; i <= 12; i++) {
-      let monthIndex = currentMonth - i;
-      let year = currentYear;
-      
-      // Handle going back to previous year
-      if (monthIndex < 0) {
-        monthIndex = monthIndex + 12;
-        year = currentYear - 1;
+  // Keep URL in sync with the selected week.
+  useEffect(() => {
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.set('week', toDateString(weekStart));
+    router.replace(`/clients/${clientId}?${sp.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart]);
+
+  const goPrev = () => setWeekStart((d) => addDays(d, -7));
+  const goNext = () => {
+    if (canGoForward) setWeekStart((d) => addDays(d, 7));
+  };
+  const goToday = () => setWeekStart(todayMonday);
+
+  // Date picker — any picked date snaps to its Monday; future weeks blocked via max.
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const openDatePicker = () => {
+    const input = dateInputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        /* fall through */
       }
-      
-      const monthName = monthNames[monthIndex];
-      
-      months.push({
-        name: monthName,
-        value: `${monthName} ${year}`,
-        year: year,
-        displayName: `${monthName} ${year}`
-      });
     }
-    
-    // Reverse to show earliest to latest (oldest first)
-    return months.reverse();
-  }, []);
+    input.click();
+    input.focus();
+  };
+  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    const parts = value.split('-').map(Number);
+    const picked = new Date(parts[0]!, parts[1]! - 1, parts[2]!);
+    if (isNaN(picked.getTime())) return;
+    const monday = getMonday(picked);
+    if (monday.getTime() > todayMonday.getTime()) return;
+    setWeekStart(monday);
+  };
 
-  // Calculate the adjusted date range for the selected filter
-  const dateRange: WeekRange = useMemo(() => {
-    const range = processFilterSelection(selectedFilter);
-    return range;
-  }, [selectedFilter]);
+  // Single-week range: Mon (00:00) → Sun (23:59:59). Used for stats + the
+  // "selected week" highlight on the calendar.
+  const dateRange = useMemo(() => {
+    const start = new Date(weekStart);
+    const end = addDays(weekStart, 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, [weekStart]);
 
-  // Calculate week count with proper logic for explicit week filters
-  const weekCount = React.useMemo(() => {
-    if (selectedFilter === '2 Weeks') return 2;
-    if (selectedFilter === '4 Weeks') return 4;
-    // For other filters, use rounded calculation since all ranges are adjusted to complete weeks
-    return Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (7 * 24 * 60 * 60 * 1000));
-  }, [dateRange, selectedFilter]);
+  // Wider range for the calendar — covers the full calendar month(s) that
+  // contain the selected week so all attendance dots in the visible months
+  // show up, even those outside the selected week.
+  const calendarRange = useMemo(() => {
+    const weekEnd = addDays(weekStart, 6);
+    const start = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+    const end = new Date(weekEnd.getFullYear(), weekEnd.getMonth() + 1, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, [weekStart]);
+
+  // Always one week of expected sessions now.
+  const weekCount = 1;
 
   // Fetch client data with attendance
   const { data: clientData, isLoading: clientLoading } = useQuery({
@@ -134,12 +194,13 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
   // Get all packages for calendar display (if client has the new allPackages field)
   const allPackages = client?.allPackages || [];
 
-  // Fetch client's detailed attendance history
+  // Fetch attendance history for the wider CALENDAR range, so every dot in the
+  // visible month(s) renders — not just the selected-week subset.
   const { data: attendanceHistory, isLoading: historyLoading } = useQuery({
     ...trpc.clients.getClientAttendanceHistory.queryOptions({
       clientId: clientId,
-      startDate: dateRange.start.toISOString(),
-      endDate: dateRange.end.toISOString(),
+      startDate: calendarRange.start.toISOString(),
+      endDate: calendarRange.end.toISOString(),
     }),
   });
 
@@ -148,13 +209,12 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
     if ((clientId === '4wnrsk1032vmhjxn5wl' || clientId === '4263bc69-f06c-4cf1-83ec-4756ea5bf94c') && client && client.currentPackage) {
       console.log(`🔍 [Client ${clientId}] Calendar Page Debug Info:`);
       console.log('📅 [Filter & Date Range]', {
-        selectedFilter,
+        weekStart: toDateString(weekStart),
         filterDateRange: {
           start: dateRange.start.toISOString(),
           end: dateRange.end.toISOString(),
           startFormatted: dateRange.start.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
           endFormatted: dateRange.end.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-          wasAdjusted: dateRange.wasAdjusted
         },
         weekCount
       });
@@ -341,7 +401,7 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
         });
       }
     }
-  }, [client, attendanceHistory, selectedFilter, dateRange, weekCount, clientId]);
+  }, [client, attendanceHistory, weekStart, dateRange, weekCount, clientId]);
 
   if (clientLoading || historyLoading) {
     return (
@@ -391,7 +451,7 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <CircuitHeader
-        onBack={() => router.push(`/clients?filter=${encodeURIComponent(selectedFilter)}`)}
+        onBack={() => router.push(`/clients?week=${toDateString(weekStart)}`)}
         backText="Back"
         title={client.name}
         subtitle={`${attendanceData.attendedSessions}/${attendanceData.expectedSessions} sessions • ${attendanceData.attendancePercentage}% attendance`}
@@ -410,38 +470,74 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
 
 
       <div className="px-4 py-6">
-        {/* Time Filter */}
-        <div className="mb-4 grid grid-cols-4 gap-1.5">
-          {['Last 2 Weeks', 'Last 4 Weeks', mostRecentCompleteMonth].map((filter) => (
+        {/* Week selector — mirrors /attendance and /clients list page */}
+        <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <button
-              key={filter}
-              onClick={() => setSelectedFilter(filter)}
-              className={`px-2 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
-                selectedFilter === filter
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              type="button"
+              onClick={goPrev}
+              aria-label="Previous week"
+              className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             >
-              {filter}
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
-          ))}
-          <button
-            onClick={() => setShowCustomPicker(true)}
-            className={`px-2 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
-              !['Last 2 Weeks', 'Last 4 Weeks', mostRecentCompleteMonth].includes(selectedFilter)
-                ? 'bg-purple-600 text-white'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-          >
-            Custom ▼
-          </button>
-        </div>
 
-        {/* Date Range Display */}
-        <div className="mb-6 text-center">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {formatLongDate(dateRange.start)} to {formatLongDate(dateRange.end)}
+            <button
+              type="button"
+              onClick={openDatePicker}
+              title="Pick a week"
+              className="relative flex items-center gap-2 justify-center text-center group focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 rounded-md px-1"
+            >
+              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors border-b border-dashed border-transparent group-hover:border-purple-400">
+                {formatWeekRange(weekStart)}
+              </span>
+              {isCurrentWeek && (
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                  This Week
+                </span>
+              )}
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={toDateString(weekStart)}
+                max={toDateString(todayMonday)}
+                onChange={handleDatePick}
+                aria-label="Jump to a specific week"
+                tabIndex={-1}
+                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+              />
+            </button>
+
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={!canGoForward}
+              aria-label="Next week"
+              className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 flex-shrink-0"
+            >
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
+
+          {!isCurrentWeek && (
+            <button
+              type="button"
+              onClick={goToday}
+              className="w-full sm:w-auto sm:ml-3 inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 active:bg-purple-800 shadow-sm transition-colors"
+            >
+              Today
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
 
 
@@ -473,16 +569,24 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
                   });
                 }
 
-                // Generate calendar months within the date range
-                const startDate = new Date(dateRange.start);
-                const endDate = new Date(dateRange.end);
+                // Generate calendar months within the wider CALENDAR range so
+                // we always show full month(s) regardless of which single week
+                // is currently selected.
+                const startDate = new Date(calendarRange.start);
+                const endDate = new Date(calendarRange.end);
                 const months = [];
-                
+
                 let currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
                 while (currentDate <= endDate) {
                   months.push(new Date(currentDate));
                   currentDate.setMonth(currentDate.getMonth() + 1);
                 }
+
+                // The selected week (Mon–Sun) for highlighting.
+                const selectedWeekStart = new Date(weekStart);
+                selectedWeekStart.setHours(0, 0, 0, 0);
+                const selectedWeekEnd = addDays(weekStart, 6);
+                selectedWeekEnd.setHours(23, 59, 59, 999);
 
                 return months.map(monthStart => {
                   const year = monthStart.getFullYear();
@@ -505,7 +609,9 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
                     const dayNumber = i - startDayOfWeek + 1;
                     const date = new Date(year, month, dayNumber);
                     const isCurrentMonth = dayNumber > 0 && dayNumber <= daysInMonth;
-                    const isInRange = date >= dateRange.start && date <= dateRange.end;
+                    const isInSelectedWeek =
+                      date.getTime() >= selectedWeekStart.getTime() &&
+                      date.getTime() <= selectedWeekEnd.getTime();
                     const dateKey = date.toDateString();
                     const sessionsOnDate = sessionsByDate.get(dateKey) || [];
                     
@@ -572,11 +678,11 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
                       date,
                       dayNumber: isCurrentMonth ? dayNumber : '',
                       isCurrentMonth,
-                      isInRange,
+                      isInSelectedWeek,
                       sessions: sessionsOnDate,
                       isPackageStartDate,
                       isPackageEndDate,
-                      packageEvents, // New field for multiple package events
+                      packageEvents,
                     });
                   }
 
@@ -616,13 +722,17 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
                             <div
                               key={index}
                               className={`relative p-2 min-h-[3rem] border ${
-                                day.isPackageStartDate || day.isPackageEndDate 
-                                  ? 'border-purple-300 dark:border-purple-600' 
+                                day.isInSelectedWeek && day.isCurrentMonth
+                                  ? 'border-purple-400 dark:border-purple-500'
+                                  : day.isPackageStartDate || day.isPackageEndDate
+                                  ? 'border-purple-300 dark:border-purple-600'
                                   : 'border-gray-100 dark:border-gray-700'
                               } ${
-                                day.isCurrentMonth && day.isInRange
-                                  ? 'bg-white dark:bg-gray-800'
-                                  : 'bg-gray-50 dark:bg-gray-900'
+                                !day.isCurrentMonth
+                                  ? 'bg-gray-50 dark:bg-gray-900'
+                                  : day.isInSelectedWeek
+                                  ? 'bg-purple-50 dark:bg-purple-900/20'
+                                  : 'bg-white dark:bg-gray-800'
                               } ${
                                 day.sessions.length > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''
                               }`}
@@ -630,9 +740,11 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
                             >
                               {/* Day number */}
                               <div className={`text-sm font-medium ${
-                                day.isCurrentMonth && day.isInRange
-                                  ? 'text-gray-900 dark:text-white'
-                                  : 'text-gray-400 dark:text-gray-600'
+                                !day.isCurrentMonth
+                                  ? 'text-gray-400 dark:text-gray-600'
+                                  : day.isInSelectedWeek
+                                  ? 'text-purple-900 dark:text-purple-100'
+                                  : 'text-gray-900 dark:text-white'
                               }`}>
                                 {day.dayNumber}
                               </div>
@@ -716,191 +828,6 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
             </div>
         </div>
       </div>
-
-      {/* Custom Date Picker Modal */}
-      {showCustomPicker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Custom Time Period</h3>
-            
-            {/* Filter Type Selection */}
-            <div className="mb-6">
-              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                <button
-                  onClick={() => {
-                    setFilterType('single');
-                    setModalStartMonth('');
-                    setModalEndMonth('');
-                    setModalFilter('');
-                  }}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                    filterType === 'single'
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  Single Month
-                </button>
-                <button
-                  onClick={() => {
-                    setFilterType('range');
-                    setModalFilter('');
-                  }}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                    filterType === 'range'
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  Date Range
-                </button>
-              </div>
-            </div>
-
-            {/* Single Month Selection */}
-            {filterType === 'single' && (
-              <div className="mb-6">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                  Select a historical month to analyze
-                </p>
-                <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                  {availableMonths.map((month) => (
-                    <button
-                      key={`${month.name}-${month.year}`}
-                      onClick={() => setModalFilter(month.value)}
-                      className={`py-2.5 px-3 rounded-lg border transition-all text-sm font-medium ${
-                        modalFilter === month.value
-                          ? 'bg-purple-600 text-white border-purple-600'
-                          : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-700'
-                      }`}
-                    >
-                      {month.displayName}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Date Range Selection */}
-            {filterType === 'range' && (
-              <div className="mb-6">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                  Select start and end months for comparison
-                </p>
-                
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                      Start Month
-                    </label>
-                    <select
-                      value={modalStartMonth}
-                      onChange={(e) => {
-                        setModalStartMonth(e.target.value);
-                        // Reset end month if it's before the new start month
-                        if (modalEndMonth) {
-                          const startIndex = availableMonths.findIndex(m => m.value === e.target.value);
-                          const endIndex = availableMonths.findIndex(m => m.value === modalEndMonth);
-                          if (endIndex < startIndex) {
-                            setModalEndMonth('');
-                          }
-                        }
-                      }}
-                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
-                    >
-                      <option value="">Choose start month</option>
-                      {availableMonths.map((month) => (
-                        <option key={`start-${month.name}-${month.year}`} value={month.value}>
-                          {month.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                      End Month
-                    </label>
-                    <select
-                      value={modalEndMonth}
-                      onChange={(e) => setModalEndMonth(e.target.value)}
-                      disabled={!modalStartMonth}
-                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Choose end month</option>
-                      {availableMonths
-                        .filter((month) => {
-                          if (!modalStartMonth) return false;
-                          const startMonthIndex = availableMonths.findIndex(m => m.value === modalStartMonth);
-                          const currentMonthIndex = availableMonths.findIndex(m => m.value === month.value);
-                          return currentMonthIndex >= startMonthIndex;
-                        })
-                        .map((month) => (
-                          <option key={`end-${month.name}-${month.year}`} value={month.value}>
-                            {month.displayName}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-                
-                {modalStartMonth && modalEndMonth && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span>
-                        Selected: {modalStartMonth} {modalStartMonth === modalEndMonth ? '' : `to ${modalEndMonth}`}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Preview & Actions */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowCustomPicker(false);
-                    setModalFilter('');
-                    setModalStartMonth('');
-                    setModalEndMonth('');
-                    setFilterType('single');
-                  }}
-                  className="flex-1 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    if (filterType === 'single' && modalFilter) {
-                      setSelectedFilter(modalFilter);
-                    } else if (filterType === 'range' && modalStartMonth && modalEndMonth) {
-                      const customFilter = modalEndMonth === modalStartMonth ? modalStartMonth : `${modalStartMonth} - ${modalEndMonth}`;
-                      setSelectedFilter(customFilter);
-                    }
-                    setShowCustomPicker(false);
-                    setModalFilter('');
-                    setModalStartMonth('');
-                    setModalEndMonth('');
-                    setFilterType('single');
-                  }}
-                  disabled={
-                    (filterType === 'single' && !modalFilter) ||
-                    (filterType === 'range' && (!modalStartMonth || !modalEndMonth))
-                  }
-                  className="flex-1 px-4 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300 dark:disabled:bg-gray-600 transition-colors font-medium"
-                >
-                  Apply Filter
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Settings Drawer */}
       <OptionsDrawer
