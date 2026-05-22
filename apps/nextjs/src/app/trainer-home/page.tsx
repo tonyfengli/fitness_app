@@ -150,7 +150,7 @@ export default function TrainerHomePage() {
           </Link>
 
           {/* Clients Button */}
-          <Link href="/client-hub" className="block">
+          <Link href="/clients" className="block">
             <div className="group relative overflow-hidden rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-8 hover:bg-white/20 hover:border-white/30 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]">
               {/* Background decoration */}
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>

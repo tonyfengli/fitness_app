@@ -2,10 +2,13 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
+import { SessionsTab } from './_components/SessionsTab';
+
+type ClientsTab = 'roster' | 'sessions';
 
 
 // Week helpers — Monday-based weeks, matches /attendance convention.
@@ -162,16 +165,23 @@ function ClientsPageContent() {
   const weekFromUrl = parseWeekParam(searchParams.get('week'));
   const [weekStart, setWeekStart] = useState<Date>(weekFromUrl ?? todayMonday);
 
+  // Tab state: roster (table) vs sessions (cards). URL param `?tab=…`.
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<ClientsTab>(
+    tabFromUrl === 'sessions' ? 'sessions' : 'roster',
+  );
+
   const isCurrentWeek = isSameDay(weekStart, todayMonday);
   const canGoForward = !isCurrentWeek;
 
-  // Keep URL in sync with the selected week.
+  // Keep URL in sync with the selected week + tab.
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('week', toDateString(weekStart));
+    params.set('tab', activeTab);
     router.replace(`/clients?${params.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart]);
+  }, [weekStart, activeTab]);
 
   const goPrev = () => setWeekStart((d) => addDays(d, -7));
   const goNext = () => {
@@ -225,13 +235,16 @@ function ClientsPageContent() {
   // Inactive clients expansion state
   const [showInactiveClients, setShowInactiveClients] = useState(false);
 
-  // Fetch clients data with their training packages
-  const { data: clientsData, isLoading, error } = useQuery({
+  // Fetch clients data with their training packages.
+  // `placeholderData: keepPreviousData` keeps the table visible while a
+  // new week refetches, so navigation doesn't blank the screen.
+  const { data: clientsData, isLoading, isFetching, error } = useQuery({
     ...trpc.clients.getClientsWithPackages.queryOptions({
       startDate: dateRange.start.toISOString(),
       endDate: dateRange.end.toISOString(),
       weekCount: weekCount,
     }),
+    placeholderData: keepPreviousData,
   });
 
   // Fetch inactive clients data
@@ -240,8 +253,12 @@ function ClientsPageContent() {
     enabled: showInactiveClients, // Only fetch when expanded
   });
 
+  // Only show the full-screen loader on the very first load (no data yet).
+  // Subsequent week changes keep the existing table and show a small inline spinner.
+  const isInitialLoad = !clientsData && isLoading;
+  const isRefetching = !isInitialLoad && isFetching;
 
-  if (isLoading) {
+  if (isInitialLoad) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
@@ -326,24 +343,6 @@ function ClientsPageContent() {
       />
 
       <div className="px-4 py-6">
-        {/* Search Bar */}
-        <div className="mb-4">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              placeholder="Search clients by name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-            />
-          </div>
-        </div>
-
         {/* Week selector — mirrors /attendance */}
         <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -401,6 +400,14 @@ function ClientsPageContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
             </button>
+
+            {/* Small inline spinner while refetching for a new week. */}
+            {isRefetching && (
+              <Loader2Icon
+                aria-label="Loading week"
+                className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-spin flex-shrink-0"
+              />
+            )}
           </div>
 
           {!isCurrentWeek && (
@@ -417,7 +424,33 @@ function ClientsPageContent() {
           )}
         </div>
 
-        {clientsWithPackages.length === 0 ? (
+        {/* Tab strip — Roster (table) vs Sessions (per-class cards) */}
+        <div className="mb-6 flex justify-center">
+          <div className="inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            {(['roster', 'sessions'] as ClientsTab[]).map((tab) => {
+              const isActive = activeTab === tab;
+              const label = tab === 'roster' ? 'Roster' : 'Sessions';
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    isActive
+                      ? 'bg-white dark:bg-gray-700 text-purple-700 dark:text-purple-300 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {activeTab === 'sessions' ? (
+          <SessionsTab weekStart={weekStart} />
+        ) : clientsWithPackages.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -438,6 +471,25 @@ function ClientsPageContent() {
             <p className="text-gray-500 dark:text-gray-400 text-sm">Try adjusting your search terms</p>
           </div>
         ) : (
+          <>
+            {/* Search bar (Roster only) */}
+            <div className="mb-4">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search clients by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+            </div>
+
           <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <table className="w-full text-sm">
               <thead>
@@ -531,10 +583,12 @@ function ClientsPageContent() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
-      {/* Inactive Clients Expandable Section */}
+      {/* Inactive Clients Expandable Section (Roster tab only) */}
+      {activeTab === 'roster' && (
       <div className="px-4 pb-6">
         <button
           onClick={() => setShowInactiveClients(!showInactiveClients)}
@@ -641,6 +695,7 @@ function ClientsPageContent() {
           </div>
         )}
       </div>
+      )}
 
     </div>
   );

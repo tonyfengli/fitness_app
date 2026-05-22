@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
@@ -179,30 +179,40 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
   // Always one week of expected sessions now.
   const weekCount = 1;
 
-  // Fetch client data with attendance
-  const { data: clientData, isLoading: clientLoading } = useQuery({
+  // Fetch client data with attendance.
+  // `placeholderData: keepPreviousData` keeps the old data visible while a
+  // new query key (e.g. different week) refetches — so the page doesn't
+  // blank out to a full-screen spinner on every week change.
+  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useQuery({
     ...trpc.clients.getClientsWithPackages.queryOptions({
       startDate: dateRange.start.toISOString(),
       endDate: dateRange.end.toISOString(),
       weekCount: weekCount,
     }),
+    placeholderData: keepPreviousData,
   });
 
   // Find the specific client
   const client = clientData?.find(c => c.id === clientId);
-  
+
   // Get all packages for calendar display (if client has the new allPackages field)
   const allPackages = client?.allPackages || [];
 
   // Fetch attendance history for the wider CALENDAR range, so every dot in the
   // visible month(s) renders — not just the selected-week subset.
-  const { data: attendanceHistory, isLoading: historyLoading } = useQuery({
+  const { data: attendanceHistory, isLoading: historyLoading, isFetching: historyFetching } = useQuery({
     ...trpc.clients.getClientAttendanceHistory.queryOptions({
       clientId: clientId,
       startDate: calendarRange.start.toISOString(),
       endDate: calendarRange.end.toISOString(),
     }),
+    placeholderData: keepPreviousData,
   });
+
+  // True initial load = nothing to show yet. Subsequent week switches keep
+  // the previous render visible and just flag a small inline spinner.
+  const isInitialLoad = !client && (clientLoading || historyLoading);
+  const isRefetching = !isInitialLoad && (clientFetching || historyFetching);
 
   // Debug logging for specific client
   React.useEffect(() => {
@@ -403,7 +413,7 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
     }
   }, [client, attendanceHistory, weekStart, dateRange, weekCount, clientId]);
 
-  if (clientLoading || historyLoading) {
+  if (isInitialLoad) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
@@ -524,6 +534,15 @@ function ClientDetailPageContent({ params }: ClientDetailPageProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
             </button>
+
+            {/* Small inline spinner shown while refetching — replaces the
+                previous full-screen blank/spinner during week navigation. */}
+            {isRefetching && (
+              <Loader2Icon
+                aria-label="Loading week"
+                className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-spin flex-shrink-0"
+              />
+            )}
           </div>
 
           {!isCurrentWeek && (
