@@ -45,3 +45,7 @@ export { sessionTestDataLogger } from "./utils/sessionTestDataLogger";
 // Export preference state manager
 export { PreferenceStateManager } from "./utils/preferenceStateManager";
 export type { PreferenceCollectionStep } from "./utils/preferenceStateManager";
+
+// Trainerize Google Sheets sync — exposed for Vercel Cron / manual triggers.
+export { syncTrainerizeEventsFromSheet } from "./services/trainerizeSheetSync";
+export type { SyncResult } from "./services/trainerizeSheetSync";

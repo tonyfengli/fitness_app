@@ -681,6 +681,74 @@ export const CreateClassAttendanceSchema = createInsertSchema(ClassAttendance, {
   updatedAt: true,
 });
 
+// Trainerize event log — combined habit + nutrition events synced from
+// Google Sheets (which Zapier writes to from Trainerize triggers).
+// `userId` is nullable so events can land before the trainer has manually
+// linked the Trainerize client_id to our user; later syncs / lookups resolve
+// the link once `user.trainerizeUserId` is populated.
+export const TrainerizeEvent = pgTable(
+  "trainerize_event",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    // FK to our user. Nullable until the trainer has linked this Trainerize
+    // client to one of our users.
+    userId: t
+      .text()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Always captured from the sheet for retroactive linking.
+    trainerizeUserId: t.text().notNull(),
+    email: t.text(),
+    eventType: t.text().notNull(), // 'habit' | 'nutrition'
+    eventDate: t.date().notNull(),
+
+    // Habit-specific fields (NULL for nutrition rows).
+    habitName: t.text(),
+    habitType: t.text(),
+    currentStreak: t.integer(),
+    longestStreak: t.integer(),
+    dailyHabitId: t.text(),
+    habitId: t.text(),
+
+    // De-duplication key built by the sync layer:
+    //   habit:     'habit:<dailyHabitId>'
+    //   nutrition: 'nutrition:<trainerizeUserId>:<eventDate>'
+    // Ensures rerunning the sync is idempotent.
+    externalEventKey: t.text().notNull(),
+    createdAt: t.timestamp().defaultNow().notNull(),
+    updatedAt: t
+      .timestamp({ mode: "date", withTimezone: true })
+      .$onUpdateFn(() => sql`now()`),
+  }),
+  (table) => ({
+    uniqExternalEventKey: unique("trainerize_event_external_key_unique").on(
+      table.externalEventKey,
+    ),
+    trainerizeUserIdx: index("trainerize_event_trainerize_user_idx").on(
+      table.trainerizeUserId,
+    ),
+    userIdx: index("trainerize_event_user_idx").on(table.userId),
+  }),
+);
+
+export const CreateTrainerizeEventSchema = createInsertSchema(TrainerizeEvent, {
+  userId: z.string().optional(),
+  trainerizeUserId: z.string().min(1),
+  email: z.string().optional(),
+  eventType: z.enum(["habit", "nutrition"]),
+  eventDate: z.string(), // ISO 'YYYY-MM-DD'
+  habitName: z.string().optional(),
+  habitType: z.string().optional(),
+  currentStreak: z.number().int().optional(),
+  longestStreak: z.number().int().optional(),
+  dailyHabitId: z.string().optional(),
+  habitId: z.string().optional(),
+  externalEventKey: z.string().min(1),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Export all relations from the relations file
 export * from "../drizzle/relations";
 

@@ -16,6 +16,10 @@ export const user = pgTable(
       .uuid()
       .notNull()
       .references(() => Business.id, { onDelete: "cascade" }),
+    // External integration link — Trainerize's stable client ID.
+    // Populated manually for each client; used to resolve incoming Trainerize
+    // events to our local user.
+    trainerizeUserId: t.text().unique(),
     createdAt: t.timestamp().notNull(),
     updatedAt: t.timestamp().notNull(),
   }),

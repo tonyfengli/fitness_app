@@ -167,12 +167,12 @@ function ClientsPageContent() {
   const [weekStart, setWeekStart] = useState<Date>(weekFromUrl ?? todayMonday);
 
   // Tab state: roster (table) | attendance (cards) | sessions (weekly stats).
-  // URL param `?tab=…`.
+  // URL param `?tab=…`. Defaults to attendance — it's the primary daily workflow.
   const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<ClientsTab>(
-    tabFromUrl === 'attendance' || tabFromUrl === 'sessions'
+    tabFromUrl === 'roster' || tabFromUrl === 'sessions'
       ? tabFromUrl
-      : 'roster',
+      : 'attendance',
   );
 
   const isCurrentWeek = isSameDay(weekStart, todayMonday);
@@ -434,7 +434,7 @@ function ClientsPageContent() {
             {(['roster', 'attendance', 'sessions'] as ClientsTab[]).map((tab) => {
               const isActive = activeTab === tab;
               const label =
-                tab === 'roster' ? 'Roster' :
+                tab === 'roster' ? 'Clients' :
                 tab === 'attendance' ? 'Attendance' :
                 'Sessions';
               return (
