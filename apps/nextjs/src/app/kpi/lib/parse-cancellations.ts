@@ -31,6 +31,9 @@ export interface CancellationsResult {
   expiredMemberships: CancellationEntry[];
   expiredCount: number;
 
+  // Lost members = cancelled + expired (members who actually left)
+  lostMemberCount: number;
+
   // Revenue calculations
   cancellationRevenueLost: number; // Sum of estimated monthly loss from cancellations
   membershipChangeRevenueLost: number; // Sum of price differences (downgrades only)
@@ -88,7 +91,7 @@ export async function parseCancellations(
           const amount = parseFloat(row["Payment Amount"]?.replace(/[^0-9.-]/g, "") || "0") || 0;
           const details = row["Payment Details"] || "";
 
-          if (details.includes("Payment Refund")) continue;
+          // Let refunds net out naturally (don't skip negative amounts)
 
           if (memberId) {
             const current = paymentsByMemberId.get(memberId) || 0;
@@ -221,6 +224,17 @@ export async function parseCancellations(
             priceDifference,
           };
 
+          // Check if member is still active (in Current Members)
+          const stillInCurrentMembers = currentMemberIds.has(memberId);
+
+          console.log(`[Cancellation] ${name} (${memberId}):`, {
+            cancelReason,
+            feedback,
+            stillInCurrentMembers,
+            hadPaymentInPeriod,
+            paymentAmount,
+          });
+
           if (cancelReason === "Membership Change") {
             membershipChanges.push(entry);
           } else if (cancelReason === "Expired") {
@@ -259,10 +273,23 @@ export async function parseCancellations(
 
   const totalRevenueLost = cancellationRevenueLost + membershipChangeRevenueLost;
 
+  // Lost members = Cancelled/Expired who are NOT still in Current Members
+  // (If they're still in Current Members, they switched plans - not lost)
+  const trulyLostCancellations = trueCancellations.filter(c => !currentMemberIds.has(c.memberId));
+  const trulyLostExpired = expiredMemberships.filter(c => !currentMemberIds.has(c.memberId));
+  const lostMemberCount = trulyLostCancellations.length + trulyLostExpired.length;
+
   console.log("=== CANCELLATIONS RESULTS ===");
-  console.log("True Cancellations:", trueCancellations.length);
+  console.log("True Cancellations (reason=Cancelled):", trueCancellations.length);
+  console.log("Expired Memberships (reason=Expired):", expiredMemberships.length);
+  console.log("Membership Changes (reason=Membership Change):", membershipChanges.length);
+  console.log("---");
+  console.log("Truly Lost (not in Current Members):", lostMemberCount);
+  console.log("  - Cancelled & left:", trulyLostCancellations.length);
+  console.log("  - Expired & left:", trulyLostExpired.length);
+  console.log("Expired but still active (switched plans):", expiredMemberships.length - trulyLostExpired.length);
+  console.log("---");
   console.log("Cancellation Revenue Lost:", cancellationRevenueLost);
-  console.log("Membership Changes:", membershipChanges.length);
   console.log("Membership Change Revenue Lost:", membershipChangeRevenueLost);
   console.log("Total Revenue Lost:", totalRevenueLost);
 
@@ -273,6 +300,7 @@ export async function parseCancellations(
     membershipChangeCount: membershipChanges.length,
     expiredMemberships,
     expiredCount: expiredMemberships.length,
+    lostMemberCount,
     cancellationRevenueLost,
     membershipChangeRevenueLost,
     totalRevenueLost,

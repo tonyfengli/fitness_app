@@ -82,8 +82,9 @@ export async function parseCurrentMembers(
 ): Promise<CurrentMembersResult> {
   console.log("=== parseCurrentMembers DEBUG ===");
 
-  // Step 1: Parse All Payments to get who actually paid
+  // Step 1: Parse All Payments to get who actually paid (net amount > 0)
   const membersPaid = new Set<string>();
+  const memberPaymentTotals = new Map<string, number>();
 
   if (allPaymentsCsv) {
     await new Promise<void>((resolve) => {
@@ -91,14 +92,19 @@ export async function parseCurrentMembers(
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
+          // First pass: calculate net totals per member (let refunds net out naturally)
           for (const row of results.data) {
             const memberId = row["Member ID"] || "";
             const amount = parseFloat(row["Payment Amount"]?.replace(/[^0-9.-]/g, "") || "0") || 0;
-            const details = row["Payment Details"] || "";
 
-            if (details.includes("Payment Refund")) continue;
-
-            if (memberId && amount > 0) {
+            if (memberId) {
+              const current = memberPaymentTotals.get(memberId) || 0;
+              memberPaymentTotals.set(memberId, current + amount);
+            }
+          }
+          // Second pass: only count as "paid" if net amount > 0
+          for (const [memberId, total] of memberPaymentTotals) {
+            if (total > 0) {
               membersPaid.add(memberId);
             }
           }

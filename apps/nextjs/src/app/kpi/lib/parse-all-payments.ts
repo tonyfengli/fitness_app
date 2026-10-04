@@ -4,6 +4,7 @@ import * as Papa from "papaparse";
 // Update this when Gym Master labels change after migration
 const PAYMENT_DETAILS_MAPPING: Record<string, CategoryKey> = {
   "Membership Category: Gym Memberships": "small_grp",
+  "Membership Category: Personal Training Packages": "pt",
   // Future mappings (uncomment after migration):
   // "Membership Category: Open Gym": "open_gym",
   // "Membership Category: Personal Training": "pt",

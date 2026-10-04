@@ -782,10 +782,10 @@ function OutputTemplate({ allPayments, newMembers, cancellations, membersOnHold,
 
   // Initialize template data with parsed values where available
   const [data, setData] = useState<TemplateData>(() => ({
-    // Financial Stats - only smallGrp is populated for now
+    // Financial Stats
     quickbooksRevenue: "",
     openGymRevenue: "",
-    ptRevenue: "",
+    ptRevenue: allPayments?.totals.pt?.toFixed(2) || "",
     sportsPerfRevenue: "",
     smallGrpRevenue: allPayments?.totals.small_grp?.toFixed(2) || "",
     remoteRevenue: "",
@@ -803,7 +803,7 @@ function OutputTemplate({ allPayments, newMembers, cancellations, membersOnHold,
 
     // Membership Stats
     newMembersCount: newMembers?.confirmedNewMembers.length.toString() || "",
-    lostMembers: cancellations?.trueCancellationCount.toString() || "",
+    lostMembers: cancellations?.lostMemberCount.toString() || "",
     totalMembers: allPayments?.memberPayments.length.toString() || "", // Paying members from All Payments
     // Revenue by category (disabled for now)
     msOpenGymRevenue: "",
@@ -858,9 +858,10 @@ function OutputTemplate({ allPayments, newMembers, cancellations, membersOnHold,
   useEffect(() => {
     setData(prev => ({
       ...prev,
+      ptRevenue: allPayments?.totals.pt?.toFixed(2) || prev.ptRevenue,
       smallGrpRevenue: allPayments?.totals.small_grp?.toFixed(2) || prev.smallGrpRevenue,
       newMembersCount: newMembers?.confirmedNewMembers.length.toString() || prev.newMembersCount,
-      lostMembers: cancellations?.trueCancellationCount.toString() || prev.lostMembers,
+      lostMembers: cancellations?.lostMemberCount.toString() || prev.lostMembers,
       totalMembers: allPayments?.memberPayments.length.toString() || prev.totalMembers, // Paying members
       frontEndRevenue: newMembers?.totalRevenue.toFixed(2) || prev.frontEndRevenue,
       allPaymentsProcessed: allPayments?.totalPayments.toFixed(2) || prev.allPaymentsProcessed,
@@ -945,7 +946,7 @@ function OutputTemplate({ allPayments, newMembers, cancellations, membersOnHold,
           <div className="divide-y divide-gray-100">
             <TemplateRow label="Quickbooks Total Revenue" value={data.quickbooksRevenue} onChange={(v) => updateField("quickbooksRevenue", v)} />
             <TemplateRow label="Open Gym Revenue" value={data.openGymRevenue} onChange={(v) => updateField("openGymRevenue", v)} disabled />
-            <TemplateRow label="PT Revenue" value={data.ptRevenue} onChange={(v) => updateField("ptRevenue", v)} disabled />
+            <TemplateRow label="PT Revenue" value={data.ptRevenue} onChange={(v) => updateField("ptRevenue", v)} highlight exportMode={exportMode} />
             <TemplateRow label="Sports Perf. Revenue" value={data.sportsPerfRevenue} onChange={(v) => updateField("sportsPerfRevenue", v)} disabled />
             <TemplateRow label="Small Grp Revenue" value={data.smallGrpRevenue} onChange={(v) => updateField("smallGrpRevenue", v)} highlight exportMode={exportMode} />
             <TemplateRow label="Remote Revenue" value={data.remoteRevenue} onChange={(v) => updateField("remoteRevenue", v)} disabled />

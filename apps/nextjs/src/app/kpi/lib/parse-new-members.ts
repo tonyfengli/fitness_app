@@ -65,8 +65,7 @@ export async function parseNewMembers(
           const amount = parseFloat(row["Payment Amount"]?.replace(/[^0-9.-]/g, "") || "0") || 0;
           const details = row["Payment Details"] || "";
 
-          // Skip refund marker rows
-          if (details.includes("Payment Refund")) continue;
+          // Let refunds net out naturally (don't skip negative amounts)
 
           if (memberId) {
             const current = paymentsByMemberId.get(memberId) || 0;
@@ -121,15 +120,15 @@ export async function parseNewMembers(
           console.log("New Members first row:", results.data[0]);
         }
 
-        // Detect reporting period from membership start dates
-        const startDates = results.data
-          .map(row => row["Membership Start Date"])
+        // Detect reporting period from member joining dates (not start dates, which can be backdated)
+        const joiningDates = results.data
+          .map(row => row["Member Joining Date"])
           .filter(Boolean)
           .sort();
 
-        if (startDates.length > 0) {
-          // Get year and month from first date to determine reporting period
-          const firstDate = startDates[0];
+        if (joiningDates.length > 0) {
+          // Get year and month from most common month to determine reporting period
+          const firstDate = joiningDates[0];
           const match = firstDate?.match(/^(\d{4})-(\d{2})/);
           if (match) {
             const [, year, month] = match;
