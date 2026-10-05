@@ -41,6 +41,7 @@
     "papaparse": "5.5.4",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
+    "recharts": "3.10.1",
     "superjson": "2.2.2",
     "zod": "catalog:"
   },

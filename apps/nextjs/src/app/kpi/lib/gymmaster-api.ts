@@ -6,7 +6,7 @@
 // Report IDs from GymMaster
 export const REPORT_IDS = {
   ALL_PAYMENTS: 103,
-  STARTING_MEMBERSHIPS: 12,
+  NEW_MEMBERS: 116, // Was STARTING_MEMBERSHIPS (12), but 116 has correct columns for parser
   CURRENT_MEMBERS: 1,
   CANCELLATIONS: 327,
   MEMBERS_ON_HOLD: 314,
@@ -23,7 +23,7 @@ export interface ReportRow {
 
 export interface FetchReportsResult {
   allPayments: ReportRow[];
-  startingMemberships: ReportRow[];
+  newMembers: ReportRow[];
   currentMembers: ReportRow[];
   cancellations: ReportRow[];
   membersOnHold: ReportRow[];
@@ -54,14 +54,17 @@ function getConfig(): GymMasterConfig {
 
 /**
  * Fetch a standard report from GymMaster Report API V2
+ * Includes retry logic with exponential backoff for rate limiting
  */
 async function fetchReport(
   config: GymMasterConfig,
   reportId: number,
   startDate: string,
-  endDate: string
+  endDate: string,
+  retryCount = 0
 ): Promise<ReportRow[]> {
   const url = `${config.baseUrl}/api/v2/report/standard_report`;
+  const MAX_RETRIES = 3;
 
   const response = await fetch(url, {
     method: "POST",
@@ -76,6 +79,14 @@ async function fetchReport(
       end_date: endDate,
     }),
   });
+
+  // Handle rate limiting with retry
+  if (response.status === 429 && retryCount < MAX_RETRIES) {
+    const waitTime = Math.pow(2, retryCount + 1) * 2000; // 4s, 8s, 16s
+    console.log(`[GymMaster API] Rate limited, waiting ${waitTime / 1000}s before retry ${retryCount + 1}/${MAX_RETRIES}...`);
+    await new Promise(r => setTimeout(r, waitTime));
+    return fetchReport(config, reportId, startDate, endDate, retryCount + 1);
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -115,6 +126,65 @@ function normalizeRow(row: ReportRow): Record<string, string> {
 }
 
 /**
+ * Normalize date from API format ("Sep 5 2026") to ISO format ("2026-09-05")
+ * Also handles dates that are already in ISO format
+ */
+function normalizeDate(dateStr: string): string {
+  if (!dateStr) return "";
+
+  // Already in YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // Convert "Sep 5 2026" or "Sep 15 2026" to "2026-09-05" or "2026-09-15"
+  const months: Record<string, string> = {
+    Jan: "01", Feb: "02", Mar: "03", Apr: "04",
+    May: "05", Jun: "06", Jul: "07", Aug: "08",
+    Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+  };
+
+  const match = dateStr.match(/^(\w+)\s+(\d+)\s+(\d{4})$/);
+  if (match) {
+    const [, monthName, day, year] = match;
+    const month = months[monthName!];
+    if (month) {
+      return `${year}-${month}-${day!.padStart(2, "0")}`;
+    }
+  }
+
+  // Return original if we can't parse it
+  return dateStr;
+}
+
+/**
+ * Fields that contain dates and need normalization
+ */
+const DATE_FIELDS = [
+  "Member Joining Date",
+  "Membership Start Date",
+  "Payment Date",
+  "Date Hold Starts",
+  "Date Hold Ends",
+  "Date Created",
+  "Cancellation Date",
+  "Date Cancelled",
+];
+
+/**
+ * Normalize dates in a row for parser compatibility
+ */
+function normalizeDatesInRow(row: Record<string, string>): Record<string, string> {
+  const result = { ...row };
+  for (const field of DATE_FIELDS) {
+    if (result[field]) {
+      result[field] = normalizeDate(result[field]);
+    }
+  }
+  return result;
+}
+
+/**
  * Convert API response to CSV string for compatibility with existing parsers
  */
 export function convertToCsv(rows: ReportRow[]): string {
@@ -134,8 +204,10 @@ export function convertToCsv(rows: ReportRow[]): string {
   // Data rows
   for (const row of rows) {
     const normalized = normalizeRow(row);
+    // Normalize dates to YYYY-MM-DD format for parser compatibility
+    const withDates = normalizeDatesInRow(normalized);
     const values = headers.map((header) => {
-      const value = normalized[header] || "";
+      const value = withDates[header] || "";
       // Escape values with commas or quotes
       if (value.includes(",") || value.includes('"') || value.includes("\n")) {
         return `"${value.replace(/"/g, '""')}"`;
@@ -167,7 +239,7 @@ function getMonthDateRange(
 
 /**
  * Fetch all reports needed for KPI calculation
- * Fetches both current month and previous month for ghost churn detection
+ * Fetches current month, previous month (X-1), and month X-2 for new member calculation
  */
 export async function fetchKpiReports(
   year: number,
@@ -175,13 +247,14 @@ export async function fetchKpiReports(
 ): Promise<{
   current: FetchReportsResult;
   previous: FetchReportsResult;
+  previous2: { allPayments: ReportRow[]; period: { startDate: string; endDate: string } };
 }> {
   const config = getConfig();
 
   // Calculate date ranges
   const currentPeriod = getMonthDateRange(year, month);
 
-  // Previous month
+  // Previous month (X-1)
   let prevYear = year;
   let prevMonth = month - 1;
   if (prevMonth < 1) {
@@ -190,39 +263,55 @@ export async function fetchKpiReports(
   }
   const previousPeriod = getMonthDateRange(prevYear, prevMonth);
 
+  // Month X-2 (for new member calculation)
+  let prev2Year = prevYear;
+  let prev2Month = prevMonth - 1;
+  if (prev2Month < 1) {
+    prev2Month = 12;
+    prev2Year = prevYear - 1;
+  }
+  const previous2Period = getMonthDateRange(prev2Year, prev2Month);
+
   console.log(`[GymMaster API] Fetching reports for ${year}-${month}`);
   console.log(`  Current period: ${currentPeriod.startDate} to ${currentPeriod.endDate}`);
-  console.log(`  Previous period: ${previousPeriod.startDate} to ${previousPeriod.endDate}`);
+  console.log(`  Previous period (X-1): ${previousPeriod.startDate} to ${previousPeriod.endDate}`);
+  console.log(`  Previous period (X-2): ${previous2Period.startDate} to ${previous2Period.endDate}`);
 
-  // Fetch all reports for both periods in parallel
+  // Fetch all reports for all periods in parallel
   const [
     currentAllPayments,
-    currentStartingMemberships,
+    currentNewMembers,
     currentCurrentMembers,
     currentCancellations,
     currentMembersOnHold,
     previousAllPayments,
     previousCurrentMembers,
+    previousMembersOnHold,
+    previous2AllPayments,
   ] = await Promise.all([
     // Current month - all 5 reports
     fetchReport(config, REPORT_IDS.ALL_PAYMENTS, currentPeriod.startDate, currentPeriod.endDate),
-    fetchReport(config, REPORT_IDS.STARTING_MEMBERSHIPS, currentPeriod.startDate, currentPeriod.endDate),
+    fetchReport(config, REPORT_IDS.NEW_MEMBERS, currentPeriod.startDate, currentPeriod.endDate),
     fetchReport(config, REPORT_IDS.CURRENT_MEMBERS, currentPeriod.startDate, currentPeriod.endDate),
     fetchReport(config, REPORT_IDS.CANCELLATIONS, currentPeriod.startDate, currentPeriod.endDate),
     fetchReport(config, REPORT_IDS.MEMBERS_ON_HOLD, currentPeriod.startDate, currentPeriod.endDate),
-    // Previous month - only need payments and members for ghost churn
+    // Previous month (X-1) - payments, members, and on hold for lost member calculation
     fetchReport(config, REPORT_IDS.ALL_PAYMENTS, previousPeriod.startDate, previousPeriod.endDate),
     fetchReport(config, REPORT_IDS.CURRENT_MEMBERS, previousPeriod.startDate, previousPeriod.endDate),
+    fetchReport(config, REPORT_IDS.MEMBERS_ON_HOLD, previousPeriod.startDate, previousPeriod.endDate),
+    // Month X-2 - only payments for new member calculation
+    fetchReport(config, REPORT_IDS.ALL_PAYMENTS, previous2Period.startDate, previous2Period.endDate),
   ]);
 
   console.log(`[GymMaster API] Fetched successfully:`);
-  console.log(`  Current: ${currentAllPayments.length} payments, ${currentStartingMemberships.length} starting, ${currentCurrentMembers.length} members, ${currentCancellations.length} cancellations, ${currentMembersOnHold.length} on hold`);
-  console.log(`  Previous: ${previousAllPayments.length} payments, ${previousCurrentMembers.length} members`);
+  console.log(`  Current: ${currentAllPayments.length} payments, ${currentNewMembers.length} new members, ${currentCurrentMembers.length} members, ${currentCancellations.length} cancellations, ${currentMembersOnHold.length} on hold`);
+  console.log(`  Previous (X-1): ${previousAllPayments.length} payments, ${previousCurrentMembers.length} members, ${previousMembersOnHold.length} on hold`);
+  console.log(`  Previous (X-2): ${previous2AllPayments.length} payments`);
 
   return {
     current: {
       allPayments: currentAllPayments,
-      startingMemberships: currentStartingMemberships,
+      newMembers: currentNewMembers,
       currentMembers: currentCurrentMembers,
       cancellations: currentCancellations,
       membersOnHold: currentMembersOnHold,
@@ -230,11 +319,15 @@ export async function fetchKpiReports(
     },
     previous: {
       allPayments: previousAllPayments,
-      startingMemberships: [], // Not needed for previous month
+      newMembers: [], // Not needed for previous month
       currentMembers: previousCurrentMembers,
       cancellations: [], // Not needed for previous month
-      membersOnHold: [], // Not needed for previous month
+      membersOnHold: previousMembersOnHold,
       period: previousPeriod,
+    },
+    previous2: {
+      allPayments: previous2AllPayments,
+      period: previous2Period,
     },
   };
 }
@@ -248,7 +341,7 @@ export async function fetchKpiReportsAsCsv(
 ): Promise<{
   current: {
     allPaymentsCsv: string;
-    startingMembershipsCsv: string;
+    newMembersCsv: string;
     currentMembersCsv: string;
     cancellationsCsv: string;
     membersOnHoldCsv: string;
@@ -257,6 +350,11 @@ export async function fetchKpiReportsAsCsv(
   previous: {
     allPaymentsCsv: string;
     currentMembersCsv: string;
+    membersOnHoldCsv: string;
+    period: { startDate: string; endDate: string };
+  };
+  previous2: {
+    allPaymentsCsv: string;
     period: { startDate: string; endDate: string };
   };
 }> {
@@ -265,7 +363,7 @@ export async function fetchKpiReportsAsCsv(
   return {
     current: {
       allPaymentsCsv: convertToCsv(reports.current.allPayments),
-      startingMembershipsCsv: convertToCsv(reports.current.startingMemberships),
+      newMembersCsv: convertToCsv(reports.current.newMembers),
       currentMembersCsv: convertToCsv(reports.current.currentMembers),
       cancellationsCsv: convertToCsv(reports.current.cancellations),
       membersOnHoldCsv: convertToCsv(reports.current.membersOnHold),
@@ -274,7 +372,12 @@ export async function fetchKpiReportsAsCsv(
     previous: {
       allPaymentsCsv: convertToCsv(reports.previous.allPayments),
       currentMembersCsv: convertToCsv(reports.previous.currentMembers),
+      membersOnHoldCsv: convertToCsv(reports.previous.membersOnHold),
       period: reports.previous.period,
+    },
+    previous2: {
+      allPaymentsCsv: convertToCsv(reports.previous2.allPayments),
+      period: reports.previous2.period,
     },
   };
 }

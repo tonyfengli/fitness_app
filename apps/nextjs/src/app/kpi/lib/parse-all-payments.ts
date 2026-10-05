@@ -166,7 +166,9 @@ export function parseAllPayments(csvContent: string): Promise<ParseResult> {
         }
 
         // Convert member payments map to sorted array (highest payer first)
+        // Only include members with positive NET payment (excludes fully refunded members)
         const memberPayments: MemberPayment[] = Array.from(memberPaymentsMap.entries())
+          .filter(([_, data]) => data.total > 0)
           .map(([memberId, data]) => ({
             memberId,
             name: data.name,
