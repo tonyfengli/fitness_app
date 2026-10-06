@@ -5,7 +5,7 @@
  * - New member in Month X if:
  *   1. Net positive payment in Month X
  *   2. AND no payment in Month X-1
- *   3. AND no payment in Month X-2
+ *   (Reactivations - members who skipped a month - are counted as new)
  *
  * Categories:
  * - "Gym Memberships" -> New Group Members
@@ -165,14 +165,14 @@ export function calculateNewMembers(
       // Must have positive payment in current month
       if (data.netPayment <= 0) return;
 
-      // Must NOT have payment in X-1 or X-2
+      // Must NOT have payment in X-1 (previous month)
       const prevPayment = prevNet.get(memberId)?.netPayment || 0;
-      const prev2Payment = prev2Net.get(memberId)?.netPayment || 0;
 
-      if (prevPayment <= 0 && prev2Payment <= 0) {
-        // Check if reactivation (had payments before X-2)
+      if (prevPayment <= 0) {
+        // Check if reactivation (had payments in X-2 or earlier)
+        const prev2Payment = prev2Net.get(memberId)?.netPayment || 0;
         const olderPayment = olderNet.get(memberId)?.netPayment || 0;
-        const isReactivation = olderPayment > 0;
+        const isReactivation = prev2Payment > 0 || olderPayment > 0;
 
         newMembers.push({
           memberId,

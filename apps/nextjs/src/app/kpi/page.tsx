@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import {
@@ -21,971 +21,77 @@ import {
   ReferenceLine,
 } from "recharts";
 
-import {
-  parseAllPayments,
-  formatCurrency,
-  CATEGORY_LABELS,
-  type ParseResult,
-  type CategoryKey,
-  type MemberPayment,
-} from "./lib/parse-all-payments";
-
-import {
-  parseNewMembers,
-  type NewMembersResult,
-} from "./lib/parse-new-members";
-
-import {
-  calculateNewMembers,
-  type NewMembersResult as PaymentBasedNewMembersResult,
-} from "./lib/calculate-new-members";
-
-import {
-  calculateLostMembers,
-  type LostMembersResult,
-} from "./lib/calculate-lost-members";
-
-import {
-  parseCancellations,
-  type CancellationsResult,
-} from "./lib/parse-cancellations";
-
-import {
-  parseMembersOnHold,
-  type MembersOnHoldResult,
-} from "./lib/parse-members-on-hold";
-
-import {
-  parseCurrentMembers,
-  type CurrentMembersResult,
-} from "./lib/parse-current-members";
-
-const REPORT_TYPES = [
-  { id: "all_payments", label: "All Payments", description: "Revenue by category" },
-  { id: "starting_memberships", label: "New Members", description: "Use 'Starting Memberships' report" },
-  { id: "current_members", label: "Current Members", description: "Membership history for validation" },
-  { id: "cancellations", label: "Cancellations Occurring in Period", description: "Select 'all memberships' + 'all cancellations'" },
-  { id: "members_on_hold", label: "Members on Hold", description: "Frozen members" },
-] as const;
-
-type ReportId = (typeof REPORT_TYPES)[number]["id"];
-
-type UploadedFiles = {
-  [K in ReportId]?: File;
-};
-
-// Track data source for each report
-type DataSource = "csv" | "api";
-type DataSources = {
-  [K in ReportId]?: DataSource;
-};
-
-// Define which reports are needed for each analysis
-const ANALYSIS_DEPENDENCIES = {
-  financial_stats: ["all_payments"],
-  new_members: ["all_payments", "starting_memberships", "current_members"],
-  retention: ["cancellations", "all_payments", "current_members"],
-  freeze: ["members_on_hold", "all_payments", "current_members"],
-  membership_stats: ["current_members", "all_payments", "members_on_hold", "cancellations"],
-} as const;
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
+import { formatCurrency } from "./lib/parse-all-payments";
+import { calculateNewMembers } from "./lib/calculate-new-members";
+import { calculateLostMembers } from "./lib/calculate-lost-members";
 
 export default function KPIPage() {
-  const [files, setFiles] = useState<UploadedFiles>({});
-  const [fileContents, setFileContents] = useState<Record<string, string>>({});
-  const [dataSources, setDataSources] = useState<DataSources>({});
-  const [allPaymentsResult, setAllPaymentsResult] = useState<ParseResult | null>(null);
-  const [newMembersResult, setNewMembersResult] = useState<NewMembersResult | null>(null);
-  const [cancellationsResult, setCancellationsResult] = useState<CancellationsResult | null>(null);
-  const [membersOnHoldResult, setMembersOnHoldResult] = useState<MembersOnHoldResult | null>(null);
-  const [currentMembersResult, setCurrentMembersResult] = useState<CurrentMembersResult | null>(null);
-  const [paymentBasedNewMembers, setPaymentBasedNewMembers] = useState<PaymentBasedNewMembersResult | null>(null);
-  const [lostMembersResult, setLostMembersResult] = useState<LostMembersResult | null>(null);
-  const [prevMonthPayments, setPrevMonthPayments] = useState<string>("");
-  const [prev2MonthPayments, setPrev2MonthPayments] = useState<string>("");
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  // API sync state
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-indexed
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-
-  const handleApiSync = async () => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      const response = await fetch(
-        `/api/kpi/fetch-reports?month=${selectedMonth}&year=${selectedYear}`
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const { data } = await response.json();
-
-      // Populate file contents from API response
-      setFileContents((prev) => ({
-        ...prev,
-        all_payments: data.current.allPaymentsCsv,
-        starting_memberships: data.current.newMembersCsv, // API returns New Members (ID 116)
-        current_members: data.current.currentMembersCsv,
-        cancellations: data.current.cancellationsCsv,
-        members_on_hold: data.current.membersOnHoldCsv,
-      }));
-
-      // Store previous month payment data for new member calculation
-      setPrevMonthPayments(data.previous.allPaymentsCsv);
-      setPrev2MonthPayments(data.previous2.allPaymentsCsv);
-
-      // Calculate payment-based new members (requires 3 months of payment data)
-      const paymentBasedResult = calculateNewMembers(
-        data.current.allPaymentsCsv,
-        data.previous.allPaymentsCsv,
-        data.previous2.allPaymentsCsv
-      );
-      setPaymentBasedNewMembers(paymentBasedResult);
-
-      // Calculate payment-based lost members
-      const lostResult = calculateLostMembers(
-        data.current.allPaymentsCsv,
-        data.previous.allPaymentsCsv,
-        data.previous2.allPaymentsCsv,
-        data.current.currentMembersCsv,
-        data.previous.currentMembersCsv,
-        data.current.membersOnHoldCsv,
-        data.previous.membersOnHoldCsv
-      );
-      setLostMembersResult(lostResult);
-
-      // Mark all as API-sourced
-      setDataSources({
-        all_payments: "api",
-        starting_memberships: "api",
-        current_members: "api",
-        cancellations: "api",
-        members_on_hold: "api",
-      });
-
-      // Clear any manually uploaded files (API takes precedence visually)
-      setFiles({});
-
-      setLastSyncTime(new Date());
-    } catch (error) {
-      console.error("API sync error:", error);
-      setSyncError(error instanceof Error ? error.message : "Unknown error");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleFileChange = async (reportId: ReportId, file: File | null) => {
-    if (file) {
-      setFiles((prev) => ({ ...prev, [reportId]: file }));
-
-      // Read file content
-      const content = await file.text();
-      setFileContents((prev) => ({ ...prev, [reportId]: content }));
-
-      // Mark as CSV-sourced (overrides API)
-      setDataSources((prev) => ({ ...prev, [reportId]: "csv" }));
-    } else {
-      const { [reportId]: _, ...restFiles } = files;
-      setFiles(restFiles);
-      const { [reportId]: __, ...restContents } = fileContents;
-      setFileContents(restContents);
-      const { [reportId]: ___, ...restSources } = dataSources;
-      setDataSources(restSources);
-    }
-  };
-
-  // Check if dependencies are met for each analysis
-  const canAnalyzeFinancialStats = ANALYSIS_DEPENDENCIES.financial_stats.every(
-    (dep) => fileContents[dep]
-  );
-  const canAnalyzeNewMembers = ANALYSIS_DEPENDENCIES.new_members.every(
-    (dep) => fileContents[dep]
-  );
-  const canAnalyzeRetention = ANALYSIS_DEPENDENCIES.retention.every(
-    (dep) => fileContents[dep]
-  );
-  const canAnalyzeFreeze = ANALYSIS_DEPENDENCIES.freeze.every(
-    (dep) => fileContents[dep]
-  );
-  const canAnalyzeMembershipStats = ANALYSIS_DEPENDENCIES.membership_stats.every(
-    (dep) => fileContents[dep]
-  );
-
-  // Run analysis when dependencies are met
-  useEffect(() => {
-    if (canAnalyzeFinancialStats && fileContents.all_payments) {
-      parseAllPayments(fileContents.all_payments).then(setAllPaymentsResult);
-    } else {
-      setAllPaymentsResult(null);
-    }
-  }, [canAnalyzeFinancialStats, fileContents.all_payments]);
-
-  useEffect(() => {
-    if (canAnalyzeNewMembers) {
-      parseNewMembers(
-        fileContents.starting_memberships!,
-        fileContents.all_payments!,
-        fileContents.current_members!
-      ).then(setNewMembersResult);
-    } else {
-      setNewMembersResult(null);
-    }
-  }, [canAnalyzeNewMembers, fileContents]);
-
-  useEffect(() => {
-    if (canAnalyzeRetention) {
-      parseCancellations(
-        fileContents.cancellations!,
-        fileContents.all_payments!,
-        fileContents.current_members!
-      ).then(setCancellationsResult);
-    } else {
-      setCancellationsResult(null);
-    }
-  }, [canAnalyzeRetention, fileContents]);
-
-  useEffect(() => {
-    if (canAnalyzeFreeze) {
-      parseMembersOnHold(
-        fileContents.members_on_hold!,
-        fileContents.all_payments!,
-        fileContents.current_members!
-      ).then(setMembersOnHoldResult);
-    } else {
-      setMembersOnHoldResult(null);
-    }
-  }, [canAnalyzeFreeze, fileContents]);
-
-  useEffect(() => {
-    if (canAnalyzeMembershipStats) {
-      parseCurrentMembers(
-        fileContents.current_members!,
-        fileContents.all_payments!,
-        fileContents.members_on_hold!,
-        fileContents.cancellations!
-      ).then(setCurrentMembersResult);
-    } else {
-      setCurrentMembersResult(null);
-    }
-  }, [canAnalyzeMembershipStats, fileContents]);
-
-  const uploadedCount = Object.keys(files).length;
-  const allUploaded = uploadedCount === REPORT_TYPES.length;
-  const [activeTab, setActiveTab] = useState<"data" | "output" | "reporting">("data");
+  const [activeTab, setActiveTab] = useState<"overview" | "elev8" | "pnl">("overview");
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-12">
       <div className="mx-auto max-w-6xl">
-        <h1 className="text-3xl font-bold text-gray-900">KPI Report Generator</h1>
+        <h1 className="text-3xl font-bold text-gray-900">KPI Dashboard</h1>
         <p className="mt-2 text-gray-600">
-          Upload your Gym Master reports to generate the monthly KPI template.
+          Track performance metrics and generate reports for Elev8 HQ.
         </p>
 
         {/* Tab Navigation */}
         <div className="mt-6 border-b border-gray-200">
           <nav className="flex gap-4">
             <button
-              onClick={() => setActiveTab("data")}
+              onClick={() => setActiveTab("overview")}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "data"
+                activeTab === "overview"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              Data
+              Overview
             </button>
             <button
-              onClick={() => setActiveTab("output")}
+              onClick={() => setActiveTab("pnl")}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "output"
+                activeTab === "pnl"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              P&L
+            </button>
+            <button
+              onClick={() => setActiveTab("elev8")}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "elev8"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               For Elev8 HQ
             </button>
-            <button
-              onClick={() => setActiveTab("reporting")}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "reporting"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Reporting
-            </button>
           </nav>
         </div>
 
-        {/* Data Tab */}
-        {activeTab === "data" && (
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
-          {/* Upload Section */}
-          <div className="space-y-4">
-            {/* API Sync Header */}
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    {MONTHS.map((month, idx) => (
-                      <option key={month} value={idx + 1}>{month}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    {[2025, 2026, 2027].map((year) => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  onClick={handleApiSync}
-                  disabled={isSyncing}
-                  className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isSyncing ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Syncing...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Sync from GymMaster
-                    </>
-                  )}
-                </button>
-                {lastSyncTime && (
-                  <span className="text-xs text-blue-600">
-                    Last synced: {lastSyncTime.toLocaleTimeString()}
-                  </span>
-                )}
-              </div>
-              {syncError && (
-                <div className="mt-2 text-sm text-red-600">
-                  Error: {syncError}
-                </div>
-              )}
-            </div>
-
-            <h2 className="text-lg font-semibold text-gray-900">Upload Reports</h2>
-            <p className="text-sm text-gray-500">
-              Sync from GymMaster above, or upload CSVs manually to override specific reports.
-            </p>
-
-            {REPORT_TYPES.map((report) => (
-              <FileUploadSlot
-                key={report.id}
-                reportId={report.id}
-                label={report.label}
-                description={report.description}
-                file={files[report.id]}
-                dataSource={dataSources[report.id]}
-                hasContent={!!fileContents[report.id]}
-                onFileChange={(file) => handleFileChange(report.id, file)}
-              />
-            ))}
-          </div>
-
-          {/* Results Section */}
-          <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-gray-900">Parsed Results</h2>
-
-            {/* Financial Stats */}
-            <ResultCard
-              title="Financial Stats"
-              ready={canAnalyzeMembershipStats}
-              requiredReports={["All Payments", "Current Members", "Members on Hold", "Cancellations"]}
-            >
-              {allPaymentsResult && currentMembersResult && (
-                <AllPaymentsResults result={allPaymentsResult} memberStats={currentMembersResult} />
-              )}
-            </ResultCard>
-
-            {/* New Members (Payment-Based) */}
-            <ResultCard
-              title="New Members"
-              ready={!!paymentBasedNewMembers}
-              requiredReports={["All Payments (current + 2 prior months)"]}
-            >
-              {paymentBasedNewMembers && (
-                <NewMembersResults paymentBased={paymentBasedNewMembers} legacy={newMembersResult} />
-              )}
-            </ResultCard>
-
-            {/* Retention (Cancellations + Freeze) */}
-            <ResultCard
-              title="Retention"
-              ready={!!lostMembersResult || (canAnalyzeRetention && canAnalyzeFreeze)}
-              requiredReports={["All Payments (current + 2 prior months)", "Current Members", "Members on Hold"]}
-            >
-              {lostMembersResult ? (
-                <RetentionResults
-                  lostMembers={lostMembersResult}
-                  cancellations={cancellationsResult}
-                  freeze={membersOnHoldResult}
-                />
-              ) : cancellationsResult && membersOnHoldResult ? (
-                <RetentionResults
-                  cancellations={cancellationsResult}
-                  freeze={membersOnHoldResult}
-                />
-              ) : null}
-            </ResultCard>
-
-          </div>
-        </div>
+        {/* Elev8 HQ Tab */}
+        {activeTab === "elev8" && (
+          <OutputTemplate />
         )}
 
-        {/* Output Tab */}
-        {activeTab === "output" && (
-          <OutputTemplate
-            allPayments={allPaymentsResult}
-            newMembers={newMembersResult}
-            paymentBasedNewMembers={paymentBasedNewMembers}
-            lostMembers={lostMembersResult}
-            cancellations={cancellationsResult}
-            membersOnHold={membersOnHoldResult}
-            currentMembers={currentMembersResult}
-          />
+        {/* P&L Tab */}
+        {activeTab === "pnl" && (
+          <PnLTab />
         )}
 
-        {/* Reporting Tab */}
-        {activeTab === "reporting" && (
-          <ReportingTab
-            allPayments={allPaymentsResult}
-            paymentBasedNewMembers={paymentBasedNewMembers}
-            lostMembers={lostMembersResult}
-            membersOnHold={membersOnHoldResult}
-            currentMembers={currentMembersResult}
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-          />
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <ReportingTab />
         )}
       </div>
     </div>
   );
 }
 
-function StatusDot({ ready }: { ready: boolean }) {
-  return (
-    <span
-      className={`inline-block h-2 w-2 rounded-full ${
-        ready ? "bg-green-500" : "bg-gray-300"
-      }`}
-    />
-  );
-}
-
-function FileUploadSlot({
-  reportId,
-  label,
-  description,
-  file,
-  dataSource,
-  hasContent,
-  onFileChange,
-}: {
-  reportId: string;
-  label: string;
-  description: string;
-  file?: File;
-  dataSource?: "csv" | "api";
-  hasContent?: boolean;
-  onFileChange: (file: File | null) => void;
-}) {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0] ?? null;
-    onFileChange(selectedFile);
-  };
-
-  const handleRemove = () => {
-    onFileChange(null);
-  };
-
-  // Determine display state
-  const isFromApi = dataSource === "api" && hasContent && !file;
-  const isFromCsv = file !== undefined;
-
-  return (
-    <div className={`rounded-lg border p-4 ${
-      isFromApi ? "border-blue-200 bg-blue-50" :
-      isFromCsv ? "border-green-200 bg-green-50" :
-      "border-gray-200 bg-white"
-    }`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium text-gray-900">{label}</h3>
-            {isFromApi && (
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                API
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-gray-500">{description}</p>
-        </div>
-        {file ? (
-          <div className="flex items-center gap-2">
-            <span className="max-w-32 truncate text-sm text-green-600">{file.name}</span>
-            <button
-              onClick={handleRemove}
-              className="text-sm text-red-600 hover:text-red-500"
-            >
-              Remove
-            </button>
-          </div>
-        ) : isFromApi ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-blue-600">Synced</span>
-            <label className="cursor-pointer rounded-md bg-white border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
-              Override
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={handleChange}
-                className="hidden"
-              />
-            </label>
-          </div>
-        ) : (
-          <label className="cursor-pointer rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
-            Upload CSV
-            <input
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={handleChange}
-              className="hidden"
-            />
-          </label>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ResultCard({
-  title,
-  ready,
-  requiredReports,
-  children,
-}: {
-  title: string;
-  ready: boolean;
-  requiredReports: string[];
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-medium text-gray-900">{title}</h3>
-        <StatusDot ready={ready} />
-      </div>
-
-      {ready ? (
-        children
-      ) : (
-        <div className="text-sm text-gray-500">
-          Waiting for: {requiredReports.join(", ")}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AllPaymentsResults({ result, memberStats }: { result: ParseResult; memberStats: CurrentMembersResult }) {
-  const [showMembers, setShowMembers] = useState(false);
-  const [showUnexplained, setShowUnexplained] = useState(false);
-
-  const nonZeroCategories = (Object.entries(result.totals) as [CategoryKey, number][])
-    .filter(([key, amount]) => amount !== 0 && key !== "unmapped");
-
-  return (
-    <div>
-      {/* Revenue Summary */}
-      <div className="mb-4 rounded-md bg-green-50 p-3">
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-green-700">Gross Payments:</span>
-            <span className="font-medium text-green-900">{formatCurrency(result.grossPayments)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-red-600">Refunds:</span>
-            <span className="font-medium text-red-600">-{formatCurrency(result.totalRefunds)}</span>
-          </div>
-          <div className="flex justify-between border-t border-green-200 pt-1 mt-1">
-            <span className="text-green-800 font-medium">Net Revenue:</span>
-            <span className="font-bold text-green-900">{formatCurrency(result.totalPayments)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Member Counts */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="rounded-lg bg-green-50 p-3 text-center">
-          <div className="text-2xl font-bold text-green-900">{result.memberPayments.length}</div>
-          <div className="text-xs text-green-700">Paid</div>
-        </div>
-        <div className="rounded-lg bg-gray-100 p-3 text-center">
-          <div className="text-2xl font-bold text-gray-900">{memberStats.freeMembers}</div>
-          <div className="text-xs text-gray-600">Free/Comp</div>
-        </div>
-      </div>
-
-      {/* Needs Investigation */}
-      {memberStats.missingUnexplained.length > 0 && (
-        <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3">
-          <button
-            onClick={() => setShowUnexplained(!showUnexplained)}
-            className="flex w-full items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-red-800">Needs Investigation</span>
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
-                {memberStats.missingUnexplained.length}
-              </span>
-            </div>
-            <span className="text-red-400">{showUnexplained ? "▲" : "▼"}</span>
-          </button>
-          <p className="mt-1 text-xs text-red-600">
-            Members with fee &gt; $0 who didn't pay and aren't on hold or cancelled
-          </p>
-
-          {showUnexplained && (
-            <div className="mt-3 space-y-1">
-              {memberStats.missingUnexplained.map((m, i) => (
-                <div key={i} className="flex justify-between rounded bg-white p-2 text-xs">
-                  <div className="flex-1">
-                    <span className="font-medium text-gray-900">{m.name}</span>
-                    <div className="text-gray-500 truncate">{m.membershipType}</div>
-                  </div>
-                  <div className="text-right text-red-600 font-medium">
-                    {formatCurrency(m.expectedFee)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* By Category - Expandable */}
-      {nonZeroCategories.length > 0 && (
-        <div className="border-t pt-4">
-          <h4 className="mb-2 text-sm font-medium text-gray-700">By Category</h4>
-          <div className="space-y-1">
-            {nonZeroCategories.map(([category, amount]) => (
-              <div key={category} className="flex justify-between text-sm">
-                <span className="text-gray-600">{CATEGORY_LABELS[category]}</span>
-                <span className={amount < 0 ? "text-red-600" : "text-gray-900"}>
-                  {formatCurrency(amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Paying Members List - Expandable */}
-      <div className="mt-4 border-t pt-4">
-        <button
-          onClick={() => setShowMembers(!showMembers)}
-          className="flex w-full items-center justify-between text-sm text-gray-500 hover:text-gray-700"
-        >
-          <span>View paying members list</span>
-          <span>{showMembers ? "▲" : "▼"}</span>
-        </button>
-
-        {showMembers && (
-          <div className="mt-2 max-h-64 overflow-y-auto">
-            <div className="space-y-1">
-              {result.memberPayments.map((member) => (
-                <div key={member.memberId} className="flex justify-between text-sm">
-                  <span className="text-gray-600 truncate max-w-48">{member.name}</span>
-                  <span className={member.totalPaid < 0 ? "text-red-600" : "text-gray-900"}>
-                    {formatCurrency(member.totalPaid)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function NewMembersResults({
-  paymentBased,
-  legacy
-}: {
-  paymentBased: PaymentBasedNewMembersResult;
-  legacy: NewMembersResult | null;
-}) {
-  const [showGroupMembers, setShowGroupMembers] = useState(false);
-  const [showPtClients, setShowPtClients] = useState(false);
-
-  return (
-    <div>
-      {/* Summary Grid */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="rounded-lg bg-green-50 p-3 text-center">
-          <div className="text-2xl font-bold text-green-900">{paymentBased.groupMemberCount}</div>
-          <div className="text-xs text-green-700">New Group Members</div>
-          <div className="text-sm font-medium text-green-800 mt-1">{formatCurrency(paymentBased.groupMemberRevenue)}</div>
-        </div>
-        <div className="rounded-lg bg-purple-50 p-3 text-center">
-          <div className="text-2xl font-bold text-purple-900">{paymentBased.ptClientCount}</div>
-          <div className="text-xs text-purple-700">New PT Clients</div>
-          <div className="text-sm font-medium text-purple-800 mt-1">{formatCurrency(paymentBased.ptClientRevenue)}</div>
-        </div>
-      </div>
-
-      {/* Total Front End Revenue */}
-      <div className="flex justify-between items-center py-2 border-t border-b mb-4">
-        <span className="text-sm font-medium text-gray-700">Total Front End Revenue</span>
-        <span className="text-lg font-bold text-green-600">
-          {formatCurrency(paymentBased.groupMemberRevenue + paymentBased.ptClientRevenue)}
-        </span>
-      </div>
-
-      {/* New Group Members List */}
-      {paymentBased.newGroupMembers.length > 0 && (
-        <div className="mb-3">
-          <button
-            onClick={() => setShowGroupMembers(!showGroupMembers)}
-            className="flex w-full items-center justify-between text-sm text-gray-500 hover:text-gray-700"
-          >
-            <span>New Group Members ({paymentBased.groupMemberCount})</span>
-            <span>{showGroupMembers ? "▲" : "▼"}</span>
-          </button>
-          {showGroupMembers && (
-            <div className="mt-2 space-y-1 text-sm">
-              {paymentBased.newGroupMembers.map((m, i) => (
-                <div key={i} className="flex justify-between">
-                  <span className="text-gray-600">
-                    {m.name}
-                    {m.isReactivation && (
-                      <span className="ml-1 text-xs text-amber-600">(reactivation)</span>
-                    )}
-                  </span>
-                  <span className="text-gray-900">{formatCurrency(m.amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* New PT Clients List */}
-      {paymentBased.newPtClients.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowPtClients(!showPtClients)}
-            className="flex w-full items-center justify-between text-sm text-gray-500 hover:text-gray-700"
-          >
-            <span>New PT Clients ({paymentBased.ptClientCount})</span>
-            <span>{showPtClients ? "▲" : "▼"}</span>
-          </button>
-          {showPtClients && (
-            <div className="mt-2 space-y-1 text-sm">
-              {paymentBased.newPtClients.map((m, i) => (
-                <div key={i} className="flex justify-between">
-                  <span className="text-gray-600">
-                    {m.name}
-                    {m.isReactivation && (
-                      <span className="ml-1 text-xs text-amber-600">(reactivation)</span>
-                    )}
-                  </span>
-                  <span className="text-gray-900">{formatCurrency(m.amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RetentionResults({
-  lostMembers,
-  cancellations,
-  freeze
-}: {
-  lostMembers?: LostMembersResult;
-  cancellations?: CancellationsResult;
-  freeze?: MembersOnHoldResult;
-}) {
-  const [showDetails, setShowDetails] = useState(false);
-
-  // Use payment-based lost members if available, otherwise fall back to cancellation-based
-  const lostGroupCount = lostMembers?.lostGroupCount ?? 0;
-  const lostGroupRevenue = lostMembers?.lostGroupRevenue ?? 0;
-  const lostPtCount = lostMembers?.lostPtCount ?? 0;
-  const lostPtRevenue = lostMembers?.lostPtRevenue ?? 0;
-  const newlyOnHoldCount = lostMembers?.newlyOnHoldCount ?? freeze?.freezeCount ?? 0;
-  const newlyOnHoldRevenue = lostMembers?.newlyOnHoldRevenue ?? freeze?.estimatedRevenueLost ?? 0;
-
-  const totalLostCount = lostGroupCount + lostPtCount;
-  const totalLostRevenue = lostGroupRevenue + lostPtRevenue;
-  const totalRevenueLost = totalLostRevenue + newlyOnHoldRevenue;
-
-  return (
-    <div>
-      {/* Summary Grid */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="rounded-lg bg-red-50 p-3 text-center">
-          <div className="text-2xl font-bold text-red-900">{lostGroupCount}</div>
-          <div className="text-xs text-red-700">Lost Group</div>
-          <div className="text-sm font-medium text-red-800 mt-1">{formatCurrency(lostGroupRevenue)}</div>
-        </div>
-        <div className="rounded-lg bg-purple-50 p-3 text-center">
-          <div className="text-2xl font-bold text-purple-900">{lostPtCount}</div>
-          <div className="text-xs text-purple-700">Lost PT</div>
-          <div className="text-sm font-medium text-purple-800 mt-1">{formatCurrency(lostPtRevenue)}</div>
-        </div>
-        <div className="rounded-lg bg-blue-50 p-3 text-center">
-          <div className="text-2xl font-bold text-blue-900">{newlyOnHoldCount}</div>
-          <div className="text-xs text-blue-700">Newly On Hold</div>
-          <div className="text-sm font-medium text-blue-800 mt-1">{formatCurrency(newlyOnHoldRevenue)}</div>
-        </div>
-      </div>
-
-      {/* Total Lost */}
-      <div className="flex justify-between items-center py-2 border-t border-b mb-4">
-        <span className="text-sm font-medium text-gray-700">Total Monthly Revenue Lost</span>
-        <span className="text-lg font-bold text-red-600">{formatCurrency(totalRevenueLost)}</span>
-      </div>
-
-      {/* Expandable Details */}
-      <button
-        onClick={() => setShowDetails(!showDetails)}
-        className="flex w-full items-center justify-between text-sm text-gray-500 hover:text-gray-700"
-      >
-        <span>View details</span>
-        <span>{showDetails ? "▲" : "▼"}</span>
-      </button>
-
-      {showDetails && (
-        <div className="mt-4 space-y-4">
-          {/* Lost Group Members */}
-          {lostMembers && lostMembers.lostGroupMembers.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-red-700 mb-2">Lost Group Members</div>
-              <div className="space-y-1">
-                {lostMembers.lostGroupMembers.map((m, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{m.name}</span>
-                    <span className="text-red-600">{formatCurrency(m.amount)}/mo</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Lost PT Clients */}
-          {lostMembers && lostMembers.lostPtClients.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-purple-700 mb-2">Lost PT Clients</div>
-              <div className="space-y-1">
-                {lostMembers.lostPtClients.map((m, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{m.name}</span>
-                    <span className="text-purple-600">{formatCurrency(m.amount)}/mo</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Newly On Hold */}
-          {lostMembers && lostMembers.newlyOnHold.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-blue-700 mb-2">Newly On Hold</div>
-              <div className="space-y-1">
-                {lostMembers.newlyOnHold.map((m, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{m.name}</span>
-                    <span className="text-blue-600">{formatCurrency(m.amount)}/mo</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Fallback to legacy cancellations if no payment-based data */}
-          {!lostMembers && cancellations && cancellations.trueCancellations.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-red-700 mb-2">Cancelled (from report)</div>
-              <div className="space-y-1">
-                {cancellations.trueCancellations.map((c, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{c.name}</span>
-                    <span className="text-red-600">{formatCurrency(c.estimatedMonthlyLoss)}/mo</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Fallback to legacy freeze if no payment-based data */}
-          {!lostMembers && freeze && freeze.membersOnHold.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-blue-700 mb-2">Frozen (from report)</div>
-              <div className="space-y-1">
-                {freeze.membersOnHold.map((m, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{m.name}</span>
-                    <span className="text-blue-600">{formatCurrency(m.revenueLost)}/mo</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Output Template Component
-interface OutputTemplateProps {
-  allPayments: ParseResult | null;
-  newMembers: NewMembersResult | null;
-  paymentBasedNewMembers: PaymentBasedNewMembersResult | null;
-  lostMembers: LostMembersResult | null;
-  cancellations: CancellationsResult | null;
-  membersOnHold: MembersOnHoldResult | null;
-  currentMembers: CurrentMembersResult | null;
-}
-
+// Output Template Component - reads from localStorage, connected to Reporting data
 interface TemplateData {
   // Financial Stats
   quickbooksRevenue: string;
@@ -1061,10 +167,168 @@ interface TemplateData {
   discountStaffMember: string;
 }
 
-function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostMembers, cancellations, membersOnHold, currentMembers }: OutputTemplateProps) {
+function OutputTemplate() {
   const templateRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMode, setExportMode] = useState(false);
+
+  // Load data from localStorage (same as Reporting tab)
+  const [monthsData, setMonthsData] = useState<MonthData[]>([]);
+  const [overrides, setOverrides] = useState<AllOverrides>({});
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
+
+  const FULL_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  // Load monthsData and overrides from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedReport = localStorage.getItem(REPORT_DATA_STORAGE_KEY);
+      if (storedReport) {
+        const parsed: PersistedReportData = JSON.parse(storedReport);
+        setMonthsData(parsed.monthsData);
+        // Default to last month in range
+        if (parsed.monthsData.length > 0) {
+          setSelectedMonthKey(parsed.monthsData[parsed.monthsData.length - 1]!.monthKey);
+        }
+      }
+
+      const storedOverrides = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+      if (storedOverrides) {
+        setOverrides(JSON.parse(storedOverrides));
+      }
+    } catch (e) {
+      console.error("Failed to load from localStorage:", e);
+    }
+  }, []);
+
+  // Compute derived data for selected month (same logic as ReportingTab)
+  const selectedMonthData = useMemo(() => {
+    if (!selectedMonthKey || monthsData.length === 0) return null;
+
+    const monthIndex = monthsData.findIndex(m => m.monthKey === selectedMonthKey);
+    if (monthIndex === -1) return null;
+
+    // Apply overrides and compute derived totals (same as ReportingTab)
+    let derivedTotal = 0;
+    for (let i = 0; i <= monthIndex; i++) {
+      const m = monthsData[i]!;
+      const monthOverrides = overrides[m.monthKey] || { excludeFromNew: [], excludeFromLost: [] };
+
+      // Filter new members
+      const filteredNew = m.newMembers.filter(
+        member => !monthOverrides.excludeFromNew.includes(member.memberId)
+      );
+
+      // Filter lost members (includes on hold)
+      const allLostWithHold = [
+        ...m.lostMembers,
+        ...m.onHoldMembers.map(oh => ({ ...oh, type: "hold" as const })),
+      ];
+      const filteredLost = allLostWithHold.filter(
+        member => !monthOverrides.excludeFromLost.includes(member.memberId)
+      );
+
+      if (i === 0) {
+        derivedTotal = m.totalMembers;
+      } else {
+        derivedTotal = derivedTotal + filteredNew.length - filteredLost.length;
+      }
+    }
+
+    const m = monthsData[monthIndex]!;
+    const monthOverrides = overrides[m.monthKey] || { excludeFromNew: [], excludeFromLost: [] };
+
+    // Calculate filtered counts for this month
+    const filteredNewMembers = m.newMembers.filter(
+      member => !monthOverrides.excludeFromNew.includes(member.memberId)
+    );
+    const allLostWithHold = [
+      ...m.lostMembers,
+      ...m.onHoldMembers.map(oh => ({ ...oh, type: "hold" as const })),
+    ];
+    const filteredLostMembers = allLostWithHold.filter(
+      member => !monthOverrides.excludeFromLost.includes(member.memberId)
+    );
+
+    return {
+      ...m,
+      derivedTotalMembers: derivedTotal,
+      filteredNewCount: filteredNewMembers.length,
+      filteredLostCount: filteredLostMembers.length,
+      filteredNewRevenue: filteredNewMembers.reduce((sum, x) => sum + x.amount, 0),
+      filteredLostRevenue: filteredLostMembers.reduce((sum, x) => sum + x.amount, 0),
+    };
+  }, [monthsData, overrides, selectedMonthKey]);
+
+  // Default template data (all empty)
+  const emptyTemplateData: TemplateData = {
+    quickbooksRevenue: "", openGymRevenue: "", ptRevenue: "", sportsPerfRevenue: "",
+    smallGrpRevenue: "", remoteRevenue: "", icRevenue: "", dayPass: "", accessPass: "",
+    packs: "", bookingFees: "", nsfFees: "", maintenanceFee: "", otherFees: "",
+    retailRevenue: "", signUpFees: "", classPass: "",
+    newMembersCount: "", newPtClientsCount: "", newPtClientsRevenue: "", lostMembers: "",
+    totalMembers: "", msOpenGymRevenue: "", msPtRevenue: "", msSportsPerfRevenue: "",
+    msRemoteRevenue: "", msAmbassador: "", msIc: "", totalArm: "", armOpenGym: "",
+    armPt: "", armSport: "", armSmallGrp: "", armRemote: "", armIc: "",
+    averageChurn: "", retention: "", leg: "", ltv: "",
+    totalLeads: "", totalAdSpend: "", frontEndRevenue: "", signUpFeesMarketing: "",
+    allPaymentsProcessed: "", taxPaid: "", ptMembershipSales: "", retailSales: "", tax: "",
+    freezeCount: "", freezeLost: "", cancelledCount: "", cancelledLost: "",
+    changesCount: "", changesLost: "", discountTimesUsed: "", discountStaffMember: "",
+  };
+
+  const [data, setData] = useState<TemplateData>(emptyTemplateData);
+
+  // Load manual entries for selected month from localStorage
+  useEffect(() => {
+    if (!selectedMonthKey) return;
+
+    try {
+      const stored = localStorage.getItem(`${ELEV8_MANUAL_STORAGE_PREFIX}${selectedMonthKey}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setData(prev => ({ ...emptyTemplateData, ...parsed }));
+      } else {
+        setData(emptyTemplateData);
+      }
+    } catch (e) {
+      console.error("Failed to load manual entries:", e);
+      setData(emptyTemplateData);
+    }
+  }, [selectedMonthKey]);
+
+  // Update auto-populated fields when selectedMonthData changes
+  useEffect(() => {
+    if (!selectedMonthData) return;
+
+    setData(prev => ({
+      ...prev,
+      // Auto-populated from Reporting derived data
+      ptRevenue: selectedMonthData.ptRevenue.toFixed(2),
+      smallGrpRevenue: selectedMonthData.smallGroupRevenue.toFixed(2),
+      newMembersCount: (selectedMonthData.newGroupMembersCount ?? selectedMonthData.filteredNewCount).toString(),
+      newPtClientsCount: (selectedMonthData.newPtClientsCount ?? 0).toString(),
+      newPtClientsRevenue: (selectedMonthData.newPtClientsRevenue ?? 0).toFixed(2),
+      lostMembers: selectedMonthData.filteredLostCount.toString(),
+      totalMembers: selectedMonthData.derivedTotalMembers.toString(),
+      frontEndRevenue: selectedMonthData.filteredNewRevenue.toFixed(2),
+      allPaymentsProcessed: selectedMonthData.totalRevenue.toFixed(2),
+      freezeCount: selectedMonthData.onHoldCount.toString(),
+      freezeLost: selectedMonthData.onHoldRevenue.toFixed(2),
+      cancelledCount: ((selectedMonthData.lostGroupCount ?? 0) + (selectedMonthData.lostPtCount ?? 0)).toString(),
+      cancelledLost: ((selectedMonthData.lostGroupRevenue ?? 0) + (selectedMonthData.lostPtRevenue ?? 0)).toFixed(2),
+    }));
+  }, [selectedMonthData]);
+
+  // Save manual entries to localStorage when data changes
+  const saveManualEntries = (newData: TemplateData) => {
+    if (!selectedMonthKey) return;
+    try {
+      localStorage.setItem(`${ELEV8_MANUAL_STORAGE_PREFIX}${selectedMonthKey}`, JSON.stringify(newData));
+    } catch (e) {
+      console.error("Failed to save manual entries:", e);
+    }
+  };
 
   const exportToPDF = async () => {
     if (!templateRef.current) return;
@@ -1072,7 +336,6 @@ function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostM
     setIsExporting(true);
     setExportMode(true);
 
-    // Wait for React to re-render with export mode (inputs become static text)
     await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
@@ -1092,10 +355,9 @@ function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostM
 
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth - 20; // 10mm margin on each side
+      const imgWidth = pageWidth - 20;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // If content is taller than one page, scale it down
       let finalWidth = imgWidth;
       let finalHeight = imgHeight;
       if (imgHeight > pageHeight - 20) {
@@ -1109,10 +371,11 @@ function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostM
 
       pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
 
-      // Generate filename with current date
-      const date = new Date();
-      const monthYear = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-      pdf.save(`KPI_Report_${monthYear.replace(" ", "_")}.pdf`);
+      // Use selected month for filename
+      const monthNum = parseInt(selectedMonthKey.split("-")[1] || "1") - 1;
+      const year = selectedMonthKey.split("-")[0] || new Date().getFullYear();
+      const monthName = FULL_MONTH_NAMES[monthNum] || "Unknown";
+      pdf.save(`KPI_Report_${monthName}_${year}.pdf`);
     } catch (error) {
       console.error("Error exporting PDF:", error);
     } finally {
@@ -1121,120 +384,12 @@ function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostM
     }
   };
 
-  // Initialize template data with parsed values where available
-  const [data, setData] = useState<TemplateData>(() => ({
-    // Financial Stats
-    quickbooksRevenue: "",
-    openGymRevenue: "",
-    ptRevenue: allPayments?.totals.pt?.toFixed(2) || "",
-    sportsPerfRevenue: "",
-    smallGrpRevenue: allPayments?.totals.small_grp?.toFixed(2) || "",
-    remoteRevenue: "",
-    icRevenue: "",
-    dayPass: "",
-    accessPass: "",
-    packs: "",
-    bookingFees: "",
-    nsfFees: "",
-    maintenanceFee: "",
-    otherFees: "",
-    retailRevenue: "",
-    signUpFees: "",
-    classPass: "",
-
-    // Membership Stats
-    newMembersCount: paymentBasedNewMembers?.groupMemberCount.toString() || "",
-    newPtClientsCount: paymentBasedNewMembers?.ptClientCount.toString() || "",
-    newPtClientsRevenue: paymentBasedNewMembers?.ptClientRevenue.toFixed(2) || "",
-    lostMembers: lostMembers
-      ? (lostMembers.lostGroupCount + lostMembers.lostPtCount).toString()
-      : cancellations?.lostMemberCount.toString() || "",
-    totalMembers: allPayments?.memberPayments.length.toString() || "", // Paying members from All Payments
-    // Revenue by category (disabled for now)
-    msOpenGymRevenue: "",
-    msPtRevenue: "",
-    msSportsPerfRevenue: "",
-    msRemoteRevenue: "",
-    msAmbassador: "",
-    msIc: "",
-    // ARM calculations (manual for now)
-    totalArm: "",
-    armOpenGym: "",
-    armPt: "",
-    armSport: "",
-    armSmallGrp: "",
-    armRemote: "",
-    armIc: "",
-    // Other metrics
-    averageChurn: "",
-    retention: "",
-    leg: "",
-    ltv: "",
-
-    // Sales & Marketing
-    totalLeads: "",
-    totalAdSpend: "",
-    frontEndRevenue: paymentBasedNewMembers ? (paymentBasedNewMembers.groupMemberRevenue + paymentBasedNewMembers.ptClientRevenue).toFixed(2) : "",
-    signUpFeesMarketing: "",
-
-    // All Payments Report
-    allPaymentsProcessed: allPayments?.totalPayments.toFixed(2) || "",
-    taxPaid: "",
-
-    // Numbers for Taxes
-    ptMembershipSales: "",
-    retailSales: "",
-    tax: "",
-
-    // Retention (use payment-based lost members if available)
-    freezeCount: lostMembers?.newlyOnHoldCount.toString() || membersOnHold?.freezeCount.toString() || "",
-    freezeLost: lostMembers?.newlyOnHoldRevenue.toFixed(2) || membersOnHold?.estimatedRevenueLost.toFixed(2) || "",
-    cancelledCount: lostMembers
-      ? (lostMembers.lostGroupCount + lostMembers.lostPtCount).toString()
-      : cancellations?.trueCancellationCount.toString() || "",
-    cancelledLost: lostMembers
-      ? (lostMembers.lostGroupRevenue + lostMembers.lostPtRevenue).toFixed(2)
-      : cancellations?.cancellationRevenueLost.toFixed(2) || "",
-    changesCount: cancellations?.membershipChangeCount.toString() || "",
-    changesLost: cancellations?.membershipChangeRevenueLost.toFixed(2) || "",
-
-    // Discount Codes
-    discountTimesUsed: "",
-    discountStaffMember: "",
-  }));
-
-  // Update data when parsed results change
-  useEffect(() => {
-    setData(prev => ({
-      ...prev,
-      ptRevenue: allPayments?.totals.pt?.toFixed(2) || prev.ptRevenue,
-      smallGrpRevenue: allPayments?.totals.small_grp?.toFixed(2) || prev.smallGrpRevenue,
-      newMembersCount: paymentBasedNewMembers?.groupMemberCount.toString() || prev.newMembersCount,
-      newPtClientsCount: paymentBasedNewMembers?.ptClientCount.toString() || prev.newPtClientsCount,
-      newPtClientsRevenue: paymentBasedNewMembers?.ptClientRevenue.toFixed(2) || prev.newPtClientsRevenue,
-      lostMembers: lostMembers
-        ? (lostMembers.lostGroupCount + lostMembers.lostPtCount).toString()
-        : cancellations?.lostMemberCount.toString() || prev.lostMembers,
-      totalMembers: allPayments?.memberPayments.length.toString() || prev.totalMembers, // Paying members
-      frontEndRevenue: paymentBasedNewMembers
-        ? (paymentBasedNewMembers.groupMemberRevenue + paymentBasedNewMembers.ptClientRevenue).toFixed(2)
-        : prev.frontEndRevenue,
-      allPaymentsProcessed: allPayments?.totalPayments.toFixed(2) || prev.allPaymentsProcessed,
-      freezeCount: lostMembers?.newlyOnHoldCount.toString() || membersOnHold?.freezeCount.toString() || prev.freezeCount,
-      freezeLost: lostMembers?.newlyOnHoldRevenue.toFixed(2) || membersOnHold?.estimatedRevenueLost.toFixed(2) || prev.freezeLost,
-      cancelledCount: lostMembers
-        ? (lostMembers.lostGroupCount + lostMembers.lostPtCount).toString()
-        : cancellations?.trueCancellationCount.toString() || prev.cancelledCount,
-      cancelledLost: lostMembers
-        ? (lostMembers.lostGroupRevenue + lostMembers.lostPtRevenue).toFixed(2)
-        : cancellations?.cancellationRevenueLost.toFixed(2) || prev.cancelledLost,
-      changesCount: cancellations?.membershipChangeCount.toString() || prev.changesCount,
-      changesLost: cancellations?.membershipChangeRevenueLost.toFixed(2) || prev.changesLost,
-    }));
-  }, [allPayments, paymentBasedNewMembers, lostMembers, cancellations, membersOnHold, currentMembers]);
-
   const updateField = (field: keyof TemplateData, value: string) => {
-    setData(prev => ({ ...prev, [field]: value }));
+    setData(prev => {
+      const newData = { ...prev, [field]: value };
+      saveManualEntries(newData);
+      return newData;
+    });
   };
 
   // Calculate totals
@@ -1265,10 +420,51 @@ function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostM
     ? ((parseFloat(data.allPaymentsProcessed) || 0) / (parseInt(data.totalMembers) || 1)).toFixed(2)
     : "";
 
+  // No data loaded - prompt user to load in Reporting tab
+  if (monthsData.length === 0) {
+    return (
+      <div className="mt-8 text-center py-12">
+        <div className="text-gray-500 mb-4">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No Report Data Loaded</h3>
+        <p className="text-gray-500 mb-4">Load data in the Reporting tab first, then come back here.</p>
+      </div>
+    );
+  }
+
+  // Get month display name
+  const getMonthDisplayName = (monthKey: string) => {
+    const [year, monthNum] = monthKey.split("-");
+    const monthIndex = parseInt(monthNum || "1") - 1;
+    return `${FULL_MONTH_NAMES[monthIndex]} ${year}`;
+  };
+
   return (
     <div className="mt-8">
-      {/* Export Button */}
-      <div className="mb-4 flex justify-end">
+      {/* Month Selector and Export Button */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">Month:</label>
+          <select
+            value={selectedMonthKey}
+            onChange={(e) => setSelectedMonthKey(e.target.value)}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {monthsData.map((m) => (
+              <option key={m.monthKey} value={m.monthKey}>
+                {getMonthDisplayName(m.monthKey)}
+              </option>
+            ))}
+          </select>
+          {selectedMonthData && (
+            <span className="text-xs text-gray-500">
+              (Data from Reporting tab with overrides applied)
+            </span>
+          )}
+        </div>
         <button
           onClick={exportToPDF}
           disabled={isExporting}
@@ -1379,7 +575,7 @@ function OutputTemplate({ allPayments, newMembers, paymentBasedNewMembers, lostM
             <TemplateRow label="New PT Clients" value={data.newPtClientsCount} readOnly isCurrency={false} />
             <TemplateRow label="Conversion Rate" value={conversionRate} readOnly />
             <TemplateRow label="Total Ad Spend" value={data.totalAdSpend} onChange={(v) => updateField("totalAdSpend", v)} prefix="$" />
-            <TemplateRow label="Front End Revenue (Group)" value={paymentBasedNewMembers?.groupMemberRevenue.toFixed(2) || ""} readOnly highlight exportMode={exportMode} />
+            <TemplateRow label="Front End Revenue (Group)" value={selectedMonthData?.newGroupMembersRevenue?.toFixed(2) || ""} readOnly highlight exportMode={exportMode} />
             <TemplateRow label="Front End Revenue (PT)" value={data.newPtClientsRevenue} readOnly highlight exportMode={exportMode} />
             <TemplateRow label="Sign Up Fees" value={data.signUpFeesMarketing} onChange={(v) => updateField("signUpFeesMarketing", v)} />
             <TemplateRow label="Total Front End Revenue" value={totalFrontEndRevenue.toFixed(2)} readOnly bold />
@@ -1610,53 +806,495 @@ function TemplateRowDouble({
 }
 
 // Reporting Tab Component - Multi-month view with charts
-interface ReportingTabProps {
-  allPayments: ParseResult | null;
-  paymentBasedNewMembers: PaymentBasedNewMembersResult | null;
-  lostMembers: LostMembersResult | null;
-  membersOnHold: MembersOnHoldResult | null;
-  currentMembers: CurrentMembersResult | null;
-  selectedMonth: number;
-  selectedYear: number;
+
+interface MemberRecord {
+  memberId: string;
+  name: string;
+  amount: number;
+}
+
+interface LostMemberRecord extends MemberRecord {
+  type: "loss" | "hold";
 }
 
 interface MonthData {
   month: string;
   year: number;
+  monthKey: string; // e.g., "2026-04" for localStorage keys
   ptRevenue: number;
   smallGroupRevenue: number;
   totalRevenue: number;
-  totalMembers: number;
+  totalMembers: number; // Raw count from payments (used as anchor for month 1)
   arm: number;
   groupRevenue: number;
   groupMembers: number;
   armGroups: number;
-  newMembers: { name: string; amount: number }[];
+  newMembers: MemberRecord[];
   newMembersCount: number;
   newMembersRevenue: number;
-  lostMembers: { name: string; amount: number; type: "loss" | "hold" }[];
+  // Separate group/PT new member counts for Elev8 HQ
+  newGroupMembersCount: number;
+  newGroupMembersRevenue: number;
+  newPtClientsCount: number;
+  newPtClientsRevenue: number;
+  lostMembers: LostMemberRecord[];
   lostMembersCount: number;
   lostMembersRevenue: number;
-  onHoldMembers: { name: string; amount: number }[];
+  // Separate group/PT lost member counts for Elev8 HQ
+  lostGroupCount: number;
+  lostGroupRevenue: number;
+  lostPtCount: number;
+  lostPtRevenue: number;
+  onHoldMembers: MemberRecord[];
   onHoldCount: number;
   onHoldRevenue: number;
+  payingMembers: MemberRecord[];
 }
 
-function ReportingTab({
-  selectedMonth,
-  selectedYear,
-}: ReportingTabProps) {
+// Override structure for localStorage
+interface MonthOverrides {
+  excludeFromNew: string[]; // member IDs
+  excludeFromLost: string[]; // member IDs
+}
+
+interface AllOverrides {
+  [monthKey: string]: MonthOverrides;
+}
+
+const OVERRIDES_STORAGE_KEY = "kpi-member-overrides";
+const REPORT_DATA_STORAGE_KEY = "kpi-report-data";
+const ELEV8_MANUAL_STORAGE_PREFIX = "kpi-elev8-manual-"; // + monthKey
+
+// Structure for persisted report data
+interface PersistedReportData {
+  monthsData: MonthData[];
+  startMonth: number;
+  endMonth: number;
+  year: number;
+  savedAt: string; // ISO timestamp
+}
+
+// P&L Tab Component - fetches from QuickBooks API
+interface PnLRow {
+  account: string;
+  amount: number;
+}
+
+interface PnLReport {
+  startDate: string;
+  endDate: string;
+  income: PnLRow[];
+  expenses: PnLRow[];
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+}
+
+function PnLTab() {
+  const [report, setReport] = useState<PnLReport | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [needsAuth, setNeedsAuth] = useState(false);
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-01-01`;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${now.getFullYear()}-${month}-${day}`;
+  });
+
+  const fetchPnL = async () => {
+    setIsLoading(true);
+    setError(null);
+    setNeedsAuth(false);
+
+    try {
+      const res = await fetch(`/api/quickbooks/pnl?start_date=${startDate}&end_date=${endDate}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.needsAuth) {
+          setNeedsAuth(true);
+        } else {
+          setError(data.error || "Failed to fetch P&L");
+        }
+        return;
+      }
+
+      setReport(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch P&L");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Check connection status on mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch("/api/quickbooks/status");
+        const data = await res.json();
+        if (data.connected) {
+          fetchPnL();
+        } else {
+          setNeedsAuth(true);
+        }
+      } catch {
+        setNeedsAuth(true);
+      }
+    };
+    checkStatus();
+  }, []);
+
+  const handleConnect = () => {
+    window.location.href = "/api/auth/quickbooks";
+  };
+
+  if (needsAuth) {
+    return (
+      <div className="mt-8">
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+          <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect QuickBooks</h3>
+          <p className="text-gray-600 mb-6">
+            Connect your QuickBooks account to pull P&L data directly into your dashboard.
+          </p>
+          <button
+            onClick={handleConnect}
+            className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+            </svg>
+            Connect to QuickBooks
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-8 space-y-6">
+      {/* Date Range Selector */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            onClick={fetchPnL}
+            disabled={isLoading}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {isLoading ? "Loading..." : "Fetch P&L"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      )}
+
+      {report && (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <div className="text-sm font-medium text-gray-500 mb-1">Total Income</div>
+              <div className="text-2xl font-bold text-green-600">
+                ${report.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <div className="text-sm font-medium text-gray-500 mb-1">Total Expenses</div>
+              <div className="text-2xl font-bold text-red-600">
+                ${report.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <div className="text-sm font-medium text-gray-500 mb-1">Net Income</div>
+              <div className={`text-2xl font-bold ${report.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+                ${report.netIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+
+          {/* Income & Expenses Tables */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Income */}
+            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+              <div className="px-4 py-3 bg-green-50 border-b border-green-100">
+                <h3 className="font-semibold text-green-800">Income</h3>
+              </div>
+              <div className="p-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 font-medium text-gray-600">Account</th>
+                      <th className="text-right py-2 font-medium text-gray-600">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.income.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-2 text-gray-900">{row.account}</td>
+                        <td className="py-2 text-right text-green-600 font-medium">
+                          ${row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-green-50">
+                      <td className="py-2 font-semibold text-gray-900">Total</td>
+                      <td className="py-2 text-right font-bold text-green-700">
+                        ${report.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Expenses */}
+            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+              <div className="px-4 py-3 bg-red-50 border-b border-red-100">
+                <h3 className="font-semibold text-red-800">Expenses</h3>
+              </div>
+              <div className="p-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 font-medium text-gray-600">Account</th>
+                      <th className="text-right py-2 font-medium text-gray-600">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.expenses.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-2 text-gray-900">{row.account}</td>
+                        <td className="py-2 text-right text-red-600 font-medium">
+                          ${row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-red-50">
+                      <td className="py-2 font-semibold text-gray-900">Total</td>
+                      <td className="py-2 text-right font-bold text-red-700">
+                        ${report.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Profit Margin */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 mb-1">Profit Margin</div>
+                <div className={`text-3xl font-bold ${report.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {report.totalIncome > 0
+                    ? ((report.netIncome / report.totalIncome) * 100).toFixed(1)
+                    : 0}%
+                </div>
+              </div>
+              <div className="text-right text-sm text-gray-500">
+                <div>{report.startDate} to {report.endDate}</div>
+                <div className="mt-1">
+                  <button
+                    onClick={handleConnect}
+                    className="text-blue-600 hover:text-blue-800 text-xs"
+                  >
+                    Reconnect QuickBooks
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {!report && !error && !isLoading && (
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
+          Select a date range and click "Fetch P&L" to load data from QuickBooks.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportingTab() {
   const [monthsData, setMonthsData] = useState<MonthData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [expandedCell, setExpandedCell] = useState<string | null>(null); // e.g., "new-Aug" or "lost-Jul"
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null); // e.g., "Aug" - expands both new and lost
+  const [membersViewMonth, setMembersViewMonth] = useState<string | null>(null); // e.g., "Aug" - shows paying members
+  const [showMemberDetails, setShowMemberDetails] = useState(false);
+  const [showChurnDetails, setShowChurnDetails] = useState(false);
   const [startMonth, setStartMonth] = useState(1); // January
   const [endMonth, setEndMonth] = useState(9); // September
-  const [reportYear, setReportYear] = useState(selectedYear);
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());
+  const [overrides, setOverrides] = useState<AllOverrides>({});
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const FULL_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  // Load overrides and report data from localStorage on mount
+  useEffect(() => {
+    try {
+      // Load overrides
+      const storedOverrides = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+      if (storedOverrides) {
+        setOverrides(JSON.parse(storedOverrides));
+      }
+
+      // Load report data
+      const storedReport = localStorage.getItem(REPORT_DATA_STORAGE_KEY);
+      if (storedReport) {
+        const parsed: PersistedReportData = JSON.parse(storedReport);
+        setMonthsData(parsed.monthsData);
+        setStartMonth(parsed.startMonth);
+        setEndMonth(parsed.endMonth);
+        setReportYear(parsed.year);
+        setLastSavedAt(parsed.savedAt);
+      }
+    } catch (e) {
+      console.error("Failed to load from localStorage:", e);
+    }
+  }, []);
+
+  // Save overrides to localStorage when they change
+  const saveOverrides = (newOverrides: AllOverrides) => {
+    setOverrides(newOverrides);
+    try {
+      localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(newOverrides));
+    } catch (e) {
+      console.error("Failed to save overrides to localStorage:", e);
+    }
+  };
+
+  // Toggle a member's exclusion from new or lost
+  const toggleExclusion = (monthKey: string, memberId: string, type: "new" | "lost") => {
+    const current = overrides[monthKey] || { excludeFromNew: [], excludeFromLost: [] };
+    const field = type === "new" ? "excludeFromNew" : "excludeFromLost";
+    const currentList = current[field];
+
+    const newList = currentList.includes(memberId)
+      ? currentList.filter(id => id !== memberId)
+      : [...currentList, memberId];
+
+    saveOverrides({
+      ...overrides,
+      [monthKey]: {
+        ...current,
+        [field]: newList,
+      },
+    });
+  };
+
+  // Check if a member is excluded
+  const isExcluded = (monthKey: string, memberId: string, type: "new" | "lost"): boolean => {
+    const monthOverrides = overrides[monthKey];
+    if (!monthOverrides) return false;
+    const field = type === "new" ? "excludeFromNew" : "excludeFromLost";
+    return monthOverrides[field].includes(memberId);
+  };
+
+  // Compute derived data with overrides applied
+  // - Filters out excluded members from new/lost lists
+  // - Calculates derived totals: month1 = anchor, month2+ = prev + new - lost
+  interface DerivedMonthData extends MonthData {
+    derivedTotalMembers: number;
+    filteredNewMembers: MemberRecord[];
+    filteredLostMembers: LostMemberRecord[];
+    filteredNewCount: number;
+    filteredLostCount: number;
+    filteredNewRevenue: number;
+    filteredLostRevenue: number;
+  }
+
+  const derivedData: DerivedMonthData[] = useMemo(() => {
+    if (monthsData.length === 0) return [];
+
+    const result: DerivedMonthData[] = [];
+
+    for (let i = 0; i < monthsData.length; i++) {
+      const m = monthsData[i]!;
+      const monthOverrides = overrides[m.monthKey] || { excludeFromNew: [], excludeFromLost: [] };
+
+      // Filter new members (exclude those in override list)
+      const filteredNew = m.newMembers.filter(
+        member => !monthOverrides.excludeFromNew.includes(member.memberId)
+      );
+
+      // Filter lost members (exclude those in override list) - includes on hold
+      const allLostWithHold = [
+        ...m.lostMembers,
+        ...m.onHoldMembers.map(oh => ({ ...oh, type: "hold" as const })),
+      ];
+      const filteredLost = allLostWithHold.filter(
+        member => !monthOverrides.excludeFromLost.includes(member.memberId)
+      );
+
+      const filteredNewCount = filteredNew.length;
+      const filteredLostCount = filteredLost.length;
+      const filteredNewRevenue = filteredNew.reduce((sum, x) => sum + x.amount, 0);
+      const filteredLostRevenue = filteredLost.reduce((sum, x) => sum + x.amount, 0);
+
+      // Calculate derived total
+      let derivedTotal: number;
+      if (i === 0) {
+        // First month: anchor = raw totalMembers from payments
+        derivedTotal = m.totalMembers;
+      } else {
+        // Subsequent months: prev + new - lost
+        const prevDerived = result[i - 1]!.derivedTotalMembers;
+        derivedTotal = prevDerived + filteredNewCount - filteredLostCount;
+      }
+
+      result.push({
+        ...m,
+        derivedTotalMembers: derivedTotal,
+        filteredNewMembers: filteredNew,
+        filteredLostMembers: filteredLost,
+        filteredNewCount,
+        filteredLostCount,
+        filteredNewRevenue,
+        filteredLostRevenue,
+      });
+    }
+
+    return result;
+  }, [monthsData, overrides]);
 
   const loadReportData = async () => {
     setIsLoading(true);
@@ -1689,20 +1327,22 @@ function ReportingTab({
         let ptRevenue = 0, smallGroupRevenue = 0, totalRevenue = 0, groupRevenue = 0;
 
         // First pass: aggregate payments by member
-        const memberTotals = new Map<string, { total: number; group: number }>();
+        const memberTotals = new Map<string, { name: string; total: number; group: number }>();
 
         for (const row of paymentRows) {
           const memberId = row["Member ID"] || "";
+          const memberName = row["Name"] || "";
           const amount = parseFloat((row["Payment Amount"] || "0").replace(/[$,]/g, "")) || 0;
           const details = row["Payment Details"] || "";
 
           totalRevenue += amount;
 
           if (!memberTotals.has(memberId)) {
-            memberTotals.set(memberId, { total: 0, group: 0 });
+            memberTotals.set(memberId, { name: memberName, total: 0, group: 0 });
           }
           const memberData = memberTotals.get(memberId)!;
           memberData.total += amount;
+          if (memberName && !memberData.name) memberData.name = memberName;
 
           if (details.includes("Personal Training")) {
             ptRevenue += amount;
@@ -1716,13 +1356,22 @@ function ReportingTab({
           }
         }
 
-        // Second pass: count only members with positive NET payments
+        // Second pass: count only members with positive NET payments and build paying members list
         let totalMembers = 0;
         let groupMembers = 0;
-        for (const [memberId, data] of memberTotals) {
-          if (memberId && data.total > 0) totalMembers++;
-          if (memberId && data.group > 0) groupMembers++;
+        const payingMembersList: MemberRecord[] = [];
+        for (const [memberId, mData] of memberTotals) {
+          if (memberId && mData.total > 0) {
+            totalMembers++;
+            payingMembersList.push({ memberId, name: mData.name || `Member ${memberId}`, amount: mData.total });
+          }
+          if (memberId && mData.group > 0) groupMembers++;
         }
+        // Sort by amount descending
+        payingMembersList.sort((a, b) => b.amount - a.amount);
+
+        // Create monthKey for this month (e.g., "2026-04")
+        const monthKey = `${reportYear}-${String(month).padStart(2, "0")}`;
 
         // Calculate new members
         const newMembersResult = calculateNewMembers(
@@ -1746,19 +1395,19 @@ function ReportingTab({
         const armGroups = groupMembers > 0 ? groupRevenue / groupMembers : 0;
 
         // Combine new members (group + PT)
-        const allNewMembers = [
-          ...newMembersResult.newGroupMembers.map(m => ({ name: m.name, amount: m.amount })),
-          ...newMembersResult.newPtClients.map(m => ({ name: m.name, amount: m.amount })),
+        const allNewMembers: MemberRecord[] = [
+          ...newMembersResult.newGroupMembers.map(m => ({ memberId: m.memberId, name: m.name, amount: m.amount })),
+          ...newMembersResult.newPtClients.map(m => ({ memberId: m.memberId, name: m.name, amount: m.amount })),
         ];
 
         // Lost members with type info (excluding newly on hold)
-        const allLostMembers: { name: string; amount: number; type: "loss" | "hold" }[] = [
-          ...lostMembersResult.lostGroupMembers.map(m => ({ name: m.name, amount: m.amount, type: m.type })),
-          ...lostMembersResult.lostPtClients.map(m => ({ name: m.name, amount: m.amount, type: m.type })),
+        const allLostMembers: LostMemberRecord[] = [
+          ...lostMembersResult.lostGroupMembers.map(m => ({ memberId: m.memberId, name: m.name, amount: m.amount, type: m.type })),
+          ...lostMembersResult.lostPtClients.map(m => ({ memberId: m.memberId, name: m.name, amount: m.amount, type: m.type })),
         ];
 
-        // Newly on hold members (separate)
-        const onHoldMembers = lostMembersResult.newlyOnHold.map(m => ({ name: m.name, amount: m.amount }));
+        // Newly on hold members (separate) - include in lost members list
+        const onHoldMembersList: MemberRecord[] = lostMembersResult.newlyOnHold.map(m => ({ memberId: m.memberId, name: m.name, amount: m.amount }));
 
         // Total lost = actual losses + newly on hold (for chart purposes)
         const totalLostCount = lostMembersResult.lostGroupCount + lostMembersResult.lostPtCount + lostMembersResult.newlyOnHoldCount;
@@ -1767,6 +1416,7 @@ function ReportingTab({
         results.push({
           month: monthNames[i]!,
           year: reportYear,
+          monthKey,
           ptRevenue,
           smallGroupRevenue,
           totalRevenue,
@@ -1778,16 +1428,43 @@ function ReportingTab({
           newMembers: allNewMembers,
           newMembersCount: newMembersResult.groupMemberCount + newMembersResult.ptClientCount,
           newMembersRevenue: newMembersResult.groupMemberRevenue + newMembersResult.ptClientRevenue,
+          // Separate group/PT counts for Elev8 HQ
+          newGroupMembersCount: newMembersResult.groupMemberCount,
+          newGroupMembersRevenue: newMembersResult.groupMemberRevenue,
+          newPtClientsCount: newMembersResult.ptClientCount,
+          newPtClientsRevenue: newMembersResult.ptClientRevenue,
           lostMembers: allLostMembers,
           lostMembersCount: totalLostCount,
           lostMembersRevenue: totalLostRevenue,
-          onHoldMembers,
+          // Separate group/PT lost counts for Elev8 HQ
+          lostGroupCount: lostMembersResult.lostGroupCount,
+          lostGroupRevenue: lostMembersResult.lostGroupRevenue,
+          lostPtCount: lostMembersResult.lostPtCount,
+          lostPtRevenue: lostMembersResult.lostPtRevenue,
+          onHoldMembers: onHoldMembersList,
           onHoldCount: lostMembersResult.newlyOnHoldCount,
           onHoldRevenue: lostMembersResult.newlyOnHoldRevenue,
+          payingMembers: payingMembersList,
         });
       }
 
       setMonthsData(results);
+
+      // Save to localStorage
+      const savedAt = new Date().toISOString();
+      const persistedData: PersistedReportData = {
+        monthsData: results,
+        startMonth,
+        endMonth,
+        year: reportYear,
+        savedAt,
+      };
+      try {
+        localStorage.setItem(REPORT_DATA_STORAGE_KEY, JSON.stringify(persistedData));
+        setLastSavedAt(savedAt);
+      } catch (e) {
+        console.error("Failed to save report data to localStorage:", e);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -1820,9 +1497,14 @@ function ReportingTab({
     return rows;
   };
 
-  const toggleCell = (type: string, month: string) => {
-    const key = `${type}-${month}`;
-    setExpandedCell(expandedCell === key ? null : key);
+  const toggleMonth = (month: string) => {
+    setExpandedMonth(expandedMonth === month ? null : month);
+    setMembersViewMonth(null); // Close members view when toggling month
+  };
+
+  const toggleMembersView = (month: string) => {
+    setMembersViewMonth(membersViewMonth === month ? null : month);
+    setExpandedMonth(null); // Close month details when toggling members view
   };
 
   if (monthsData.length === 0) {
@@ -1892,28 +1574,73 @@ function ReportingTab({
     );
   }
 
-  // Calculate growth percentages
-  const firstMembers = monthsData[0]?.totalMembers ?? 0;
-  const lastMembers = monthsData[monthsData.length - 1]?.totalMembers ?? 0;
+  // Calculate growth percentages using derived totals
+  const firstMembers = derivedData[0]?.derivedTotalMembers ?? 0;
+  const lastMembers = derivedData[derivedData.length - 1]?.derivedTotalMembers ?? 0;
   const memberGrowth = firstMembers > 0 ? Math.round(((lastMembers - firstMembers) / firstMembers) * 100) : 0;
 
-  const firstMonth = monthsData[0]?.month ?? "";
-  const lastMonth = monthsData[monthsData.length - 1]?.month ?? "";
-  const dataYear = monthsData[0]?.year ?? reportYear;
+  // Calculate average new members per month (exclude first month - founding members)
+  const ongoingMonths = derivedData.slice(1); // Skip January (founding month)
+  const totalNewMembers = ongoingMonths.reduce((sum, m) => sum + m.filteredNewCount, 0);
+  const avgNewMembersPerMonth = ongoingMonths.length > 0 ? Math.round(totalNewMembers / ongoingMonths.length * 10) / 10 : 0;
+
+  const firstMonth = derivedData[0]?.month ?? "";
+  const lastMonth = derivedData[derivedData.length - 1]?.month ?? "";
+  const dataYear = derivedData[0]?.year ?? reportYear;
+
+  const clearCache = () => {
+    try {
+      localStorage.removeItem(REPORT_DATA_STORAGE_KEY);
+      localStorage.removeItem(OVERRIDES_STORAGE_KEY);
+    } catch (e) {
+      console.error("Failed to clear cache:", e);
+    }
+    setMonthsData([]);
+    setOverrides({});
+    setLastSavedAt(null);
+  };
+
+  const formatSavedAt = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="mt-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">
-          Performance Report: {firstMonth}–{lastMonth} {dataYear}
-        </h2>
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Performance Report: {firstMonth}–{lastMonth} {dataYear}
+            </h2>
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="text-gray-400 hover:text-gray-600"
+              title="Change date range"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          </div>
+          {lastSavedAt && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Cached: {formatSavedAt(lastSavedAt)}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setMonthsData([])}
+            onClick={clearCache}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
-            Change Range
+            Clear Cache
           </button>
           <button
             onClick={loadReportData}
@@ -1925,24 +1652,81 @@ function ReportingTab({
         </div>
       </div>
 
+      {/* Inline Date Picker */}
+      {showDatePicker && (
+        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">From:</label>
+            <select
+              value={startMonth}
+              onChange={(e) => setStartMonth(parseInt(e.target.value))}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            >
+              {FULL_MONTH_NAMES.map((name, i) => (
+                <option key={i} value={i + 1}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">To:</label>
+            <select
+              value={endMonth}
+              onChange={(e) => setEndMonth(parseInt(e.target.value))}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            >
+              {FULL_MONTH_NAMES.map((name, i) => (
+                <option key={i} value={i + 1} disabled={i + 1 < startMonth}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Year:</label>
+            <select
+              value={reportYear}
+              onChange={(e) => setReportYear(parseInt(e.target.value))}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            >
+              <option value={2024}>2024</option>
+              <option value={2025}>2025</option>
+              <option value={2026}>2026</option>
+            </select>
+          </div>
+          <button
+            onClick={() => {
+              setShowDatePicker(false);
+              loadReportData();
+            }}
+            disabled={isLoading}
+            className="ml-auto px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+          >
+            {isLoading ? "Loading..." : "Load Data"}
+          </button>
+          <button
+            onClick={() => setShowDatePicker(false)}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Prepare chart data for Recharts */}
       {(() => {
-        const chartData = monthsData.map(m => ({
+        const chartData = derivedData.map(m => ({
           name: `${m.month} ${m.year}`,
-          totalMembers: m.totalMembers,
-          newMembers: m.newMembersCount,
-          lostMembers: -m.lostMembersCount, // Negative for display below axis
-          netChange: m.newMembersCount - m.lostMembersCount,
+          totalMembers: m.derivedTotalMembers,
+          newMembers: m.filteredNewCount,
+          lostMembers: -m.filteredLostCount, // Negative for display below axis
+          netChange: m.filteredNewCount - m.filteredLostCount,
           ptRevenue: m.ptRevenue,
-          smallGroupRevenue: m.smallGroupRevenue,
-          otherRevenue: m.totalRevenue - m.ptRevenue - m.smallGroupRevenue,
+          groupRevenue: m.groupRevenue, // Group Memberships (includes Small Group + Gym Memberships)
           totalRevenue: m.totalRevenue,
-          arm: Math.round(m.arm),
+          arm: m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0,
           armGroups: Math.round(m.armGroups),
         }));
 
-        const firstPt = monthsData[0]?.ptRevenue ?? 0;
-        const lastPt = monthsData[monthsData.length - 1]?.ptRevenue ?? 0;
+        const firstPt = derivedData[0]?.ptRevenue ?? 0;
+        const lastPt = derivedData[derivedData.length - 1]?.ptRevenue ?? 0;
 
         return (
           <>
@@ -1950,12 +1734,20 @@ function ReportingTab({
             <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
                 <h3 className="font-bold text-gray-900">Membership Overview</h3>
-                {memberGrowth > 0 && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-xs">
-                    <div className="text-green-700 font-semibold">{memberGrowth}% growth</div>
-                    <div className="text-green-600">{firstMembers} → {lastMembers} members</div>
-                  </div>
-                )}
+                <div className="flex gap-2">
+                  {avgNewMembersPerMonth > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-right">
+                      <div className="text-blue-700 font-semibold">{avgNewMembersPerMonth} avg</div>
+                      <div className="text-blue-600">new/month</div>
+                    </div>
+                  )}
+                  {memberGrowth > 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-xs text-right">
+                      <div className="text-green-700 font-semibold">{memberGrowth}% growth</div>
+                      <div className="text-green-600">{firstMembers} → {lastMembers} members</div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="p-4">
                 <ResponsiveContainer width="100%" height={320}>
@@ -2052,19 +1844,44 @@ function ReportingTab({
                 </div>
               </div>
 
-              {/* Member Details - Click on individual cells to expand */}
+              {/* Member Details - Collapsible */}
               <div className="border-t border-gray-100">
-                <div className="px-4 py-2 bg-gray-50 flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Member Details</span>
-                  <span className="text-xs text-gray-500">Click on any number to see details</span>
-                </div>
+                <button
+                  onClick={() => setShowMemberDetails(!showMemberDetails)}
+                  className="w-full px-4 py-2 bg-gray-50 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className={`w-4 h-4 text-gray-500 transition-transform ${showMemberDetails ? "rotate-90" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">Member Details</span>
+                  </div>
+                  <span className="text-xs text-gray-500">Click month to expand, click member to exclude</span>
+                </button>
+                {showMemberDetails && (
                 <div className="p-4 pt-2">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th className="text-left py-2 font-medium text-gray-600 w-32"></th>
-                        {monthsData.map(m => (
-                          <th key={m.month} className="text-center py-2 font-medium text-gray-600">{m.month}</th>
+                        {derivedData.map(m => (
+                          <th key={m.month} className="text-center py-2">
+                            <button
+                              onClick={() => toggleMonth(m.month)}
+                              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                                expandedMonth === m.month
+                                  ? "bg-blue-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              {m.month}
+                            </button>
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -2072,135 +1889,140 @@ function ReportingTab({
                       {/* New Members Row */}
                       <tr className="border-b border-gray-100">
                         <td className="py-2 text-green-600 font-medium">New Members</td>
-                        {monthsData.map(m => (
+                        {derivedData.map(m => (
                           <td key={m.month} className="text-center py-2">
-                            <button
-                              onClick={() => toggleCell("new", m.month)}
-                              className={`px-3 py-1 rounded-full font-medium transition-all ${
-                                expandedCell === `new-${m.month}`
-                                  ? "bg-green-500 text-white"
-                                  : "text-green-600 hover:bg-green-100"
-                              }`}
-                            >
-                              +{m.newMembersCount}
-                            </button>
+                            <span className={`px-3 py-1 rounded-full font-medium ${
+                              expandedMonth === m.month ? "bg-green-100" : ""
+                            } text-green-600`}>
+                              +{m.filteredNewCount}
+                            </span>
                           </td>
                         ))}
                       </tr>
 
-                      {/* Expanded New Members Details */}
-                      {monthsData.map(m => expandedCell === `new-${m.month}` && (
-                        <tr key={`new-detail-${m.month}`} className="bg-green-50">
-                          <td colSpan={monthsData.length + 1} className="p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className="text-sm font-semibold text-green-700">New Members in {m.month}</span>
-                              <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-                                {m.newMembersCount} member{m.newMembersCount !== 1 ? "s" : ""}
-                              </span>
-                            </div>
-                            {m.newMembers.length > 0 ? (
-                              <div className="grid gap-2">
-                                {m.newMembers.map((member, i) => (
-                                  <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 shadow-sm">
-                                    <span className="text-gray-700 font-medium">{member.name}</span>
-                                    <span className="text-green-600 font-semibold">{formatCurrency(member.amount)}/mo</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-gray-400 text-sm">No new members this month</div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-
                       {/* Lost/On Hold Row */}
                       <tr className="border-b border-gray-100">
                         <td className="py-2 text-red-600 font-medium">Lost / On Hold</td>
-                        {monthsData.map(m => {
-                          const lostCount = m.lostMembers.filter(x => x.type === "loss").length;
-                          const holdCount = m.onHoldCount + m.lostMembers.filter(x => x.type === "hold").length;
-                          const totalCount = m.lostMembersCount;
-                          return (
-                            <td key={m.month} className="text-center py-2">
-                              <button
-                                onClick={() => toggleCell("lost", m.month)}
-                                className={`px-3 py-1 rounded-full font-medium transition-all ${
-                                  expandedCell === `lost-${m.month}`
-                                    ? "bg-red-500 text-white"
-                                    : "text-red-600 hover:bg-red-100"
-                                }`}
-                              >
-                                {totalCount > 0 ? `-${totalCount}` : "0"}
-                              </button>
-                            </td>
-                          );
-                        })}
+                        {derivedData.map(m => (
+                          <td key={m.month} className="text-center py-2">
+                            <span className={`px-3 py-1 rounded-full font-medium ${
+                              expandedMonth === m.month ? "bg-red-100" : ""
+                            } text-red-600`}>
+                              {m.filteredLostCount > 0 ? `-${m.filteredLostCount}` : "0"}
+                            </span>
+                          </td>
+                        ))}
                       </tr>
 
-                      {/* Expanded Lost/Hold Details */}
-                      {monthsData.map(m => {
-                        if (expandedCell !== `lost-${m.month}`) return null;
+                      {/* Expanded Details for Selected Month */}
+                      {derivedData.map(m => {
+                        if (expandedMonth !== m.month) return null;
 
-                        const actualLosses = m.lostMembers.filter(x => x.type === "loss");
-                        const onHolds = [
-                          ...m.lostMembers.filter(x => x.type === "hold"),
-                          ...m.onHoldMembers.map(x => ({ ...x, type: "hold" as const }))
+                        // Get all members (including excluded) for display
+                        const allLostWithHold = [
+                          ...m.lostMembers,
+                          ...m.onHoldMembers.map(oh => ({ ...oh, type: "hold" as const })),
                         ];
 
                         return (
-                          <tr key={`lost-detail-${m.month}`} className="bg-gray-50">
-                            <td colSpan={monthsData.length + 1} className="p-4">
+                          <tr key={`detail-${m.month}`} className="bg-gray-50">
+                            <td colSpan={derivedData.length + 1} className="p-4">
                               <div className="grid md:grid-cols-2 gap-6">
-                                {/* Actual Losses */}
+                                {/* New Members */}
                                 <div>
                                   <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                                    <span className="text-sm font-semibold text-red-700">Cancelled / Lost</span>
-                                    <span className="text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                                      {actualLosses.length}
+                                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                                    <span className="text-sm font-semibold text-green-700">New Members</span>
+                                    <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                                      {m.filteredNewCount}
+                                    </span>
+                                    <span className="text-xs text-green-600 ml-auto">
+                                      +{formatCurrency(m.filteredNewRevenue)}/mo
                                     </span>
                                   </div>
-                                  {actualLosses.length > 0 ? (
+                                  {m.newMembers.length > 0 ? (
                                     <div className="grid gap-2">
-                                      {actualLosses.map((member, i) => (
-                                        <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 shadow-sm border-l-4 border-red-400">
-                                          <span className="text-gray-700 font-medium">{member.name}</span>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-red-600 font-semibold">{formatCurrency(member.amount)}/mo</span>
-                                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">LOST</span>
-                                          </div>
-                                        </div>
-                                      ))}
+                                      {m.newMembers.map((member) => {
+                                        const excluded = isExcluded(m.monthKey, member.memberId, "new");
+                                        return (
+                                          <button
+                                            key={member.memberId}
+                                            onClick={() => toggleExclusion(m.monthKey, member.memberId, "new")}
+                                            className={`flex items-center justify-between rounded-lg px-3 py-2 shadow-sm border-l-4 text-left transition-all ${
+                                              excluded
+                                                ? "bg-gray-100 border-gray-300 opacity-50"
+                                                : "bg-white border-green-400 hover:bg-green-50"
+                                            }`}
+                                          >
+                                            <span className={`font-medium ${excluded ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                                              {member.name}
+                                              {excluded && <span className="ml-2 text-xs text-gray-500 no-underline">(excluded)</span>}
+                                            </span>
+                                            <span className={`font-semibold ${excluded ? "text-gray-400" : "text-green-600"}`}>
+                                              {formatCurrency(member.amount)}/mo
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
                                     </div>
                                   ) : (
-                                    <div className="text-gray-400 text-sm bg-white rounded-lg px-3 py-2">No cancellations</div>
+                                    <div className="text-gray-400 text-sm bg-white rounded-lg px-3 py-2">No new members this month</div>
                                   )}
                                 </div>
 
-                                {/* On Hold */}
+                                {/* Lost / On Hold */}
                                 <div>
                                   <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                                    <span className="text-sm font-semibold text-amber-700">On Hold</span>
-                                    <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
-                                      {onHolds.length}
+                                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                                    <span className="text-sm font-semibold text-red-700">Lost / On Hold</span>
+                                    <span className="text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                      {m.filteredLostCount}
+                                    </span>
+                                    <span className="text-xs text-red-600 ml-auto">
+                                      -{formatCurrency(m.filteredLostRevenue)}/mo
                                     </span>
                                   </div>
-                                  {onHolds.length > 0 ? (
+                                  {allLostWithHold.length > 0 ? (
                                     <div className="grid gap-2">
-                                      {onHolds.map((member, i) => (
-                                        <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 shadow-sm border-l-4 border-amber-400">
-                                          <span className="text-gray-700 font-medium">{member.name}</span>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-amber-600 font-semibold">{formatCurrency(member.amount)}/mo</span>
-                                            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">HOLD</span>
-                                          </div>
-                                        </div>
-                                      ))}
+                                      {allLostWithHold.map((member) => {
+                                        const excluded = isExcluded(m.monthKey, member.memberId, "lost");
+                                        const isHold = member.type === "hold";
+                                        return (
+                                          <button
+                                            key={member.memberId}
+                                            onClick={() => toggleExclusion(m.monthKey, member.memberId, "lost")}
+                                            className={`flex items-center justify-between rounded-lg px-3 py-2 shadow-sm border-l-4 text-left transition-all ${
+                                              excluded
+                                                ? "bg-gray-100 border-gray-300 opacity-50"
+                                                : isHold
+                                                  ? "bg-white border-amber-400 hover:bg-amber-50"
+                                                  : "bg-white border-red-400 hover:bg-red-50"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <span className={`font-medium ${excluded ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                                                {member.name}
+                                              </span>
+                                              {!excluded && (
+                                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                                  isHold ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                                                }`}>
+                                                  {isHold ? "HOLD" : "LOST"}
+                                                </span>
+                                              )}
+                                              {excluded && <span className="text-xs text-gray-500">(excluded)</span>}
+                                            </div>
+                                            <span className={`font-semibold ${
+                                              excluded ? "text-gray-400" : isHold ? "text-amber-600" : "text-red-600"
+                                            }`}>
+                                              {formatCurrency(member.amount)}/mo
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
                                     </div>
                                   ) : (
-                                    <div className="text-gray-400 text-sm bg-white rounded-lg px-3 py-2">No members on hold</div>
+                                    <div className="text-gray-400 text-sm bg-white rounded-lg px-3 py-2">No lost members this month</div>
                                   )}
                                 </div>
                               </div>
@@ -2212,18 +2034,284 @@ function ReportingTab({
                       {/* Net Change Row */}
                       <tr className="bg-gray-50 font-medium">
                         <td className="py-2 text-gray-900">Net Change</td>
-                        {monthsData.map(m => {
-                          const net = m.newMembersCount - m.lostMembersCount;
+                        {derivedData.map(m => {
+                          const net = m.filteredNewCount - m.filteredLostCount;
                           return (
-                            <td key={m.month} className={`text-center py-2 font-bold ${net >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              {net >= 0 ? "+" : ""}{net}
+                            <td key={m.month} className="text-center py-2">
+                              <button
+                                onClick={() => toggleMembersView(m.month)}
+                                className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                                  membersViewMonth === m.month
+                                    ? "bg-blue-600 text-white"
+                                    : net >= 0
+                                      ? "text-green-600 hover:bg-green-100"
+                                      : "text-red-600 hover:bg-red-100"
+                                }`}
+                              >
+                                {net >= 0 ? "+" : ""}{net}
+                              </button>
                             </td>
                           );
                         })}
                       </tr>
+
+                      {/* Expanded Paying Members View */}
+                      {derivedData.map((m, idx) => {
+                        if (membersViewMonth !== m.month) return null;
+
+                        const net = m.filteredNewCount - m.filteredLostCount;
+                        const prevMonth = idx > 0 ? derivedData[idx - 1] : null;
+                        const derivedArm = m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0;
+
+                        return (
+                          <tr key={`members-${m.month}`} className="bg-blue-50">
+                            <td colSpan={derivedData.length + 1} className="p-4">
+                              {/* Summary Header */}
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+                                      <span className="text-white font-bold text-lg">{m.derivedTotalMembers}</span>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">Paying Members</div>
+                                      <div className="text-xs text-gray-500">{m.month} {m.year}</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Flow visualization */}
+                                  <div className="flex items-center gap-2 text-sm">
+                                    {prevMonth && (
+                                      <>
+                                        <span className="text-gray-500">{prevMonth.derivedTotalMembers}</span>
+                                        <span className="text-gray-400">→</span>
+                                      </>
+                                    )}
+                                    <span className="text-green-600 font-medium">+{m.filteredNewCount}</span>
+                                    <span className="text-gray-400">/</span>
+                                    <span className="text-red-600 font-medium">-{m.filteredLostCount}</span>
+                                    <span className="text-gray-400">=</span>
+                                    <span className={`font-bold ${net >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                      {net >= 0 ? "+" : ""}{net} net
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <div className="text-lg font-bold text-gray-900">{formatCurrency(m.totalRevenue)}</div>
+                                  <div className="text-xs text-gray-500">Total Revenue</div>
+                                </div>
+                              </div>
+
+                              {/* Stats Cards */}
+                              <div className="grid grid-cols-3 gap-3 mb-4">
+                                <div className="bg-white rounded-lg p-3 shadow-sm">
+                                  <div className="text-2xl font-bold text-blue-600">${derivedArm}</div>
+                                  <div className="text-xs text-gray-500">ARM (All)</div>
+                                </div>
+                                <div className="bg-white rounded-lg p-3 shadow-sm">
+                                  <div className="text-2xl font-bold text-purple-600">${Math.round(m.armGroups)}</div>
+                                  <div className="text-xs text-gray-500">ARM (Groups)</div>
+                                </div>
+                                <div className="bg-white rounded-lg p-3 shadow-sm">
+                                  <div className="text-2xl font-bold text-gray-700">{m.groupMembers}</div>
+                                  <div className="text-xs text-gray-500">Group Members</div>
+                                </div>
+                              </div>
+
+                              {/* Members List */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-gray-700">All Paying Members</span>
+                                  <span className="text-xs text-gray-500">{m.payingMembers.length} members</span>
+                                </div>
+                                <div className="bg-white rounded-lg shadow-sm max-h-64 overflow-y-auto">
+                                  <div className="divide-y divide-gray-100">
+                                    {m.payingMembers.map((member) => {
+                                      const isNew = m.filteredNewMembers.some(n => n.memberId === member.memberId);
+                                      return (
+                                        <div key={member.memberId} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-gray-700">{member.name}</span>
+                                            {isNew && (
+                                              <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">NEW</span>
+                                            )}
+                                          </div>
+                                          <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                )}
+              </div>
+
+              {/* Churn Rate Section */}
+              <div className="border-t border-gray-100">
+                <div className="px-4 py-3 bg-gray-50 flex justify-between items-center">
+                  <div className="text-left">
+                    <h4 className="font-semibold text-gray-900">Monthly Churn Rate</h4>
+                    <p className="text-xs text-gray-500">Lost members ÷ previous month's total</p>
+                  </div>
+                  {(() => {
+                    // Calculate average churn (excluding first month which has no previous)
+                    const churnRates = derivedData.slice(1).map((m, i) => {
+                      const prevTotal = derivedData[i]?.derivedTotalMembers || 0;
+                      return prevTotal > 0 ? (m.filteredLostCount / prevTotal) * 100 : 0;
+                    });
+                    const avgChurn = churnRates.length > 0
+                      ? churnRates.reduce((a, b) => a + b, 0) / churnRates.length
+                      : 0;
+                    return (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-right">
+                        <div className="text-orange-700 font-semibold">{avgChurn.toFixed(1)}% avg</div>
+                        <div className="text-orange-600 text-xs">monthly churn</div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {/* Churn Graph - Always visible */}
+                <div className="p-4">
+                  {(() => {
+                    // Build churn data - first month has no churn (no previous month)
+                    const churnData = derivedData.map((m, i) => {
+                      if (i === 0) {
+                        return {
+                          name: `${m.month} ${m.year}`,
+                          churn: null, // No churn for first month
+                          lostCount: m.filteredLostCount,
+                        };
+                      }
+                      const prevTotal = derivedData[i - 1]?.derivedTotalMembers || 0;
+                      const churnRate = prevTotal > 0 ? (m.filteredLostCount / prevTotal) * 100 : 0;
+                      return {
+                        name: `${m.month} ${m.year}`,
+                        churn: Math.round(churnRate * 10) / 10, // Round to 1 decimal
+                        lostCount: m.filteredLostCount,
+                      };
+                    });
+
+                    return (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <ComposedChart data={churnData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fontSize: 12, fill: '#666' }}
+                            axisLine={{ stroke: '#e0e0e0' }}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 12, fill: '#666' }}
+                            axisLine={{ stroke: '#e0e0e0' }}
+                            tickFormatter={(value) => `${value}%`}
+                            domain={[0, 'auto']}
+                          />
+                          <Tooltip
+                            formatter={(value: number | null, name: string) => {
+                              if (value === null) return ['N/A', 'Churn Rate'];
+                              if (name === 'churn') return [`${value}%`, 'Churn Rate'];
+                              return [value, name];
+                            }}
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e0e0e0' }}
+                          />
+                          <Bar
+                            dataKey="churn"
+                            fill="#f97316"
+                            radius={[4, 4, 0, 0]}
+                            name="churn"
+                          >
+                            <LabelList
+                              dataKey="churn"
+                              position="top"
+                              fill="#ea580c"
+                              fontWeight="bold"
+                              fontSize={12}
+                              formatter={(value: number | null) => value !== null ? `${value}%` : ''}
+                            />
+                          </Bar>
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    );
+                  })()}
+                </div>
+
+                {/* Churn Details Table - Collapsible */}
+                <button
+                  onClick={() => setShowChurnDetails(!showChurnDetails)}
+                  className="w-full px-4 py-2 bg-gray-50 flex items-center gap-2 hover:bg-gray-100 transition-colors border-t border-gray-100"
+                >
+                  <svg
+                    className={`w-4 h-4 text-gray-500 transition-transform ${showChurnDetails ? "rotate-90" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700">Churn Details</span>
+                </button>
+                {showChurnDetails && (
+                <div className="px-4 pb-4">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 font-medium text-gray-600 w-32"></th>
+                        {derivedData.map(m => (
+                          <th key={m.month} className="text-center py-2 font-medium text-gray-600">
+                            {m.month}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 text-gray-600">Churn %</td>
+                        {derivedData.map((m, i) => {
+                          if (i === 0) {
+                            return (
+                              <td key={m.month} className="text-center py-2 text-gray-400">
+                                —
+                              </td>
+                            );
+                          }
+                          const prevTotal = derivedData[i - 1]?.derivedTotalMembers || 0;
+                          const churnRate = prevTotal > 0 ? (m.filteredLostCount / prevTotal) * 100 : 0;
+                          const churnColor = churnRate > 20 ? "text-red-600" : churnRate > 10 ? "text-orange-600" : "text-green-600";
+                          return (
+                            <td key={m.month} className={`text-center py-2 font-semibold ${churnColor}`}>
+                              {churnRate.toFixed(1)}%
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 text-gray-600">Lost</td>
+                        {derivedData.map(m => (
+                          <td key={m.month} className="text-center py-2 text-red-600">
+                            {m.filteredLostCount}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-gray-600">Prev Total</td>
+                        {derivedData.map((m, i) => (
+                          <td key={m.month} className="text-center py-2 text-gray-500">
+                            {i === 0 ? "—" : derivedData[i - 1]?.derivedTotalMembers}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                )}
               </div>
             </div>
 
@@ -2232,9 +2320,9 @@ function ReportingTab({
               <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
                 <h3 className="font-bold text-gray-900">Revenue Breakdown by Source</h3>
                 {lastPt > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-right">
-                    <div className="text-red-600 font-semibold">PT revenue grew</div>
-                    <div className="text-red-600">from ${firstPt.toLocaleString()} to ${lastPt.toLocaleString()}</div>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-right">
+                    <div className="text-purple-700 font-semibold">PT Revenue</div>
+                    <div className="text-purple-600">${firstPt.toLocaleString()} → ${lastPt.toLocaleString()}</div>
                   </div>
                 )}
               </div>
@@ -2255,37 +2343,28 @@ function ReportingTab({
                     <Tooltip
                       formatter={(value: number, name: string) => {
                         const labels: Record<string, string> = {
-                          otherRevenue: 'Other Membership',
-                          smallGroupRevenue: 'Small Group',
+                          groupRevenue: 'Group Membership',
                           ptRevenue: 'PT'
                         };
                         return [`$${value.toLocaleString()}`, labels[name] || name];
                       }}
                       contentStyle={{ borderRadius: '8px', border: '1px solid #e0e0e0' }}
                     />
-                    <Bar dataKey="otherRevenue" stackId="a" fill="#d1d5db" name="otherRevenue">
+                    <Bar dataKey="groupRevenue" stackId="a" fill="#3b82f6" name="groupRevenue">
                       <LabelList
-                        dataKey="otherRevenue"
+                        dataKey="groupRevenue"
                         position="center"
-                        fill="#374151"
+                        fill="#ffffff"
+                        fontWeight="bold"
                         fontSize={11}
                         formatter={(value: number) => value > 500 ? `$${(value/1000).toFixed(1)}k` : ''}
                       />
                     </Bar>
-                    <Bar dataKey="smallGroupRevenue" stackId="a" fill="#fca5a5" name="smallGroupRevenue">
-                      <LabelList
-                        dataKey="smallGroupRevenue"
-                        position="center"
-                        fill="#991b1b"
-                        fontSize={11}
-                        formatter={(value: number) => value > 500 ? `$${(value/1000).toFixed(1)}k` : ''}
-                      />
-                    </Bar>
-                    <Bar dataKey="ptRevenue" stackId="a" fill="#ef4444" name="ptRevenue" radius={[4, 4, 0, 0]}>
+                    <Bar dataKey="ptRevenue" stackId="a" fill="#a855f7" name="ptRevenue" radius={[4, 4, 0, 0]}>
                       <LabelList
                         dataKey="ptRevenue"
                         position="top"
-                        fill="#dc2626"
+                        fill="#7c3aed"
                         fontSize={12}
                         fontWeight="bold"
                         formatter={(value: number) => value > 0 ? `$${(value/1000).toFixed(1)}k` : ''}
@@ -2295,16 +2374,12 @@ function ReportingTab({
                 </ResponsiveContainer>
                 <div className="flex justify-center gap-6 mt-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="w-4 h-4 bg-red-500 rounded-sm" />
-                    <span className="text-gray-600">PT Revenue</span>
+                    <span className="w-4 h-4 bg-blue-500 rounded-sm" />
+                    <span className="text-gray-600">Group Membership</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-4 h-4 bg-red-300 rounded-sm" />
-                    <span className="text-gray-600">Small Group</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-4 h-4 bg-gray-300 rounded-sm" />
-                    <span className="text-gray-600">Other</span>
+                    <span className="w-4 h-4 bg-purple-500 rounded-sm" />
+                    <span className="text-gray-600">PT</span>
                   </div>
                 </div>
               </div>
