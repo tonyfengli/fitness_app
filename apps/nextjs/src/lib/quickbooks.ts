@@ -4,10 +4,13 @@
  */
 
 import OAuthClient from "intuit-oauth";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, unlink } from "fs/promises";
 import { join } from "path";
 
 const TOKEN_FILE = join(process.cwd(), ".quickbooks-tokens.json");
+
+// Track if we've detected an invalid token (refresh failed)
+let tokenInvalidated = false;
 
 export interface QuickBooksTokens {
   accessToken: string;
@@ -107,12 +110,28 @@ export async function getValidTokens(): Promise<QuickBooksTokens | null> {
     };
 
     await saveTokens(newTokens);
+    tokenInvalidated = false;
     console.log("QuickBooks token refreshed successfully");
     return newTokens;
   } catch (err) {
     console.error("Failed to refresh QuickBooks token:", err);
+    // Mark token as invalidated and delete the file
+    tokenInvalidated = true;
+    try {
+      await unlink(TOKEN_FILE);
+      console.log("Deleted invalid QuickBooks token file");
+    } catch {
+      // File may not exist, ignore
+    }
     return null;
   }
+}
+
+/**
+ * Clear the invalidated flag (call after successful re-auth)
+ */
+export function clearTokenInvalidated(): void {
+  tokenInvalidated = false;
 }
 
 /**
@@ -255,6 +274,9 @@ function parseProfitAndLossReport(
  * Check if QuickBooks is connected
  */
 export async function isQuickBooksConnected(): Promise<boolean> {
+  // If we've detected an invalid token, return false immediately
+  if (tokenInvalidated) return false;
+
   const tokens = await loadTokens();
   if (!tokens) return false;
 

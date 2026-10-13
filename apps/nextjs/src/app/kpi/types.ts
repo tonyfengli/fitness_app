@@ -170,8 +170,11 @@ export interface StripeMonthData {
 // Administrative Tab types
 export interface RefundPaymentHistory {
   month: string;
+  monthKey: string;
   expected: number;
-  actual: number;
+  paid: number;      // Gross amount paid (before refunds)
+  refunded: number;  // Refund amount for this month (0 if none)
+  actual: number;    // Net amount (paid - refunded)
 }
 
 export interface GymMasterRefund {
@@ -181,17 +184,34 @@ export interface GymMasterRefund {
   refundAmount: number;
   reason: string;
   status: "on_track" | "needs_review";
+  paymentMethod: string;
+  isNonStripeAdjustment: boolean; // True if "No Payment / Adjustment" - not an actual Stripe refund
   paymentHistory: RefundPaymentHistory[];
+}
+
+export interface UnmatchedRefund {
+  source: "gymmaster" | "stripe";
+  date: string;
+  amount: number;
+  name: string;
+  paymentMethod?: string;
+  isAdjustment?: boolean;
+  reason?: string;
 }
 
 export interface MonthlyReconciliation {
   month: string;
-  gymMasterTotal: number;
+  monthKey: string; // "YYYY-MM" format for filtering
+  gymMasterTotal: number; // Excludes "No Payment / Adjustment" entries
   gymMasterCount: number;
   stripeTotal: number;
   stripeCount: number;
   variance: number;
   status: "reconciled" | "variance";
+  unmatchedRefunds: UnmatchedRefund[];
+  // "No Payment / Adjustment" entries (not actual Stripe refunds)
+  adjustmentsTotal: number;
+  adjustmentsCount: number;
 }
 
 export interface UnmatchedStripeRefund {
@@ -213,6 +233,11 @@ export interface AdminRefundsData {
     onTrackCount: number;
     reconciledMonths: number;
     totalMonths: number;
+    // Adjustment stats ("No Payment / Adjustment" entries)
+    adjustmentsCount: number;
+    adjustmentsAmount: number;
+    // Regular GymMaster total (for reconciliation)
+    regularGymMasterAmount: number;
   };
   monthlyReconciliation: MonthlyReconciliation[];
   refunds: GymMasterRefund[];

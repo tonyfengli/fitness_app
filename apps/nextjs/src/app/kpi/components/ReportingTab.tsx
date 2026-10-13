@@ -729,7 +729,7 @@ export function ReportingTab() {
               </svg>
               <span className="text-sm font-medium text-gray-700">Member Details</span>
             </div>
-            <span className="text-xs text-gray-500">Click month to expand, click member to exclude</span>
+            <span className="text-xs text-blue-500 font-medium">↓ Click a month below to see members</span>
           </button>
           {showMemberDetails && (
             <div className="p-4 pt-2">
@@ -741,11 +741,23 @@ export function ReportingTab() {
                       <th key={m.month} className="text-center py-2">
                         <button
                           onClick={() => toggleMonth(m.month)}
-                          className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                            expandedMonth === m.month ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"
+                          className={`group px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 mx-auto ${
+                            expandedMonth === m.month
+                              ? "bg-blue-600 text-white"
+                              : "text-gray-600 hover:bg-blue-50 hover:text-blue-600 border border-transparent hover:border-blue-200"
                           }`}
                         >
                           {m.month}
+                          <svg
+                            className={`w-3.5 h-3.5 transition-transform ${
+                              expandedMonth === m.month ? "rotate-180" : "group-hover:translate-y-0.5"
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
                         </button>
                       </th>
                     ))}
@@ -791,6 +803,12 @@ export function ReportingTab() {
                     return (
                       <tr key={`detail-${m.month}`} className="bg-gray-50">
                         <td colSpan={derivedData.length + 1} className="p-4">
+                          <div className="text-xs text-gray-500 mb-3 flex items-center gap-1">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Click a member name to exclude/include them from calculations
+                          </div>
                           <div className="grid md:grid-cols-2 gap-6">
                             {/* New Members */}
                             <div>

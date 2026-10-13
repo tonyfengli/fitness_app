@@ -42,9 +42,10 @@ export async function GET(request: NextRequest) {
     const report = await fetchProfitAndLoss(startDate, endDate);
 
     if (!report) {
+      // Token may have been invalidated - signal need for re-auth
       return NextResponse.json(
-        { error: "Failed to fetch P&L report" },
-        { status: 500 }
+        { error: "Failed to fetch P&L report. QuickBooks token may have expired.", needsAuth: true },
+        { status: 401 }
       );
     }
 

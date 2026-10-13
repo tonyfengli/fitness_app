@@ -17,53 +17,50 @@ import {
 import {
   PnLMonthData,
   MonthData,
-  StripeMonthData,
   PersistedPnLData,
   PersistedReportData,
 } from "../types";
 import {
   PNL_DATA_STORAGE_KEY,
-  STRIPE_DATA_STORAGE_KEY,
   REPORT_DATA_STORAGE_KEY,
   MONTH_NAMES,
 } from "../constants";
 
+interface SimplifiedPnLMonth {
+  month: string;
+  year: number;
+  revenue: number; // From GymMaster
+  expenses: number; // From QuickBooks
+  netIncome: number; // Calculated
+}
+
 export function PnLTab() {
-  const [monthsData, setMonthsData] = useState<PnLMonthData[]>([]);
+  const [qbData, setQbData] = useState<PnLMonthData[]>([]);
   const [gymMasterData, setGymMasterData] = useState<MonthData[]>([]);
-  const [stripeData, setStripeData] = useState<StripeMonthData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
-  const [startMonth, setStartMonth] = useState(1); // January
-  const [endMonth, setEndMonth] = useState(9); // September
+  const [startMonth, setStartMonth] = useState(1);
+  const [endMonth, setEndMonth] = useState(9);
   const [reportYear, setReportYear] = useState(2026);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [showVarianceBreakdown, setShowVarianceBreakdown] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
     try {
-      // Load P&L data
+      // Load QuickBooks P&L data (for expenses)
       const stored = localStorage.getItem(PNL_DATA_STORAGE_KEY);
       if (stored) {
         const parsed: PersistedPnLData = JSON.parse(stored);
-        setMonthsData(parsed.monthsData);
+        setQbData(parsed.monthsData);
         setStartMonth(parsed.startMonth);
         setEndMonth(parsed.endMonth);
         setReportYear(parsed.year);
         setLastSavedAt(parsed.savedAt);
       }
 
-      // Load Stripe data
-      const stripeStored = localStorage.getItem(STRIPE_DATA_STORAGE_KEY);
-      if (stripeStored) {
-        const stripeParsed = JSON.parse(stripeStored);
-        setStripeData(stripeParsed.months || []);
-      }
-
-      // Load GymMaster data for comparison
+      // Load GymMaster data (for revenue)
       const gmStored = localStorage.getItem(REPORT_DATA_STORAGE_KEY);
       if (gmStored) {
         const gmParsed: PersistedReportData = JSON.parse(gmStored);
@@ -94,6 +91,12 @@ export function PnLTab() {
     return gmMonth?.totalRevenue || 0;
   };
 
+  // Get QuickBooks expenses for a given month
+  const getQbExpenses = (month: string, year: number): number => {
+    const qbMonth = qbData.find((m) => m.month === month && m.year === year);
+    return qbMonth?.expenses || 0;
+  };
+
   // Save to localStorage after fetching
   const saveToLocalStorage = (data: PnLMonthData[]) => {
     try {
@@ -113,9 +116,7 @@ export function PnLTab() {
 
   const clearCache = () => {
     localStorage.removeItem(PNL_DATA_STORAGE_KEY);
-    localStorage.removeItem(STRIPE_DATA_STORAGE_KEY);
-    setMonthsData([]);
-    setStripeData([]);
+    setQbData([]);
     setLastSavedAt(null);
   };
 
@@ -123,13 +124,12 @@ export function PnLTab() {
     setIsLoading(true);
     setError(null);
     setNeedsAuth(false);
-    setMonthsData([]);
-    setStripeData([]);
+    setQbData([]);
 
     const results: PnLMonthData[] = [];
 
     try {
-      // Fetch QuickBooks data month by month
+      // Fetch QuickBooks data month by month (for expenses)
       for (let m = startMonth; m <= endMonth; m++) {
         setLoadingProgress(`Loading QuickBooks ${MONTH_NAMES[m - 1]} ${reportYear}...`);
 
@@ -158,31 +158,8 @@ export function PnLTab() {
         });
       }
 
-      setMonthsData(results);
+      setQbData(results);
       saveToLocalStorage(results);
-
-      // Fetch Stripe data
-      setLoadingProgress("Loading Stripe data...");
-      const stripeRes = await fetch(
-        `/api/stripe/monthly?start_month=${startMonth}&end_month=${endMonth}&year=${reportYear}`
-      );
-      const stripeJson = await stripeRes.json();
-
-      if (stripeRes.ok && stripeJson.months) {
-        setStripeData(stripeJson.months);
-        // Save Stripe data to localStorage
-        localStorage.setItem(
-          STRIPE_DATA_STORAGE_KEY,
-          JSON.stringify({
-            months: stripeJson.months,
-            startMonth,
-            endMonth,
-            year: reportYear,
-            savedAt: new Date().toISOString(),
-          })
-        );
-      }
-
       setLoadingProgress("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch P&L");
@@ -207,7 +184,7 @@ export function PnLTab() {
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect QuickBooks</h3>
           <p className="text-gray-600 mb-6">
-            Connect your QuickBooks account to pull P&L data directly into your dashboard.
+            Connect your QuickBooks account to pull expense data for P&L calculations.
           </p>
           <button
             onClick={handleConnect}
@@ -223,35 +200,39 @@ export function PnLTab() {
     );
   }
 
-  // Helper to get Stripe data for a month
-  const getStripeMonth = (month: string, year: number): StripeMonthData | undefined => {
-    return stripeData.find((s) => s.month === month && s.year === year);
-  };
+  // Build simplified P&L data combining GymMaster revenue + QB expenses
+  const pnlData: SimplifiedPnLMonth[] = [];
+  for (let m = startMonth; m <= endMonth; m++) {
+    const monthName = MONTH_NAMES[m - 1]!;
+    const revenue = getGymMasterRevenue(monthName, reportYear);
+    const expenses = getQbExpenses(monthName, reportYear);
+    const netIncome = revenue - expenses;
 
-  // Calculate totals and stats
-  const totalIncome = monthsData.reduce((sum, m) => sum + m.income, 0);
-  const totalExpenses = monthsData.reduce((sum, m) => sum + m.expenses, 0);
-  const totalNetIncome = monthsData.reduce((sum, m) => sum + m.netIncome, 0);
-  const avgMonthlyProfit = monthsData.length > 0 ? totalNetIncome / monthsData.length : 0;
-  const profitMargin = totalIncome > 0 ? (totalNetIncome / totalIncome) * 100 : 0;
+    pnlData.push({
+      month: monthName,
+      year: reportYear,
+      revenue,
+      expenses,
+      netIncome,
+    });
+  }
 
-  // Calculate GymMaster totals
-  const totalGymMasterRevenue = monthsData.reduce((sum, m) => sum + getGymMasterRevenue(m.month, m.year), 0);
+  // Check if we have data
+  const hasGymMasterData = gymMasterData.length > 0;
+  const hasQbData = qbData.length > 0;
+  const hasData = hasGymMasterData && hasQbData;
 
-  // Calculate Stripe totals
-  const totalStripeGross = stripeData.reduce((sum, s) => sum + s.grossAmount, 0);
-  const totalStripeFees = stripeData.reduce((sum, s) => sum + s.fees, 0);
-  const totalStripeNet = stripeData.reduce((sum, s) => sum + s.netAmount, 0);
-  const totalStripeRefunds = stripeData.reduce((sum, s) => sum + s.refunds, 0);
-  const avgStripeFeePercentage = totalStripeGross > 0 ? (totalStripeFees / totalStripeGross) * 100 : 0;
-
-  // Variance: Stripe - GymMaster (positive = non-membership income like drop-ins)
-  const totalVariance = totalStripeGross - totalGymMasterRevenue;
+  // Calculate totals
+  const totalRevenue = pnlData.reduce((sum, m) => sum + m.revenue, 0);
+  const totalExpenses = pnlData.reduce((sum, m) => sum + m.expenses, 0);
+  const totalNetIncome = totalRevenue - totalExpenses;
+  const avgMonthlyProfit = pnlData.length > 0 ? totalNetIncome / pnlData.length : 0;
+  const profitMargin = totalRevenue > 0 ? (totalNetIncome / totalRevenue) * 100 : 0;
 
   // Chart data
-  const chartData = monthsData.map((m) => ({
+  const chartData = pnlData.map((m) => ({
     name: `${m.month} ${m.year}`,
-    income: m.income,
+    revenue: m.revenue,
     expenses: -m.expenses, // Negative for display below axis
     netIncome: m.netIncome,
   }));
@@ -304,9 +285,9 @@ export function PnLTab() {
           disabled={isLoading}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          {isLoading ? loadingProgress || "Loading..." : "Load Data"}
+          {isLoading ? loadingProgress || "Loading..." : "Load Expenses"}
         </button>
-        {monthsData.length > 0 && (
+        {hasQbData && (
           <button onClick={clearCache} className="text-sm text-gray-500 hover:text-red-600 transition-colors">
             Clear Cache
           </button>
@@ -321,19 +302,22 @@ export function PnLTab() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
-      {monthsData.length > 0 && (
+      {!hasGymMasterData && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-700">
+          <strong>Missing GymMaster data:</strong> Load data from the Membership Stats tab first to get revenue figures.
+        </div>
+      )}
+
+      {hasData && (
         <>
-          {/* Monthly P&L Table - Primary */}
+          {/* Monthly P&L Table */}
           <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
-              <h3 className="font-bold text-gray-900">Monthly P&L with Reconciliation</h3>
+              <div>
+                <h3 className="font-bold text-gray-900">Monthly P&L</h3>
+                <p className="text-xs text-gray-500 mt-1">Revenue from GymMaster, Expenses from QuickBooks</p>
+              </div>
               <div className="flex gap-2">
-                {stripeData.length > 0 && (
-                  <div className="bg-purple-50 border-purple-200 border rounded-lg px-3 py-2 text-xs text-right">
-                    <div className="text-purple-700 font-semibold">{avgStripeFeePercentage.toFixed(2)}%</div>
-                    <div className="text-purple-600">Stripe fees</div>
-                  </div>
-                )}
                 {avgMonthlyProfit !== 0 && (
                   <div
                     className={`${avgMonthlyProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"} border rounded-lg px-3 py-2 text-xs text-right`}
@@ -361,7 +345,7 @@ export function PnLTab() {
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-2 font-medium text-gray-600 w-32"></th>
-                    {monthsData.map((m) => (
+                    {pnlData.map((m) => (
                       <th key={m.month} className="text-center py-2 font-medium text-gray-600">
                         {m.month}
                       </th>
@@ -370,187 +354,39 @@ export function PnLTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* GymMaster Revenue */}
+                  {/* Revenue (GymMaster) */}
                   <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">GymMaster</td>
-                    {monthsData.map((m) => {
-                      const gmRev = getGymMasterRevenue(m.month, m.year);
-                      return (
-                        <td key={m.month} className="text-center py-2 text-gray-700 font-medium">
-                          {gmRev > 0 ? `$${(gmRev / 1000).toFixed(1)}k` : "-"}
-                        </td>
-                      );
-                    })}
-                    <td className="text-center py-2 text-gray-700 font-bold bg-gray-50">
-                      {totalGymMasterRevenue > 0 ? `$${(totalGymMasterRevenue / 1000).toFixed(1)}k` : "-"}
-                    </td>
-                  </tr>
-                  {/* Stripe Gross */}
-                  <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">Stripe Gross</td>
-                    {monthsData.map((m) => {
-                      const stripe = getStripeMonth(m.month, m.year);
-                      return (
-                        <td key={m.month} className="text-center py-2 text-purple-600 font-medium">
-                          {stripe ? `$${(stripe.grossAmount / 1000).toFixed(1)}k` : "-"}
-                        </td>
-                      );
-                    })}
-                    <td className="text-center py-2 text-purple-700 font-bold bg-gray-50">
-                      {stripeData.length > 0 ? `$${(totalStripeGross / 1000).toFixed(1)}k` : "-"}
-                    </td>
-                  </tr>
-                  {/* Variance Row - Expandable */}
-                  <tr
-                    className="border-b border-gray-100 bg-amber-50/50 cursor-pointer hover:bg-amber-100/50 transition-colors"
-                    onClick={() => setShowVarianceBreakdown(!showVarianceBreakdown)}
-                  >
-                    <td className="py-2 text-amber-700 font-medium">
-                      <span className="flex items-center gap-1">
-                        <svg
-                          className={`w-4 h-4 transition-transform ${showVarianceBreakdown ? "rotate-90" : ""}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                        Variance
-                      </span>
-                    </td>
-                    {monthsData.map((m) => {
-                      const gmRev = getGymMasterRevenue(m.month, m.year);
-                      const stripe = getStripeMonth(m.month, m.year);
-                      const variance = stripe ? stripe.grossAmount - gmRev : 0;
-                      const isPositive = variance >= 0;
-                      return (
-                        <td
-                          key={m.month}
-                          className={`text-center py-2 font-medium ${isPositive ? "text-amber-600" : "text-red-600"}`}
-                        >
-                          {stripe && gmRev > 0 ? (
-                            <span>
-                              {isPositive ? "+" : ""}${(variance / 1000).toFixed(1)}k
-                            </span>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td
-                      className={`text-center py-2 font-bold bg-amber-100/50 ${totalVariance >= 0 ? "text-amber-700" : "text-red-700"}`}
-                    >
-                      {stripeData.length > 0 && totalGymMasterRevenue > 0 ? (
-                        <span>
-                          {totalVariance >= 0 ? "+" : ""}${(totalVariance / 1000).toFixed(1)}k
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  </tr>
-                  {/* Variance Breakdown - Expandable */}
-                  {showVarianceBreakdown && (
-                    <>
-                      <tr className="border-b border-gray-100 bg-amber-50/30">
-                        <td className="py-1.5 pl-6 text-xs text-amber-600">Non-membership</td>
-                        {monthsData.map((m) => {
-                          const gmRev = getGymMasterRevenue(m.month, m.year);
-                          const stripe = getStripeMonth(m.month, m.year);
-                          const variance = stripe ? stripe.grossAmount - gmRev : 0;
-                          return (
-                            <td key={m.month} className="text-center py-1.5 text-xs text-amber-600">
-                              {stripe && gmRev > 0 && variance > 0 ? `$${variance.toFixed(0)}` : "-"}
-                            </td>
-                          );
-                        })}
-                        <td className="text-center py-1.5 text-xs text-amber-700 font-medium bg-amber-50/50">
-                          {totalVariance > 0 ? `$${totalVariance.toFixed(0)}` : "-"}
-                        </td>
-                      </tr>
-                      <tr className="border-b border-gray-100 bg-amber-50/30">
-                        <td className="py-1.5 pl-6 text-xs text-gray-500">Refunds</td>
-                        {monthsData.map((m) => {
-                          const stripe = getStripeMonth(m.month, m.year);
-                          return (
-                            <td key={m.month} className="text-center py-1.5 text-xs text-red-500">
-                              {stripe && stripe.refunds > 0 ? `-$${stripe.refunds.toFixed(0)}` : "-"}
-                            </td>
-                          );
-                        })}
-                        <td className="text-center py-1.5 text-xs text-red-600 font-medium bg-amber-50/50">
-                          {totalStripeRefunds > 0 ? `-$${totalStripeRefunds.toFixed(0)}` : "-"}
-                        </td>
-                      </tr>
-                    </>
-                  )}
-                  {/* Stripe Fees */}
-                  <tr className="border-b border-gray-100 bg-purple-50/30">
-                    <td className="py-2 text-purple-700 font-medium">Stripe Fees</td>
-                    {monthsData.map((m) => {
-                      const stripe = getStripeMonth(m.month, m.year);
-                      const pct = stripe && stripe.grossAmount > 0 ? (stripe.fees / stripe.grossAmount) * 100 : 0;
-                      return (
-                        <td key={m.month} className="text-center py-2 text-purple-600 font-medium">
-                          {stripe ? (
-                            <span>
-                              ${(stripe.fees / 1000).toFixed(2)}k
-                              <span className="text-purple-400 text-xs ml-1">({pct.toFixed(1)}%)</span>
-                            </span>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="text-center py-2 text-purple-700 font-bold bg-purple-100/50">
-                      {stripeData.length > 0 ? (
-                        <span>
-                          ${(totalStripeFees / 1000).toFixed(2)}k
-                          <span className="text-purple-500 text-xs ml-1">({avgStripeFeePercentage.toFixed(2)}%)</span>
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  </tr>
-                  {/* Stripe Net */}
-                  <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">Stripe Net</td>
-                    {monthsData.map((m) => {
-                      const stripe = getStripeMonth(m.month, m.year);
-                      return (
-                        <td key={m.month} className="text-center py-2 text-green-600 font-medium">
-                          {stripe ? `$${(stripe.netAmount / 1000).toFixed(1)}k` : "-"}
-                        </td>
-                      );
-                    })}
+                    <td className="py-2 text-gray-600">Revenue</td>
+                    {pnlData.map((m) => (
+                      <td key={m.month} className="text-center py-2 text-green-600 font-medium">
+                        {m.revenue > 0 ? `$${(m.revenue / 1000).toFixed(1)}k` : "-"}
+                      </td>
+                    ))}
                     <td className="text-center py-2 text-green-700 font-bold bg-gray-50">
-                      {stripeData.length > 0 ? `$${(totalStripeNet / 1000).toFixed(1)}k` : "-"}
+                      {totalRevenue > 0 ? `$${(totalRevenue / 1000).toFixed(1)}k` : "-"}
                     </td>
                   </tr>
-                  {/* Expenses */}
+                  {/* Expenses (QuickBooks) */}
                   <tr className="border-b border-gray-100">
                     <td className="py-2 text-gray-600">Expenses</td>
-                    {monthsData.map((m) => (
+                    {pnlData.map((m) => (
                       <td key={m.month} className="text-center py-2 text-red-600 font-medium">
-                        ${(m.expenses / 1000).toFixed(1)}k
+                        {m.expenses > 0 ? `$${(m.expenses / 1000).toFixed(1)}k` : "-"}
                       </td>
                     ))}
                     <td className="text-center py-2 text-red-700 font-bold bg-gray-50">
-                      ${(totalExpenses / 1000).toFixed(1)}k
+                      {totalExpenses > 0 ? `$${(totalExpenses / 1000).toFixed(1)}k` : "-"}
                     </td>
                   </tr>
                   {/* Net Income */}
                   <tr className="bg-blue-50">
                     <td className="py-2 font-semibold text-gray-900">Net Income</td>
-                    {monthsData.map((m) => (
+                    {pnlData.map((m) => (
                       <td
                         key={m.month}
                         className={`text-center py-2 font-bold ${m.netIncome >= 0 ? "text-green-700" : "text-red-700"}`}
                       >
-                        ${(m.netIncome / 1000).toFixed(1)}k
+                        {m.revenue > 0 || m.expenses > 0 ? `$${(m.netIncome / 1000).toFixed(1)}k` : "-"}
                       </td>
                     ))}
                     <td
@@ -591,7 +427,7 @@ export function PnLTab() {
                   <Tooltip
                     formatter={(value: number, name: string) => {
                       const labels: Record<string, string> = {
-                        income: "Revenue",
+                        revenue: "Revenue",
                         expenses: "Expenses",
                         netIncome: "Net Income",
                       };
@@ -602,9 +438,9 @@ export function PnLTab() {
                   />
                   <ReferenceLine yAxisId="left" y={0} stroke="#e0e0e0" />
                   {/* Revenue - Green bars going up */}
-                  <Bar yAxisId="left" dataKey="income" fill="#22c55e" name="income" radius={[4, 4, 0, 0]}>
+                  <Bar yAxisId="left" dataKey="revenue" fill="#22c55e" name="revenue" radius={[4, 4, 0, 0]}>
                     <LabelList
-                      dataKey="income"
+                      dataKey="revenue"
                       position="top"
                       fill="#16a34a"
                       fontWeight="bold"
@@ -648,11 +484,11 @@ export function PnLTab() {
               <div className="flex justify-center gap-6 mt-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-green-500 rounded-sm" />
-                  <span className="text-gray-600">Revenue</span>
+                  <span className="text-gray-600">Revenue (GymMaster)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-red-500 rounded-sm" />
-                  <span className="text-gray-600">Expenses</span>
+                  <span className="text-gray-600">Expenses (QuickBooks)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-0.5 bg-blue-500" style={{ height: "3px" }} />
@@ -664,9 +500,12 @@ export function PnLTab() {
         </>
       )}
 
-      {monthsData.length === 0 && !isLoading && !error && (
+      {!hasData && !isLoading && !error && (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
-          Select a date range and click "Load Data" to fetch P&L from QuickBooks.
+          {!hasGymMasterData
+            ? "Load GymMaster data from Membership Stats tab first, then click \"Load Expenses\" to fetch QuickBooks data."
+            : "Click \"Load Expenses\" to fetch QuickBooks expense data."
+          }
         </div>
       )}
     </div>

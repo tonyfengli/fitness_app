@@ -6,8 +6,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import OAuthClient from "intuit-oauth";
-import { writeFile, readFile, mkdir } from "fs/promises";
+import { writeFile, readFile } from "fs/promises";
 import { join } from "path";
+import { clearTokenInvalidated } from "~/lib/quickbooks";
 
 const TOKEN_FILE = join(process.cwd(), ".quickbooks-tokens.json");
 
@@ -85,6 +86,9 @@ export async function GET(request: NextRequest) {
     };
 
     await saveTokens(tokens);
+
+    // Clear any invalidated token flag
+    clearTokenInvalidated();
 
     // Redirect to KPI dashboard with success message
     return NextResponse.redirect(
