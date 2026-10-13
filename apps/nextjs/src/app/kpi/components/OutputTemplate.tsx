@@ -196,6 +196,7 @@ export function OutputTemplate() {
     setData((prev) => ({
       ...prev,
       // Auto-populated from Reporting derived data
+      openGymRevenue: (selectedMonthData.openGymRevenue ?? 0).toFixed(2),
       ptRevenue: selectedMonthData.ptRevenue.toFixed(2),
       smallGrpRevenue: selectedMonthData.smallGroupRevenue.toFixed(2),
       newMembersCount: (selectedMonthData.newGroupMembersCount ?? selectedMonthData.filteredNewCount).toString(),
@@ -422,12 +423,15 @@ export function OutputTemplate() {
                 label="Quickbooks Total Revenue"
                 value={data.quickbooksRevenue}
                 onChange={(v) => updateField("quickbooksRevenue", v)}
+                highlight
+                exportMode={exportMode}
               />
               <TemplateRow
                 label="Open Gym Revenue"
                 value={data.openGymRevenue}
                 onChange={(v) => updateField("openGymRevenue", v)}
-                disabled
+                highlight
+                exportMode={exportMode}
               />
               <TemplateRow
                 label="PT Revenue"
@@ -645,15 +649,20 @@ export function OutputTemplate() {
                 label="Total Leads"
                 value={data.totalLeads}
                 onChange={(v) => updateField("totalLeads", v)}
+                isCurrency={false}
+                highlight
+                exportMode={exportMode}
               />
               <TemplateRow label="New Group Members" value={data.newMembersCount} readOnly isCurrency={false} />
               <TemplateRow label="New PT Clients" value={data.newPtClientsCount} readOnly isCurrency={false} />
-              <TemplateRow label="Conversion Rate" value={conversionRate} readOnly />
+              <TemplateRow label="Conversion Rate" value={conversionRate} readOnly isCurrency={false} />
               <TemplateRow
                 label="Total Ad Spend"
                 value={data.totalAdSpend}
                 onChange={(v) => updateField("totalAdSpend", v)}
                 prefix="$"
+                highlight
+                exportMode={exportMode}
               />
               <TemplateRow
                 label="Front End Revenue (Group)"
@@ -673,9 +682,11 @@ export function OutputTemplate() {
                 label="Sign Up Fees"
                 value={data.signUpFeesMarketing}
                 onChange={(v) => updateField("signUpFeesMarketing", v)}
+                highlight
+                exportMode={exportMode}
               />
               <TemplateRow label="Total Front End Revenue" value={totalFrontEndRevenue.toFixed(2)} readOnly bold />
-              <TemplateRow label="Customer Acquisition Cost" value={cac ? `$${cac}` : ""} readOnly />
+              <TemplateRow label="Customer Acquisition Cost" value={cac || ""} readOnly />
             </div>
           </div>
 
@@ -690,7 +701,7 @@ export function OutputTemplate() {
                 highlight
                 exportMode={exportMode}
               />
-              <TemplateRow label="Tax Paid" value={data.taxPaid} onChange={(v) => updateField("taxPaid", v)} />
+              <TemplateRow label="Tax Paid" value={data.taxPaid} onChange={(v) => updateField("taxPaid", v)} highlight exportMode={exportMode} />
             </div>
           </div>
 
@@ -702,13 +713,17 @@ export function OutputTemplate() {
                 label="PT/membership sales"
                 value={data.ptMembershipSales}
                 onChange={(v) => updateField("ptMembershipSales", v)}
+                highlight
+                exportMode={exportMode}
               />
               <TemplateRow
                 label="Retail sales"
                 value={data.retailSales}
                 onChange={(v) => updateField("retailSales", v)}
+                highlight
+                exportMode={exportMode}
               />
-              <TemplateRow label="Tax" value={data.tax} onChange={(v) => updateField("tax", v)} />
+              <TemplateRow label="Tax" value={data.tax} onChange={(v) => updateField("tax", v)} highlight exportMode={exportMode} />
             </div>
           </div>
 

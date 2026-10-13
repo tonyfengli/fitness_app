@@ -4,7 +4,7 @@ import { useState, useEffect, Fragment } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 import { formatCurrency } from "../lib/parse-all-payments";
-import { GymMasterRefund, AdminRefundsData } from "../types";
+import { GymMasterRefund, AdminRefundsData, ClientNeedingReview, ClientsNeedingReviewData, ReviewStatusFlag, VerifyMemberResponse } from "../types";
 
 // Monthly reconciliation data from new API
 interface MonthlyReconciliation {
@@ -60,6 +60,11 @@ export function AdministrativeTab() {
   const [showRefundSection, setShowRefundSection] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [expandedRefunds, setExpandedRefunds] = useState<Set<string>>(new Set());
+  const [clientsReviewData, setClientsReviewData] = useState<ClientsNeedingReviewData | null>(null);
+  const [isLoadingClientsReview, setIsLoadingClientsReview] = useState(false);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [verificationData, setVerificationData] = useState<Map<string, VerifyMemberResponse>>(new Map());
+  const [loadingVerification, setLoadingVerification] = useState<Set<string>>(new Set());
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -102,9 +107,26 @@ export function AdministrativeTab() {
     }
   };
 
+  const fetchClientsNeedingReview = async (month?: string) => {
+    setIsLoadingClientsReview(true);
+    try {
+      const monthParam = month ? `&month=${month.split("-")[1]}` : "";
+      const res = await fetch(`/api/admin/clients-needing-review?year=${reportYear}${monthParam}`);
+      const json = await res.json();
+      if (res.ok) {
+        setClientsReviewData(json);
+      }
+    } catch (err) {
+      console.error("Failed to fetch clients needing review:", err);
+    } finally {
+      setIsLoadingClientsReview(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     fetchRevenueReconciliation();
+    fetchClientsNeedingReview();
   }, [reportYear]);
 
   // Get adjustments for a specific month
@@ -138,8 +160,163 @@ export function AdministrativeTab() {
   const getRefundKey = (refund: GymMasterRefund) => `${refund.memberId}-${refund.refundDate}`;
 
   const handleBarClick = (monthKey: string) => {
-    setSelectedMonth(selectedMonth === monthKey ? null : monthKey);
+    const newMonth = selectedMonth === monthKey ? null : monthKey;
+    setSelectedMonth(newMonth);
     setExpandedRefunds(new Set());
+    setExpandedClients(new Set());
+    if (newMonth) {
+      fetchClientsNeedingReview(newMonth);
+    }
+  };
+
+  const toggleClientExpand = async (memberId: string) => {
+    const isExpanding = !expandedClients.has(memberId);
+
+    setExpandedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) {
+        next.delete(memberId);
+      } else {
+        next.add(memberId);
+      }
+      return next;
+    });
+
+    // Fetch verification data when expanding (if not already fetched)
+    if (isExpanding && !verificationData.has(memberId) && selectedMonth) {
+      setLoadingVerification((prev) => new Set(prev).add(memberId));
+      try {
+        // Get the date range for verification (6 months of history)
+        const [year, month] = selectedMonth.split("-").map(Number);
+        const startDate = new Date(year!, month! - 6, 1);
+        const endDate = new Date(year!, month!, 0); // Last day of selected month
+        const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
+        const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${endDate.getDate()}`;
+
+        const res = await fetch(
+          `/api/admin/verify-member-stripe?memberId=${memberId}&startDate=${startStr}&endDate=${endStr}`
+        );
+        if (res.ok) {
+          const data: VerifyMemberResponse = await res.json();
+          setVerificationData((prev) => new Map(prev).set(memberId, data));
+        }
+      } catch (err) {
+        console.error("Failed to fetch verification data:", err);
+      } finally {
+        setLoadingVerification((prev) => {
+          const next = new Set(prev);
+          next.delete(memberId);
+          return next;
+        });
+      }
+    }
+  };
+
+  const getStatusBadgeColor = (flag: ReviewStatusFlag): string => {
+    switch (flag) {
+      case "Refund": return "bg-red-100 text-red-700";
+      case "On Hold": return "bg-yellow-100 text-yellow-700";
+      case "Not Paid": return "bg-orange-100 text-orange-700";
+      case "Billing Failed": return "bg-purple-100 text-purple-700";
+      default: return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  // Get verification status summary for a member's transactions in a specific month
+  const getMonthVerificationStatus = (memberId: string, monthKey: string): {
+    hasTransactions: boolean;
+    allVerified: boolean;
+    hasUncertain: boolean;
+    hasManual: boolean;
+    isLoading: boolean;
+  } => {
+    if (loadingVerification.has(memberId)) {
+      return { hasTransactions: false, allVerified: false, hasUncertain: false, hasManual: false, isLoading: true };
+    }
+
+    const verification = verificationData.get(memberId);
+    if (!verification) {
+      return { hasTransactions: false, allVerified: false, hasUncertain: false, hasManual: false, isLoading: false };
+    }
+
+    // Filter transactions to this month
+    const monthTransactions = verification.transactions.filter((t) => {
+      // Parse the GymMaster date format (e.g., "Oct 5 2026" or "2026-10-05")
+      let txMonthKey = "";
+      if (t.date.match(/^\d{4}-\d{2}-\d{2}/)) {
+        txMonthKey = t.date.substring(0, 7);
+      } else {
+        // Parse "Oct 5 2026" format
+        const months: Record<string, string> = {
+          Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+          Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+        };
+        const match = t.date.match(/^(\w+)\s+\d+\s+(\d{4})$/);
+        if (match) {
+          const [, monthName, year] = match;
+          const month = months[monthName!];
+          if (month && year) {
+            txMonthKey = `${year}-${month}`;
+          }
+        }
+      }
+      return txMonthKey === monthKey;
+    });
+
+    if (monthTransactions.length === 0) {
+      return { hasTransactions: false, allVerified: false, hasUncertain: false, hasManual: false, isLoading: false };
+    }
+
+    const allVerified = monthTransactions.every((t) => t.status === "verified");
+    const hasUncertain = monthTransactions.some((t) => t.status === "uncertain" || t.status === "not_found");
+    const hasManual = monthTransactions.some((t) => t.status === "manual");
+
+    return { hasTransactions: true, allVerified, hasUncertain, hasManual, isLoading: false };
+  };
+
+  // Render verification checkmark for a month
+  const renderVerificationCheckmark = (memberId: string, monthKey: string) => {
+    const status = getMonthVerificationStatus(memberId, monthKey);
+
+    if (status.isLoading) {
+      return (
+        <div className="animate-spin h-3 w-3 border border-gray-400 border-t-transparent rounded-full" />
+      );
+    }
+
+    if (!status.hasTransactions) {
+      return null;
+    }
+
+    if (status.hasManual) {
+      return (
+        <span className="text-xs text-purple-500 cursor-help" title="Manual adjustment (not Stripe)">
+          📝
+        </span>
+      );
+    }
+
+    if (status.allVerified) {
+      return (
+        <span className="cursor-help" title="Verified in Stripe">
+          <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </span>
+      );
+    }
+
+    if (status.hasUncertain) {
+      return (
+        <span className="cursor-help" title="Uncertain - could not verify in Stripe">
+          <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </span>
+      );
+    }
+
+    return null;
   };
 
   // Filter refunds by selected month
@@ -510,27 +687,30 @@ export function AdministrativeTab() {
         </div>
       )}
 
-      {/* Refunds Bar Chart - Separate Section */}
-      {data && chartData.length > 0 && (
+      {/* Clients Needing Review - Chart Section */}
+      {clientsReviewData && clientsReviewData.monthlySummaries.length > 0 && (
         <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Refunds by Month</h3>
+            <h3 className="text-lg font-medium text-gray-900">Clients that Need Review</h3>
             {selectedMonth && (
               <button
-                onClick={() => setSelectedMonth(null)}
+                onClick={() => {
+                  setSelectedMonth(null);
+                  fetchClientsNeedingReview();
+                }}
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
                 Clear selection
               </button>
             )}
           </div>
-          <p className="text-sm text-gray-500 mb-4">Click on a bar to view refund details</p>
+          <p className="text-sm text-gray-500 mb-4">Click on a bar to view client details (refunds, on-hold, underpayments)</p>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <BarChart data={clientsReviewData.monthlySummaries} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis
-                  dataKey="month"
+                  dataKey="monthKey"
                   tick={{ fontSize: 12, fill: "#6b7280" }}
                   tickFormatter={(value) => {
                     const parts = value.split("-");
@@ -540,10 +720,14 @@ export function AdministrativeTab() {
                 />
                 <YAxis
                   tick={{ fontSize: 12, fill: "#6b7280" }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  tickFormatter={(value) => value.toString()}
+                  allowDecimals={false}
                 />
                 <Tooltip
-                  formatter={(value) => [formatCurrency(Number(value)), "Total Refunds"]}
+                  formatter={(value, name) => {
+                    if (name === "clientsNeedingReview") return [value, "Clients"];
+                    return [value, name];
+                  }}
                   labelFormatter={(label) => {
                     if (!label || typeof label !== "string") return String(label);
                     const parts = label.split("-");
@@ -553,18 +737,18 @@ export function AdministrativeTab() {
                   contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb" }}
                 />
                 <Bar
-                  dataKey="total"
+                  dataKey="clientsNeedingReview"
                   radius={[4, 4, 0, 0]}
                   cursor="pointer"
                   onClick={(_data, index) => {
-                    const monthKey = chartData[index]?.monthKey;
+                    const monthKey = clientsReviewData.monthlySummaries[index]?.monthKey;
                     if (monthKey) handleBarClick(monthKey);
                   }}
                 >
-                  {chartData.map((entry) => (
+                  {clientsReviewData.monthlySummaries.map((entry) => (
                     <Cell
                       key={entry.monthKey}
-                      fill={selectedMonth === entry.monthKey ? "#dc2626" : "#ef4444"}
+                      fill={selectedMonth === entry.monthKey ? "#7c3aed" : "#8b5cf6"}
                       opacity={selectedMonth && selectedMonth !== entry.monthKey ? 0.4 : 1}
                     />
                   ))}
@@ -575,172 +759,252 @@ export function AdministrativeTab() {
         </div>
       )}
 
-      {/* Refunds Detail Table - Show when month is selected */}
-      {selectedMonth && (
+      {isLoadingClientsReview && !clientsReviewData && (
+        <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
+            <span className="ml-3 text-gray-500">Loading clients needing review...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Clients Needing Review Detail Table - Show when month is selected */}
+      {selectedMonth && clientsReviewData && clientsReviewData.clients.length > 0 && (
         <div className="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <h3 className="text-lg font-medium text-gray-900">
-              Refunds for {chartData.find((c) => c.monthKey === selectedMonth)?.month || selectedMonth}
+              Clients that Need Review - {clientsReviewData.monthlySummaries.find((m) => m.monthKey === selectedMonth)?.monthName || selectedMonth}
             </h3>
             <p className="text-sm text-gray-500 mt-1">
-              {filteredRefunds.length} refund{filteredRefunds.length !== 1 ? "s" : ""}
-              {adjustmentRefunds.length > 0 && (
-                <span className="text-purple-500 ml-2">
-                  + {adjustmentRefunds.length} adjustment{adjustmentRefunds.length !== 1 ? "s" : ""}
-                </span>
-              )}
+              {clientsReviewData.clients.length} client{clientsReviewData.clients.length !== 1 ? "s" : ""} needing attention
             </p>
           </div>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Expected</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Paid</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Refunded</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Net</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredRefunds.map((refund) => {
-                const key = getRefundKey(refund);
-                return (
-                  <Fragment key={key}>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{refund.refundDate}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        <div className="flex items-center gap-2">
-                          {refund.memberName}
-                          <span className="text-gray-400 text-xs">#{refund.memberId}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-red-600 text-right font-medium">
-                        -{formatCurrency(refund.refundAmount)}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                            refund.status === "on_track"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-yellow-100 text-yellow-700"
-                          }`}
-                        >
-                          {refund.status === "on_track" ? "On track" : "Needs review"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => toggleExpand(key)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                          {expandedRefunds.has(key) ? "Hide" : "View"}
-                        </button>
-                      </td>
-                    </tr>
-                    {expandedRefunds.has(key) && (
-                      <tr>
-                        <td colSpan={5} className="bg-gray-50 px-4 py-4">
-                          <div className="space-y-4">
-                            <div className="flex gap-4">
-                              <div className="flex-1">
-                                <div className="text-xs text-gray-500 uppercase mb-1">Payment Method</div>
-                                <div className="text-sm font-medium rounded px-2 py-1 inline-block bg-gray-100 text-gray-700">
-                                  {refund.paymentMethod}
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <div className="text-xs text-gray-500 uppercase mb-1">Reason</div>
-                                <div className="text-sm text-gray-700 bg-white rounded p-2 border border-gray-200">
-                                  {refund.reason}
-                                </div>
+              {clientsReviewData.clients.map((client) => (
+                <Fragment key={client.memberId}>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      <div className="flex items-center gap-2">
+                        {client.memberName}
+                        <span className="text-gray-400 text-xs">#{client.memberId}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 text-right font-mono">
+                      {formatCurrency(client.expected)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-green-600 text-right font-mono">
+                      {formatCurrency(client.paid)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-red-600 text-right font-mono">
+                      {client.refunded > 0 ? `-${formatCurrency(client.refunded)}` : "—"}
+                    </td>
+                    <td className={`px-4 py-3 text-sm text-right font-mono font-medium ${
+                      client.net < client.expected ? "text-red-600" : "text-green-600"
+                    }`}>
+                      {formatCurrency(client.net)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {client.statusFlags.map((flag) => (
+                          <span
+                            key={flag}
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeColor(flag)}`}
+                          >
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => toggleClientExpand(client.memberId)}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        {expandedClients.has(client.memberId) ? "Hide" : "View"}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedClients.has(client.memberId) && (
+                    <tr>
+                      <td colSpan={7} className="bg-gray-50 px-4 py-4">
+                        <div className="space-y-4">
+                          {/* Billing Status Section */}
+                          <div className="flex items-start gap-6">
+                            <div>
+                              <div className="text-xs text-gray-500 uppercase mb-1">Billing Status</div>
+                              <div className="flex items-center gap-2">
+                                {client.billingStatus === "SUCCESS" && (
+                                  <span className="inline-flex items-center gap-1 text-green-700 font-medium">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Billing Successful
+                                  </span>
+                                )}
+                                {client.billingStatus === "REFUSED" && (
+                                  <span className="inline-flex items-center gap-1 text-purple-700 font-medium">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    Billing Failed
+                                  </span>
+                                )}
+                                {client.billingStatus === "NO_ATTEMPT" && (
+                                  <span className="inline-flex items-center gap-1 text-gray-500 font-medium">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                    </svg>
+                                    No Billing Attempt
+                                  </span>
+                                )}
+                                {client.billingStatus === "PENDING" && (
+                                  <span className="inline-flex items-center gap-1 text-yellow-600 font-medium">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                    </svg>
+                                    Pending
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <div>
-                              <div className="text-xs text-gray-500 uppercase mb-2">6-Month Payment History</div>
-                              <div className="overflow-x-auto">
-                                <table className="min-w-full bg-white border border-gray-200 rounded">
-                                  <thead>
-                                    <tr className="bg-gray-100">
-                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Month</th>
-                                      {refund.paymentHistory.map((h) => (
-                                        <th key={h.month} className="px-3 py-2 text-center text-xs font-medium text-gray-500">
-                                          {h.month}
-                                        </th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <tr>
-                                      <td className="px-3 py-2 text-xs text-gray-500">Expected</td>
-                                      {refund.paymentHistory.map((h) => (
-                                        <td key={`exp-${h.month}`} className="px-3 py-2 text-center text-xs text-gray-700">
-                                          {formatCurrency(h.expected)}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                    <tr className="border-t border-gray-200">
-                                      <td className="px-3 py-2 text-xs font-medium text-gray-700">Actually Paid</td>
-                                      {refund.paymentHistory.map((h) => (
-                                        <td
-                                          key={`net-${h.month}`}
-                                          className={`px-3 py-2 text-center text-xs font-semibold ${
-                                            h.actual < h.expected && h.expected > 0 ? "text-red-600 bg-red-50" : "text-green-600"
-                                          }`}
-                                        >
-                                          {formatCurrency(h.actual)}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  </tbody>
-                                </table>
+                            {client.billingFailReason && (
+                              <div>
+                                <div className="text-xs text-gray-500 uppercase mb-1">Fail Reason</div>
+                                <div className="text-sm text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                                  {client.billingFailReason}
+                                </div>
                               </div>
+                            )}
+                            {client.billingAttempts && client.billingAttempts.length > 0 && (
+                              <div>
+                                <div className="text-xs text-gray-500 uppercase mb-1">Billing Attempts</div>
+                                <div className="space-y-1">
+                                  {client.billingAttempts.map((attempt, idx) => (
+                                    <div key={idx} className={`text-xs px-2 py-1 rounded ${
+                                      attempt.status === "SUCCESS" ? "bg-green-50 text-green-700" :
+                                      attempt.status === "REFUSED" ? "bg-purple-50 text-purple-700" :
+                                      "bg-gray-50 text-gray-600"
+                                    }`}>
+                                      {attempt.date}: {formatCurrency(attempt.amount)} - {attempt.status}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs text-gray-500 uppercase">6-Month Payment History</div>
+                              {loadingVerification.has(client.memberId) && (
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                  <div className="animate-spin h-3 w-3 border border-gray-400 border-t-transparent rounded-full" />
+                                  Verifying with Stripe...
+                                </div>
+                              )}
+                              {verificationData.has(client.memberId) && !loadingVerification.has(client.memberId) && (
+                                <div className="flex items-center gap-3 text-xs">
+                                  <span className="flex items-center gap-1 text-green-600">
+                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Verified
+                                  </span>
+                                  <span className="flex items-center gap-1 text-gray-400">
+                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Uncertain
+                                  </span>
+                                  <span className="flex items-center gap-1 text-purple-500">
+                                    📝 Manual
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full bg-white border border-gray-200 rounded">
+                                <thead>
+                                  <tr className="bg-gray-100">
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Month</th>
+                                    {client.paymentHistory.map((h) => (
+                                      <th key={h.monthKey} className="px-3 py-2 text-center text-xs font-medium text-gray-500">
+                                        <div className="flex items-center justify-center gap-1">
+                                          {h.monthName}
+                                          {renderVerificationCheckmark(client.memberId, h.monthKey)}
+                                        </div>
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr>
+                                    <td className="px-3 py-2 text-xs text-gray-500">Expected</td>
+                                    {client.paymentHistory.map((h) => (
+                                      <td key={`exp-${h.monthKey}`} className="px-3 py-2 text-center text-xs text-gray-700">
+                                        {formatCurrency(h.expected)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 text-xs text-gray-500">Paid</td>
+                                    {client.paymentHistory.map((h) => (
+                                      <td key={`paid-${h.monthKey}`} className="px-3 py-2 text-center text-xs text-green-600">
+                                        {formatCurrency(h.paid)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 text-xs text-gray-500">Refunded</td>
+                                    {client.paymentHistory.map((h) => (
+                                      <td key={`ref-${h.monthKey}`} className="px-3 py-2 text-center text-xs text-red-500">
+                                        {h.refunded > 0 ? `-${formatCurrency(h.refunded)}` : "—"}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                  <tr className="border-t border-gray-200">
+                                    <td className="px-3 py-2 text-xs font-medium text-gray-700">Net</td>
+                                    {client.paymentHistory.map((h) => (
+                                      <td
+                                        key={`net-${h.monthKey}`}
+                                        className={`px-3 py-2 text-center text-xs font-semibold ${
+                                          h.net < h.expected && h.expected > 0 ? "text-red-600 bg-red-50" : "text-green-600"
+                                        }`}
+                                      >
+                                        {formatCurrency(h.net)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                </tbody>
+                              </table>
                             </div>
                           </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          {filteredRefunds.length === 0 && (
-            <div className="py-8 text-center text-gray-500">No refunds recorded for this month</div>
-          )}
-        </div>
-      )}
-
-      {/* Adjustments Section */}
-      {selectedMonth && adjustmentRefunds.length > 0 && (
-        <div className="rounded-lg bg-purple-50 shadow-sm border border-purple-200 overflow-hidden">
-          <div className="px-4 py-3 bg-purple-100 border-b border-purple-200">
-            <h3 className="text-lg font-medium text-purple-900">Adjustments (Non-Stripe)</h3>
-            <p className="text-sm text-purple-600 mt-1">Internal GymMaster adjustments, not actual Stripe refunds</p>
-          </div>
-          <table className="min-w-full divide-y divide-purple-200">
-            <thead className="bg-purple-100/50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Member</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-purple-600 uppercase">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Reason</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-purple-100">
-              {adjustmentRefunds.map((refund) => (
-                <tr key={getRefundKey(refund)} className="hover:bg-purple-100/30">
-                  <td className="px-4 py-3 text-sm text-purple-900">{refund.refundDate}</td>
-                  <td className="px-4 py-3 text-sm text-purple-900">
-                    {refund.memberName} <span className="text-purple-400 text-xs">#{refund.memberId}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-purple-700 text-right font-medium">
-                    {formatCurrency(refund.refundAmount)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-purple-600 max-w-xs truncate">{refund.reason}</td>
-                </tr>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {selectedMonth && clientsReviewData && clientsReviewData.clients.length === 0 && (
+        <div className="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
+          <div className="py-8 text-center text-gray-500">No clients needing review for this month</div>
         </div>
       )}
 

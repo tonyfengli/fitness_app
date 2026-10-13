@@ -90,7 +90,8 @@ export interface MonthData {
   year: number;
   monthKey: string; // e.g., "2026-04" for localStorage keys
   ptRevenue: number;
-  smallGroupRevenue: number;
+  smallGroupRevenue: number; // Classes revenue
+  openGymRevenue: number; // Open Gym revenue
   totalRevenue: number;
   totalMembers: number; // Raw count from payments (used as anchor for month 1)
   arm: number;
@@ -242,4 +243,88 @@ export interface AdminRefundsData {
   monthlyReconciliation: MonthlyReconciliation[];
   refunds: GymMasterRefund[];
   unmatchedStripeRefunds: UnmatchedStripeRefund[];
+}
+
+// Clients Needing Review types
+export type ReviewStatusFlag = "Refund" | "On Hold" | "Not Paid" | "Billing Failed";
+
+// Billing status from GymMaster Report 130
+export type BillingStatus = "SUCCESS" | "REFUSED" | "PENDING" | "NO_ATTEMPT";
+
+export interface BillingAttempt {
+  date: string;
+  amount: number;
+  status: BillingStatus;
+  failReason: string | null;
+}
+
+export interface ClientReviewPaymentHistory {
+  monthKey: string;
+  monthName: string;
+  expected: number;
+  paid: number;
+  refunded: number;
+  net: number;
+}
+
+export interface ClientNeedingReview {
+  memberId: string;
+  memberName: string;
+  expected: number;
+  paid: number;
+  refunded: number;
+  net: number;
+  statusFlags: ReviewStatusFlag[];
+  isOnHold: boolean;
+  paymentHistory: ClientReviewPaymentHistory[];
+  // Billing data from Report 130
+  billingAttempts: BillingAttempt[];
+  billingStatus: BillingStatus; // Overall status for the month
+  billingFailReason: string | null;
+}
+
+export interface MonthlyReviewSummary {
+  monthKey: string;
+  monthName: string;
+  clientsNeedingReview: number;
+  refundCount: number;
+  onHoldCount: number;
+  notPaidCount: number;
+  billingFailedCount: number;
+}
+
+export interface ClientsNeedingReviewData {
+  year: number;
+  selectedMonth: string | null;
+  monthlySummaries: MonthlyReviewSummary[];
+  clients: ClientNeedingReview[];
+}
+
+// Stripe Verification types
+export type VerificationStatus = "verified" | "uncertain" | "manual" | "not_found";
+
+export interface TransactionVerification {
+  date: string;
+  amount: number;
+  type: "charge" | "refund";
+  paymentMethod: string;
+  status: VerificationStatus;
+  stripeMatch?: {
+    id: string;
+    amount: number;
+    date: string;
+  };
+}
+
+export interface VerifyMemberResponse {
+  memberId: string;
+  memberName: string;
+  transactions: TransactionVerification[];
+  summary: {
+    verified: number;
+    uncertain: number;
+    manual: number;
+    notFound: number;
+    total: number;
+  };
 }

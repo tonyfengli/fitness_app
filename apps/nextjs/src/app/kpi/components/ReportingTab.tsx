@@ -223,8 +223,27 @@ export function ReportingTab() {
         const { data } = await response.json();
 
         const paymentRows = parseCsvSimple(data.current.allPaymentsCsv);
+        const currentMembersRows = parseCsvSimple(data.current.currentMembersCsv);
+
+        // Build membership type lookup: Member ID -> Membership Type Name
+        const membershipTypeLookup = new Map<string, string>();
+        for (const row of currentMembersRows) {
+          const memberId = row["Member ID"] || "";
+          const membershipType = row["Membership Type Name"] || "";
+          if (memberId && membershipType) {
+            membershipTypeLookup.set(memberId, membershipType);
+          }
+        }
+
+        // Helper to check if membership type is "Open Gym"
+        const isOpenGymType = (membershipType: string): boolean => {
+          const typeLower = membershipType.toLowerCase();
+          return typeLower.includes("open gym") || typeLower.includes("opengym");
+        };
+
         let ptRevenue = 0,
           smallGroupRevenue = 0,
+          openGymRevenue = 0,
           totalRevenue = 0,
           groupRevenue = 0;
 
@@ -247,11 +266,15 @@ export function ReportingTab() {
 
           if (details.includes("Personal Training")) {
             ptRevenue += amount;
-          } else if (details.includes("Small Group")) {
-            smallGroupRevenue += amount;
-            memberData.group += amount;
-            groupRevenue += amount;
           } else if (details.includes("Gym Memberships")) {
+            // Cross-reference with membership type to separate Open Gym from Classes
+            const membershipType = membershipTypeLookup.get(memberId) || "";
+            if (isOpenGymType(membershipType)) {
+              openGymRevenue += amount;
+            } else {
+              // All other Gym Memberships = Classes (including "unclear" types)
+              smallGroupRevenue += amount;
+            }
             memberData.group += amount;
             groupRevenue += amount;
           }
@@ -327,6 +350,7 @@ export function ReportingTab() {
           monthKey,
           ptRevenue,
           smallGroupRevenue,
+          openGymRevenue,
           totalRevenue,
           totalMembers,
           arm,
@@ -506,6 +530,8 @@ export function ReportingTab() {
     lostMembers: -m.filteredLostCount,
     netChange: m.filteredNewCount - m.filteredLostCount,
     ptRevenue: m.ptRevenue,
+    openGymRevenue: m.openGymRevenue,
+    classesRevenue: m.smallGroupRevenue, // Classes revenue
     groupRevenue: m.groupRevenue,
     totalRevenue: m.totalRevenue,
     arm: m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0,
@@ -1211,21 +1237,17 @@ export function ReportingTab() {
               />
               <Tooltip
                 formatter={(value: number, name: string) => {
-                  const labels: Record<string, string> = { groupRevenue: "Group Membership", ptRevenue: "PT" };
+                  const labels: Record<string, string> = {
+                    openGymRevenue: "Open Gym",
+                    classesRevenue: "Classes",
+                    ptRevenue: "PT",
+                  };
                   return [`$${value.toLocaleString()}`, labels[name] || name];
                 }}
                 contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
               />
-              <Bar dataKey="groupRevenue" stackId="a" fill="#3b82f6" name="groupRevenue">
-                <LabelList
-                  dataKey="groupRevenue"
-                  position="center"
-                  fill="#ffffff"
-                  fontWeight="bold"
-                  fontSize={11}
-                  formatter={(value: number) => (value > 500 ? `$${(value / 1000).toFixed(1)}k` : "")}
-                />
-              </Bar>
+              <Bar dataKey="openGymRevenue" stackId="a" fill="#22c55e" name="openGymRevenue" />
+              <Bar dataKey="classesRevenue" stackId="a" fill="#3b82f6" name="classesRevenue" />
               <Bar dataKey="ptRevenue" stackId="a" fill="#a855f7" name="ptRevenue" radius={[4, 4, 0, 0]}>
                 <LabelList
                   dataKey="ptRevenue"
@@ -1240,8 +1262,12 @@ export function ReportingTab() {
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2 text-sm">
             <div className="flex items-center gap-2">
+              <span className="w-4 h-4 bg-green-500 rounded-sm" />
+              <span className="text-gray-600">Open Gym</span>
+            </div>
+            <div className="flex items-center gap-2">
               <span className="w-4 h-4 bg-blue-500 rounded-sm" />
-              <span className="text-gray-600">Group Membership</span>
+              <span className="text-gray-600">Classes</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 bg-purple-500 rounded-sm" />
