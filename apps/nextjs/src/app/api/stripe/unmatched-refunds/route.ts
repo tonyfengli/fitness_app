@@ -7,9 +7,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia",
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
 interface RefundDetail {
   refundId: string;
@@ -42,7 +44,7 @@ export async function GET(request: NextRequest) {
     let startingAfter: string | undefined;
 
     while (hasMore) {
-      const response = await stripe.refunds.list({
+      const response = await getStripe().refunds.list({
         created: { gte: startTimestamp, lte: endTimestamp },
         limit: 100,
         ...(startingAfter && { starting_after: startingAfter }),
@@ -64,7 +66,7 @@ export async function GET(request: NextRequest) {
 
       try {
         // Fetch the full charge with expanded customer
-        const charge = await stripe.charges.retrieve(chargeId, {
+        const charge = await getStripe().charges.retrieve(chargeId, {
           expand: ['customer', 'payment_method_details'],
         });
 
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
           customerEmail = charge.customer.email;
         } else if (typeof charge.customer === 'string') {
           try {
-            const customer = await stripe.customers.retrieve(charge.customer);
+            const customer = await getStripe().customers.retrieve(charge.customer);
             if (!customer.deleted) {
               customerEmail = customer.email;
             }

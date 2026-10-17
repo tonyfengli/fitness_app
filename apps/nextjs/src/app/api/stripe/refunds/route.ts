@@ -7,9 +7,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia",
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
 interface RefundDetail {
   id: string;
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
       let startingAfter: string | undefined;
 
       while (hasMore) {
-        const response = await stripe.refunds.list({
+        const response = await getStripe().refunds.list({
           created: {
             gte: startTimestamp,
             lte: endTimestamp,
@@ -78,7 +80,7 @@ export async function GET(request: NextRequest) {
           // Try to get the charge to get more details
           if (refund.charge && typeof refund.charge === 'string') {
             try {
-              const charge = await stripe.charges.retrieve(refund.charge);
+              const charge = await getStripe().charges.retrieve(refund.charge);
               description = charge.description || charge.billing_details?.name || null;
             } catch {
               // Ignore errors fetching charge details

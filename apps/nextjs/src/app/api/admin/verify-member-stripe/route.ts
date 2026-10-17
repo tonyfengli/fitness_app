@@ -8,9 +8,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
 type VerificationStatus = "verified" | "uncertain" | "manual" | "not_found";
 
@@ -95,7 +97,7 @@ async function fetchStripeCharges(
   let startingAfter: string | undefined;
 
   while (hasMore) {
-    const response = await stripe.charges.list({
+    const response = await getStripe().charges.list({
       created: { gte: startTs, lte: endTs },
       limit: 100,
       ...(startingAfter && { starting_after: startingAfter }),
@@ -136,7 +138,7 @@ async function fetchStripeRefunds(
   let startingAfter: string | undefined;
 
   while (hasMore) {
-    const response = await stripe.refunds.list({
+    const response = await getStripe().refunds.list({
       created: { gte: startTs, lte: endTs },
       limit: 100,
       ...(startingAfter && { starting_after: startingAfter }),

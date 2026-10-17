@@ -7,9 +7,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-09-30.endive",
-});
+// Lazy init to avoid build-time errors when env vars aren't available
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
 interface MemberPaymentHistory {
   month: string;
@@ -206,7 +209,7 @@ export async function GET(request: NextRequest) {
     let startingAfter: string | undefined;
 
     while (hasMore) {
-      const response = await stripe.refunds.list({
+      const response = await getStripe().refunds.list({
         created: { gte: startTimestamp, lte: endTimestamp },
         limit: 100,
         expand: ["data.charge"],

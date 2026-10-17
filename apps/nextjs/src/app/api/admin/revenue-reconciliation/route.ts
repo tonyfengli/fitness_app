@@ -10,9 +10,11 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { fetchProfitAndLoss } from "~/lib/quickbooks";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
 // Expense categories we track
 interface ExpenseBreakdown {
@@ -150,7 +152,7 @@ async function fetchStripeCharges(
   let startingAfter: string | undefined;
 
   while (hasMore) {
-    const response = await stripe.charges.list({
+    const response = await getStripe().charges.list({
       created: { gte: startTs, lte: endTs },
       limit: 100,
       ...(startingAfter && { starting_after: startingAfter }),
@@ -182,7 +184,7 @@ async function fetchStripeFees(startDate: string, endDate: string): Promise<numb
   let startingAfter: string | undefined;
 
   while (hasMore) {
-    const response = await stripe.balanceTransactions.list({
+    const response = await getStripe().balanceTransactions.list({
       created: { gte: startTs, lte: endTs },
       type: "charge",
       limit: 100,
@@ -212,7 +214,7 @@ async function fetchStripeRefunds(startDate: string, endDate: string): Promise<n
   let startingAfter: string | undefined;
 
   while (hasMore) {
-    const response = await stripe.refunds.list({
+    const response = await getStripe().refunds.list({
       created: { gte: startTs, lte: endTs },
       limit: 100,
       ...(startingAfter && { starting_after: startingAfter }),
@@ -241,7 +243,7 @@ async function fetchStripePayouts(startDate: string, endDate: string): Promise<n
   let startingAfter: string | undefined;
 
   while (hasMore) {
-    const response = await stripe.payouts.list({
+    const response = await getStripe().payouts.list({
       arrival_date: { gte: startTs, lte: endTs },
       status: "paid",
       limit: 100,
@@ -477,7 +479,7 @@ export async function GET(request: NextRequest) {
         gymMasterNet: acc.gymMasterNet + m.gymMaster.net,
         stripeGross: acc.stripeGross + m.stripe.gross,
         stripeFees: acc.stripeFees + m.stripe.fees,
-        stripeRefunds: acc.stripeRefunds + m.stripe.refunds,
+        stripeRefunds: acc.stripeRefunds + m.getStripe().refunds,
         stripeNet: acc.stripeNet + m.stripe.net,
         quickbooksIncome: acc.quickbooksIncome + m.quickbooks.income,
         quickbooksStripeIncome: acc.quickbooksStripeIncome + m.quickbooks.stripeIncome,
