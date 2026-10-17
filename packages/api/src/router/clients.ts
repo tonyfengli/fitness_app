@@ -2,8 +2,8 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { and, asc, eq, gte, lte, count, sql, or } from "@acme/db";
-import { user, UserTrainingPackage, TrainingPackage, ClassAttendance, ClassSchedule, ChangeUserPackageSchema } from "@acme/db/schema";
+import { and, eq, gte, lte, ne, count, sql, or } from "@acme/db";
+import { user, UserTrainingPackage, TrainingPackage, UserTrainingSession, TrainingSession, ChangeUserPackageSchema } from "@acme/db/schema";
 
 // Import week utility functions for package date alignment
 function getWeekStart(date: Date): Date {
@@ -75,54 +75,31 @@ export const clientsRouter = {
         throw new Error("Trainer must be associated with a business");
       }
 
-      // Read attendance from class_attendance (the new source of truth).
-      // We synthesize the legacy `scheduledAt` field by combining date + start_time
-      // so existing frontend code that reads `scheduledAt` keeps working.
-      const startDateStr = startDate.slice(0, 10);
-      const endDateStr = endDate.slice(0, 10);
-
-      const rows = await ctx.db
+      // Fetch all training sessions the client attended in the date range
+      const attendanceHistory = await ctx.db
         .select({
-          attendanceId: ClassAttendance.id,
-          classScheduleId: ClassAttendance.classScheduleId,
-          scheduleName: ClassSchedule.name,
-          startTime: ClassSchedule.startTime,
-          attendanceDate: ClassAttendance.date,
-          attendanceStatus: ClassAttendance.status,
+          sessionId: TrainingSession.id,
+          sessionName: TrainingSession.name,
+          scheduledAt: TrainingSession.scheduledAt,
+          status: UserTrainingSession.status,
+          checkedInAt: UserTrainingSession.checkedInAt,
+          sessionStatus: TrainingSession.status,
+          templateType: TrainingSession.templateType,
         })
-        .from(ClassAttendance)
-        .innerJoin(ClassSchedule, eq(ClassAttendance.classScheduleId, ClassSchedule.id))
+        .from(UserTrainingSession)
+        .leftJoin(TrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
         .where(
           and(
-            eq(ClassAttendance.userId, clientId),
-            eq(ClassSchedule.businessId, businessId),
-            gte(ClassAttendance.date, startDateStr),
-            lte(ClassAttendance.date, endDateStr)
+            eq(UserTrainingSession.userId, clientId),
+            eq(TrainingSession.businessId, businessId),
+            gte(TrainingSession.scheduledAt, new Date(startDate)),
+            lte(TrainingSession.scheduledAt, new Date(endDate))
           )
         )
-        .orderBy(asc(ClassAttendance.date), asc(ClassSchedule.startTime));
+        .orderBy(TrainingSession.scheduledAt);
 
-      // Shape the response to match the legacy structure so the detail page
-      // (filters/sorts on scheduledAt, sessionName, status) keeps compiling.
-      return rows.map((r) => {
-        // Anchor the synthetic scheduledAt at NOON UTC of the session's date.
-        // Previously we used the literal start_time as UTC, which caused
-        // early-morning slots (5/6/8 AM) to roll back to the prior calendar
-        // day for clients in negative-UTC timezones (e.g. PT). Noon UTC stays
-        // on the same calendar day in any reasonable zone (UTC-11 to UTC+11),
-        // which is all the calendar matching needs.
-        const [y, mo, da] = r.attendanceDate.split('-').map(Number);
-        const scheduledAt = new Date(Date.UTC(y!, mo! - 1, da!, 12, 0, 0));
-        return {
-          sessionId: r.attendanceId,
-          sessionName: r.scheduleName,
-          scheduledAt,
-          status: r.attendanceStatus, // always 'present' for now
-          checkedInAt: null,
-          sessionStatus: 'completed' as const,
-          templateType: null,
-        };
-      });
+
+      return attendanceHistory;
     }),
 
   getClientsWithPackages: protectedProcedure
@@ -259,22 +236,17 @@ export const clientsRouter = {
           Math.max(...allPackageEnds)
         ));
         
-        // Count attended class_attendance rows in the overall effective date range.
-        // class_attendance is the source of truth for attendance — user_training_session
-        // is no longer read here (see /attendance UX). Date comparisons use YYYY-MM-DD
-        // since class_attendance.date is a SQL date (no time component).
-        const overallStartDateStr = overallEffectiveStart.toISOString().slice(0, 10);
-        const overallEndDateStr = overallEffectiveEnd.toISOString().slice(0, 10);
+        // Count sessions attended in the overall effective date range
         const attendanceResult = await ctx.db
           .select({ count: count() })
-          .from(ClassAttendance)
-          .innerJoin(ClassSchedule, eq(ClassAttendance.classScheduleId, ClassSchedule.id))
+          .from(UserTrainingSession)
+          .leftJoin(TrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
           .where(
             and(
-              eq(ClassAttendance.userId, client.id),
-              eq(ClassSchedule.businessId, businessId),
-              gte(ClassAttendance.date, overallStartDateStr),
-              lte(ClassAttendance.date, overallEndDateStr)
+              eq(UserTrainingSession.userId, client.id),
+              ne(UserTrainingSession.status, 'no_show'),
+              gte(TrainingSession.scheduledAt, overallEffectiveStart),
+              lte(TrainingSession.scheduledAt, overallEffectiveEnd)
             )
           );
 
@@ -321,33 +293,6 @@ export const clientsRouter = {
 
     // Filter out any clients without current packages for backward compatibility
     return clientsWithAttendance.filter(client => client.currentPackage !== null);
-  }),
-
-  // Lightweight: every client in the trainer's business (no package join).
-  // Used for the attendance search dropdown so historical/inactive clients are still selectable.
-  listAll: protectedProcedure.query(async ({ ctx }) => {
-    const currentUser = ctx.session?.user as SessionUser;
-    if (currentUser?.role !== "trainer") {
-      throw new Error("Only trainers can list clients");
-    }
-    const businessId = currentUser.businessId;
-    if (!businessId) {
-      throw new Error("Trainer must be associated with a business");
-    }
-
-    return ctx.db
-      .select({
-        id: user.id,
-        name: user.name,
-      })
-      .from(user)
-      .where(
-        and(
-          eq(user.businessId, businessId),
-          eq(user.role, "client"),
-        ),
-      )
-      .orderBy(user.name);
   }),
 
   getClientsWithActivePackages: protectedProcedure.query(async ({ ctx }) => {

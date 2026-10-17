@@ -1,71 +1,20 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
-import { AttendanceTab } from './_components/AttendanceTab';
-import { SessionsTab } from './_components/SessionsTab';
-
-type ClientsTab = 'roster' | 'attendance' | 'sessions';
+import { processFilterSelection, formatLongDate, getMostRecentCompleteMonth, type WeekRange } from '~/utils/weekUtils';
 
 
-// Week helpers — Monday-based weeks, matches /attendance convention.
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function getMonday(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d;
-}
-
-function addDays(date: Date, n: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function toDateString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function parseWeekParam(value: string | null): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const parts = value.split('-').map(Number);
-  const d = new Date(parts[0]!, (parts[1]! - 1), parts[2]!);
-  if (isNaN(d.getTime())) return null;
-  return getMonday(d);
-}
-
-function formatWeekRange(monday: Date): string {
-  const sunday = addDays(monday, 6);
-  const sameMonth = monday.getMonth() === sunday.getMonth();
-  const sameYear = monday.getFullYear() === sunday.getFullYear();
-  const m1 = MONTH_SHORT[monday.getMonth()];
-  const m2 = MONTH_SHORT[sunday.getMonth()];
-  const d1 = monday.getDate();
-  const d2 = sunday.getDate();
-  const y1 = monday.getFullYear();
-  const y2 = sunday.getFullYear();
-  if (sameMonth && sameYear) return `${m1} ${d1} – ${d2}, ${y1}`;
-  if (sameYear) return `${m1} ${d1} – ${m2} ${d2}, ${y1}`;
-  return `${m1} ${d1}, ${y1} – ${m2} ${d2}, ${y2}`;
+// Get progress bar color based on percentage
+function getProgressColor(percentage: number) {
+  if (percentage >= 80) return 'bg-emerald-500';
+  if (percentage >= 60) return 'bg-yellow-500';
+  if (percentage >= 40) return 'bg-orange-500';
+  return 'bg-red-500';
 }
 
 // Get initials from name
@@ -75,32 +24,6 @@ function getInitials(name: string) {
     .map(part => part.charAt(0).toUpperCase())
     .slice(0, 2)
     .join('');
-}
-
-// "Christina Herrera" -> "Herrera, Christina"; "Tabi" -> "Tabi" (single word stays as-is).
-function formatLastFirst(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0]!;
-  const last = parts[parts.length - 1];
-  const first = parts.slice(0, -1).join(' ');
-  return `${last}, ${first}`;
-}
-
-// Excel-style 3-color heatmap: red @ 0% → amber @ 50% → green @ 100%.
-function getHeatmapColor(pct: number): string {
-  const p = Math.max(0, Math.min(100, pct));
-  if (p <= 50) {
-    const t = p / 50;
-    const r = Math.round(220 + (245 - 220) * t);
-    const g = Math.round(38 + (158 - 38) * t);
-    const b = Math.round(38 + (11 - 38) * t);
-    return `rgb(${r}, ${g}, ${b})`;
-  }
-  const t = (p - 50) / 50;
-  const r = Math.round(245 + (22 - 245) * t);
-  const g = Math.round(158 + (163 - 158) * t);
-  const b = Math.round(11 + (74 - 11) * t);
-  return `rgb(${r}, ${g}, ${b})`;
 }
 
 function ClientsPageContent() {
@@ -140,115 +63,90 @@ function ClientsPageContent() {
   const searchParams = useSearchParams();
   const trpc = api();
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Sort state — defaults to score ascending (at-risk clients on top).
-  type SortKey = 'name' | 'score' | 'attended';
-  type SortDir = 'asc' | 'desc';
-  const [sortBy, setSortBy] = useState<SortKey>('score');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
-
-  const handleSort = (key: SortKey) => {
-    if (sortBy === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortBy(key);
-      // Sensible per-column default direction:
-      // - name: A→Z
-      // - score: lowest first (surface at-risk)
-      // - attended: most first (leaderboard feel)
-      setSortDir(key === 'attended' ? 'desc' : 'asc');
-    }
-  };
-
-  // Week-based filter. URL param `?week=YYYY-MM-DD` carries the Monday;
-  // falls back to the current week.
-  const todayMonday = useMemo(() => getMonday(new Date()), []);
-  const weekFromUrl = parseWeekParam(searchParams.get('week'));
-  const [weekStart, setWeekStart] = useState<Date>(weekFromUrl ?? todayMonday);
-
-  // Tab state: roster (table) | attendance (cards) | sessions (weekly stats).
-  // URL param `?tab=…`. Defaults to attendance — it's the primary daily workflow.
-  const tabFromUrl = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<ClientsTab>(
-    tabFromUrl === 'roster' || tabFromUrl === 'sessions'
-      ? tabFromUrl
-      : 'attendance',
-  );
-
-  const isCurrentWeek = isSameDay(weekStart, todayMonday);
-  const canGoForward = !isCurrentWeek;
-
-  // Keep URL in sync with the selected week + tab.
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('week', toDateString(weekStart));
-    params.set('tab', activeTab);
-    router.replace(`/clients?${params.toString()}`, { scroll: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart, activeTab]);
-
-  const goPrev = () => setWeekStart((d) => addDays(d, -7));
-  const goNext = () => {
-    if (canGoForward) setWeekStart((d) => addDays(d, 7));
-  };
-  const goToday = () => setWeekStart(todayMonday);
-
-  // Date-picker jump: any date selected snaps to its Monday. Future weeks are
-  // blocked via the `max` attribute on the input.
-  const dateInputRef = useRef<HTMLInputElement>(null);
-
-  const openDatePicker = () => {
-    const input = dateInputRef.current;
-    if (!input) return;
-    // Chrome 99+ / Safari 16+ / Firefox 101+ all support showPicker, which is
-    // the only reliable way to open a date picker from arbitrary click areas.
-    if (typeof input.showPicker === 'function') {
-      try {
-        input.showPicker();
-        return;
-      } catch {
-        // Some browsers throw outside a user gesture; fall through.
-      }
-    }
-    input.click();
-    input.focus();
-  };
-
-  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    const parts = value.split('-').map(Number);
-    const picked = new Date(parts[0]!, parts[1]! - 1, parts[2]!);
-    if (isNaN(picked.getTime())) return;
-    const monday = getMonday(picked);
-    if (monday.getTime() > todayMonday.getTime()) return;
-    setWeekStart(monday);
-  };
-
-  // Single-week date range: Monday → Sunday (inclusive)
-  const dateRange = useMemo(() => {
-    const start = new Date(weekStart);
-    const end = addDays(weekStart, 6);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }, [weekStart]);
-
-  // Always one week of expected sessions now
-  const weekCount = 1;
-
+  
+  // Get the most recent complete month as an additional filter option
+  const mostRecentCompleteMonth = useMemo(() => getMostRecentCompleteMonth(), []);
+  
+  // Get filter from URL params, fallback to 'Last 2 Weeks'
+  const filterFromUrl = searchParams.get('filter');
+  const [selectedFilter, setSelectedFilter] = useState(filterFromUrl || 'Last 2 Weeks');
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [customStartMonth, setCustomStartMonth] = useState('');
+  const [customEndMonth, setCustomEndMonth] = useState('');
+  
+  // State for the modal - separate from applied state
+  const [modalFilter, setModalFilter] = useState('');
+  const [modalStartMonth, setModalStartMonth] = useState('');
+  const [modalEndMonth, setModalEndMonth] = useState('');
+  const [filterType, setFilterType] = useState<'single' | 'range'>('single');
+  
   // Inactive clients expansion state
   const [showInactiveClients, setShowInactiveClients] = useState(false);
 
-  // Fetch clients data with their training packages.
-  // `placeholderData: keepPreviousData` keeps the table visible while a
-  // new week refetches, so navigation doesn't blank the screen.
-  const { data: clientsData, isLoading, isFetching, error } = useQuery({
+  // Generate available historical months (up to 1 year back)
+  const availableMonths = useMemo(() => {
+    const months = [];
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth(); // 0-11 (November = 10)
+    
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    // Start from previous month (skip current month since it's not fully historical)
+    // Go back 12 months from previous month
+    for (let i = 1; i <= 12; i++) {
+      let monthIndex = currentMonth - i;
+      let year = currentYear;
+      
+      // Handle going back to previous year
+      if (monthIndex < 0) {
+        monthIndex = monthIndex + 12;
+        year = currentYear - 1;
+      }
+      
+      const monthName = monthNames[monthIndex];
+      
+      months.push({
+        name: monthName,
+        value: `${monthName} ${year}`,
+        year: year,
+        displayName: `${monthName} ${year}`
+      });
+    }
+    
+    // Reverse to show earliest to latest (oldest first)
+    return months.reverse();
+  }, []);
+
+  // Calculate the adjusted date range for the selected filter
+  const dateRange: WeekRange = useMemo(() => {
+    const range = processFilterSelection(selectedFilter);
+    return range;
+  }, [selectedFilter]);
+
+  // Calculate week count
+  const weekCount = useMemo(() => {
+    // For explicit week filters, use the expected count instead of calculation
+    if (selectedFilter === 'Last 2 Weeks') return 2;
+    if (selectedFilter === 'Last 4 Weeks') return 4;
+    
+    // For all other filters (months, custom ranges), use the calculated week count
+    // Since all ranges are adjusted to complete weeks, this should be accurate
+    const durationMs = dateRange.end.getTime() - dateRange.start.getTime();
+    const durationDays = durationMs / (24 * 60 * 60 * 1000);
+    return Math.round(durationDays / 7);
+  }, [dateRange, selectedFilter]);
+
+  // Fetch clients data with their training packages
+  const { data: clientsData, isLoading, error } = useQuery({
     ...trpc.clients.getClientsWithPackages.queryOptions({
       startDate: dateRange.start.toISOString(),
       endDate: dateRange.end.toISOString(),
       weekCount: weekCount,
     }),
-    placeholderData: keepPreviousData,
   });
 
   // Fetch inactive clients data
@@ -257,12 +155,8 @@ function ClientsPageContent() {
     enabled: showInactiveClients, // Only fetch when expanded
   });
 
-  // Only show the full-screen loader on the very first load (no data yet).
-  // Subsequent week changes keep the existing table and show a small inline spinner.
-  const isInitialLoad = !clientsData && isLoading;
-  const isRefetching = !isInitialLoad && isFetching;
 
-  if (isInitialLoad) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
@@ -297,28 +191,13 @@ function ClientsPageContent() {
     })));
   }
 
-  // Controlled by sortBy/sortDir state above; tie-break always falls back to
-  // alphabetical-by-last-name so order is stable across renders.
+  // Filter clients based on search query and sort by attendance percentage (lowest first)
   const filteredClients = clientsWithPackages
-    .filter((client) =>
+    .filter(client =>
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       client.email.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === 'name') {
-        cmp = formatLastFirst(a.name).localeCompare(formatLastFirst(b.name));
-      } else if (sortBy === 'score') {
-        cmp = (a.attendance?.attendancePercentage ?? 0) - (b.attendance?.attendancePercentage ?? 0);
-      } else {
-        cmp = (a.attendance?.attendedSessions ?? 0) - (b.attendance?.attendedSessions ?? 0);
-      }
-      if (sortDir === 'desc') cmp = -cmp;
-      if (cmp === 0 && sortBy !== 'name') {
-        cmp = formatLastFirst(a.name).localeCompare(formatLastFirst(b.name));
-      }
-      return cmp;
-    });
+    .sort((a, b) => a.attendance.attendancePercentage - b.attendance.attendancePercentage);
 
   // Show loading state while checking authentication
   if (isCheckingAuth) {
@@ -347,119 +226,59 @@ function ClientsPageContent() {
       />
 
       <div className="px-4 py-6">
-        {/* Week selector — mirrors /attendance */}
-        <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <button
-              type="button"
-              onClick={goPrev}
-              aria-label="Previous week"
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-            >
-              <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-            </button>
-
-            <button
-              type="button"
-              onClick={openDatePicker}
-              title="Pick a week"
-              className="relative flex items-center gap-2 justify-center text-center group focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 rounded-md px-1"
-            >
-              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors border-b border-dashed border-transparent group-hover:border-purple-400">
-                {formatWeekRange(weekStart)}
-              </span>
-              {isCurrentWeek && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 whitespace-nowrap">
-                  This Week
-                </span>
-              )}
-              {/* Hidden input positioned beneath the button — pointer-events-none lets
-                  the button receive the click, while keeping the native picker anchored
-                  to the visible location when showPicker() fires. */}
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={toDateString(weekStart)}
-                max={toDateString(todayMonday)}
-                onChange={handleDatePick}
-                aria-label="Jump to a specific week"
-                tabIndex={-1}
-                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-              />
-            </button>
-
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={!canGoForward}
-              aria-label="Next week"
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 flex-shrink-0"
-            >
-              <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-
-            {/* Small inline spinner while refetching for a new week. */}
-            {isRefetching && (
-              <Loader2Icon
-                aria-label="Loading week"
-                className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-spin flex-shrink-0"
-              />
-            )}
-          </div>
-
-          {!isCurrentWeek && (
-            <button
-              type="button"
-              onClick={goToday}
-              className="w-full sm:w-auto sm:ml-3 inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 active:bg-purple-800 shadow-sm transition-colors"
-            >
-              Today
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {/* Tab strip — Roster (table) | Attendance (cards) | Sessions (weekly stats) */}
-        <div className="mb-6 flex justify-center">
-          <div className="inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-            {(['roster', 'attendance', 'sessions'] as ClientsTab[]).map((tab) => {
-              const isActive = activeTab === tab;
-              const label =
-                tab === 'roster' ? 'Clients' :
-                tab === 'attendance' ? 'Attendance' :
-                'Sessions';
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    isActive
-                      ? 'bg-white dark:bg-gray-700 text-purple-700 dark:text-purple-300 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            </div>
+            <input
+              type="text"
+              placeholder="Search clients by name or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+            />
           </div>
         </div>
 
-        {activeTab === 'attendance' ? (
-          <AttendanceTab weekStart={weekStart} />
-        ) : activeTab === 'sessions' ? (
-          <SessionsTab weekStart={weekStart} />
-        ) : clientsWithPackages.length === 0 ? (
+        {/* Time Filter */}
+        <div className="mb-4 grid grid-cols-4 gap-1.5">
+          {['Last 2 Weeks', 'Last 4 Weeks', mostRecentCompleteMonth].map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setSelectedFilter(filter)}
+              className={`px-2 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
+                selectedFilter === filter
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              {filter}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowCustomPicker(true)}
+            className={`px-2 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
+              !['Last 2 Weeks', 'Last 4 Weeks', mostRecentCompleteMonth].includes(selectedFilter)
+                ? 'bg-purple-600 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            Custom ▼
+          </button>
+        </div>
+
+        {/* Simple Date Range Display */}
+        <div className="mb-6 text-center">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {formatLongDate(dateRange.start)} to {formatLongDate(dateRange.end)}
+          </div>
+        </div>
+
+        {clientsWithPackages.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,124 +299,142 @@ function ClientsPageContent() {
             <p className="text-gray-500 dark:text-gray-400 text-sm">Try adjusting your search terms</p>
           </div>
         ) : (
-          <>
-            {/* Search bar (Roster only) */}
-            <div className="mb-4">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search clients by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                />
-              </div>
-            </div>
-
-          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 select-none">
-                  <th
-                    onClick={() => handleSort('name')}
-                    className="text-left px-4 py-3 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          <div className="space-y-4">
+            {filteredClients.map((client) => {
+              const initials = getInitials(client.name);
+              const isTrainer = client.role === 'trainer';
+              
+              // Handle trainer vs client display differently
+              if (isTrainer) {
+                return (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      router.push(`/clients/${client.id}?filter=${encodeURIComponent(selectedFilter)}`);
+                    }}
+                    className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group"
                   >
-                    <span className="inline-flex items-center gap-1">
-                      Client Name
-                      <span className={`text-[10px] ${sortBy === 'name' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                        {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </span>
-                  </th>
-                  <th
-                    onClick={() => handleSort('score')}
-                    className="text-center px-4 py-3 w-28 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                  >
-                    <span className="inline-flex items-center gap-1 justify-center">
-                      Score (%)
-                      <span className={`text-[10px] ${sortBy === 'score' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                        {sortBy === 'score' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </span>
-                  </th>
-                  <th
-                    onClick={() => handleSort('attended')}
-                    className="text-left px-4 py-3 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Attendance
-                      <span className={`text-[10px] ${sortBy === 'attended' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                        {sortBy === 'attended' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClients.map((client, i) => {
-                  const isTrainer = client.role === 'trainer';
-                  const attendance = client.attendance;
-                  const pct = attendance?.attendancePercentage ?? 0;
-                  const attended = attendance?.attendedSessions ?? 0;
-                  const expected = attendance?.expectedSessions ?? 0;
-                  const heat = getHeatmapColor(pct);
-                  const fillPct = expected > 0
-                    ? Math.min(100, Math.round((attended / expected) * 100))
-                    : 0;
-                  const rowBg = i % 2 === 0
-                    ? 'bg-white dark:bg-gray-800'
-                    : 'bg-gray-50 dark:bg-gray-900/30';
-
-                  return (
-                    <tr
-                      key={client.id}
-                      onClick={() => router.push(`/clients/${client.id}?week=${toDateString(weekStart)}`)}
-                      className={`${rowBg} hover:bg-purple-50 dark:hover:bg-purple-900/10 cursor-pointer border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 transition-colors`}
-                    >
-                      <td className="px-4 py-2.5 text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {formatLastFirst(client.name)}
-                        {isTrainer && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                            Trainer
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        className="px-4 py-2.5 text-center font-semibold tabular-nums"
-                        style={{ color: heat }}
-                      >
-                        {pct}%
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 max-w-[180px] bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className="h-1.5 rounded-full transition-all"
-                              style={{ width: `${fillPct}%`, backgroundColor: heat }}
-                            />
+                    <div className="p-5">
+                      <div className="flex items-center gap-4">
+                        {/* Circled initials - different color for trainers */}
+                        <div className="relative">
+                          <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center shadow-md">
+                            <span className="text-white font-bold text-xl">{initials}</span>
                           </div>
-                          <span className="text-sm text-gray-700 dark:text-gray-300 tabular-nums w-4 text-right">
-                            {attended}
-                          </span>
+                          {/* Trainer badge */}
+                          <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-0.5">
+                            <div className="bg-purple-600 dark:bg-purple-500 text-white text-[8px] font-bold w-6 h-6 rounded-full flex items-center justify-center">
+                              T
+                            </div>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+
+                        {/* Trainer info */}
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">{client.name}</h3>
+                            <span className="px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 text-xs font-medium rounded-full">
+                              Trainer
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {client.email}
+                          </p>
+                        </div>
+
+                        {/* Chevron */}
+                        <div className="flex items-center gap-3">
+                          <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              }
+
+              // Client display logic (existing) - check if client has packages
+              if (!client.currentPackage || !client.attendance) {
+                // Client without package data - shouldn't happen but handle gracefully
+                return null;
+              }
+              
+              const packageData = client.currentPackage;
+              const attendanceData = client.attendance;
+              const stats = {
+                commitment: packageData.sessionsPerWeek,
+                attendedSessions: attendanceData.attendedSessions,
+                totalSessions: attendanceData.expectedSessions,
+                attendancePercentage: attendanceData.attendancePercentage,
+              };
+              
+              const progressColor = getProgressColor(stats.attendancePercentage);
+
+              return (
+                <button
+                  key={client.id}
+                  onClick={() => {
+                    router.push(`/clients/${client.id}?filter=${encodeURIComponent(selectedFilter)}`);
+                  }}
+                  className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group"
+                >
+                  <div className="p-5">
+                    <div className="flex items-center gap-4">
+                      {/* Circled initials */}
+                      <div className="relative">
+                        <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center shadow-md">
+                          <span className="text-white font-bold text-xl">{initials}</span>
+                        </div>
+                        {/* Small commitment badge */}
+                        <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-0.5">
+                          <div className="bg-gray-600 dark:bg-gray-400 text-white dark:text-gray-900 text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center">
+                            {stats.commitment}x
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Client info */}
+                      <div className="flex-1 text-left">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">{client.name}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-2">
+                          {stats.attendedSessions} of {stats.totalSessions} sessions
+                        </p>
+                        {/* Progress bar */}
+                        <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                          <div 
+                            className={`h-1.5 rounded-full transition-all duration-500 ${progressColor}`}
+                            style={{ width: `${stats.attendancePercentage}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Progress percentage and chevron */}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className={`text-2xl font-bold ${
+                            stats.attendancePercentage >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
+                            stats.attendancePercentage >= 60 ? 'text-yellow-600 dark:text-yellow-400' :
+                            stats.attendancePercentage >= 40 ? 'text-orange-600 dark:text-orange-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {stats.attendancePercentage}%
+                          </div>
+                        </div>
+                        <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-          </>
         )}
       </div>
 
-      {/* Inactive Clients Expandable Section (Roster tab only) */}
-      {activeTab === 'roster' && (
+      {/* Inactive Clients Expandable Section */}
       <div className="px-4 pb-6">
         <button
           onClick={() => setShowInactiveClients(!showInactiveClients)}
@@ -704,8 +541,191 @@ function ClientsPageContent() {
           </div>
         )}
       </div>
-      )}
 
+      {/* Custom Date Picker Modal */}
+      {showCustomPicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Custom Time Period</h3>
+            
+            {/* Filter Type Selection */}
+            <div className="mb-6">
+              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <button
+                  onClick={() => {
+                    setFilterType('single');
+                    setModalStartMonth('');
+                    setModalEndMonth('');
+                    setModalFilter('');
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    filterType === 'single'
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Single Month
+                </button>
+                <button
+                  onClick={() => {
+                    setFilterType('range');
+                    setModalFilter('');
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    filterType === 'range'
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Date Range
+                </button>
+              </div>
+            </div>
+
+            {/* Single Month Selection */}
+            {filterType === 'single' && (
+              <div className="mb-6">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Select a historical month to analyze
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                  {availableMonths.map((month) => (
+                    <button
+                      key={`${month.name}-${month.year}`}
+                      onClick={() => setModalFilter(month.value)}
+                      className={`py-2.5 px-3 rounded-lg border transition-all text-sm font-medium ${
+                        modalFilter === month.value
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-700'
+                      }`}
+                    >
+                      {month.displayName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Date Range Selection */}
+            {filterType === 'range' && (
+              <div className="mb-6">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                  Select start and end months for comparison
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      Start Month
+                    </label>
+                    <select
+                      value={modalStartMonth}
+                      onChange={(e) => {
+                        setModalStartMonth(e.target.value);
+                        // Reset end month if it's before the new start month
+                        if (modalEndMonth) {
+                          const startIndex = availableMonths.findIndex(m => m.value === e.target.value);
+                          const endIndex = availableMonths.findIndex(m => m.value === modalEndMonth);
+                          if (endIndex < startIndex) {
+                            setModalEndMonth('');
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
+                    >
+                      <option value="">Choose start month</option>
+                      {availableMonths.map((month) => (
+                        <option key={`start-${month.name}-${month.year}`} value={month.value}>
+                          {month.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      End Month
+                    </label>
+                    <select
+                      value={modalEndMonth}
+                      onChange={(e) => setModalEndMonth(e.target.value)}
+                      disabled={!modalStartMonth}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Choose end month</option>
+                      {availableMonths
+                        .filter((month) => {
+                          if (!modalStartMonth) return false;
+                          const startMonthIndex = availableMonths.findIndex(m => m.value === modalStartMonth);
+                          const currentMonthIndex = availableMonths.findIndex(m => m.value === month.value);
+                          return currentMonthIndex >= startMonthIndex;
+                        })
+                        .map((month) => (
+                          <option key={`end-${month.name}-${month.year}`} value={month.value}>
+                            {month.displayName}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+                
+                {modalStartMonth && modalEndMonth && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>
+                        Selected: {modalStartMonth} {modalStartMonth === modalEndMonth ? '' : `to ${modalEndMonth}`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Preview & Actions */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCustomPicker(false);
+                    setModalFilter('');
+                    setModalStartMonth('');
+                    setModalEndMonth('');
+                    setFilterType('single');
+                  }}
+                  className="flex-1 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (filterType === 'single' && modalFilter) {
+                      setSelectedFilter(modalFilter);
+                    } else if (filterType === 'range' && modalStartMonth && modalEndMonth) {
+                      const customFilter = modalEndMonth === modalStartMonth ? modalStartMonth : `${modalStartMonth} - ${modalEndMonth}`;
+                      setSelectedFilter(customFilter);
+                    }
+                    setShowCustomPicker(false);
+                    setModalFilter('');
+                    setModalStartMonth('');
+                    setModalEndMonth('');
+                    setFilterType('single');
+                  }}
+                  disabled={
+                    (filterType === 'single' && !modalFilter) ||
+                    (filterType === 'range' && (!modalStartMonth || !modalEndMonth))
+                  }
+                  className="flex-1 px-4 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300 dark:disabled:bg-gray-600 transition-colors font-medium"
+                >
+                  Apply Filter
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
