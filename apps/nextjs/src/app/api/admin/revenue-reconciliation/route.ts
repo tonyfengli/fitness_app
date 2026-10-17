@@ -479,7 +479,7 @@ export async function GET(request: NextRequest) {
         gymMasterNet: acc.gymMasterNet + m.gymMaster.net,
         stripeGross: acc.stripeGross + m.stripe.gross,
         stripeFees: acc.stripeFees + m.stripe.fees,
-        stripeRefunds: acc.stripeRefunds + m.getStripe().refunds,
+        stripeRefunds: acc.stripeRefunds + m.stripe.refunds,
         stripeNet: acc.stripeNet + m.stripe.net,
         quickbooksIncome: acc.quickbooksIncome + m.quickbooks.income,
         quickbooksStripeIncome: acc.quickbooksStripeIncome + m.quickbooks.stripeIncome,
