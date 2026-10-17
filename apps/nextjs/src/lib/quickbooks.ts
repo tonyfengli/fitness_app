@@ -177,6 +177,69 @@ export async function fetchProfitAndLoss(
 }
 
 /**
+ * Recursively extract accounts from QB row structure
+ * Handles nested sub-accounts (e.g., Sales > Stripe Deposits)
+ */
+function extractAccounts(
+  rows: any[],
+  results: ProfitAndLossRow[],
+  parentName?: string
+): number {
+  let sectionTotal = 0;
+
+  for (const row of rows) {
+    // Check if this row has nested sub-accounts
+    if (row?.Header?.ColData && row?.Rows?.Row) {
+      // Parent account with sub-accounts
+      const headerCols = row.Header.ColData;
+      const parentAccountName = headerCols[0]?.value || "Unknown";
+      const parentAmount = parseFloat(headerCols[1]?.value || "0");
+      const fullName = parentName
+        ? `${parentName}:${parentAccountName}`
+        : parentAccountName;
+
+      // If parent has its own amount (not just sum of children), add it
+      if (parentAmount !== 0) {
+        results.push({ account: fullName, amount: parentAmount });
+      }
+
+      // Recursively process sub-accounts
+      extractAccounts(row.Rows.Row, results, fullName);
+
+      // Get total from Summary if available
+      if (row?.Summary?.ColData) {
+        const summaryCols = row.Summary.ColData;
+        const summaryName = summaryCols[0]?.value || "";
+        const summaryAmount = parseFloat(summaryCols[1]?.value || "0");
+        if (summaryName.includes("Total")) {
+          sectionTotal = summaryAmount;
+        }
+      }
+    } else if (row?.ColData) {
+      // Leaf account (no children)
+      const cols = row.ColData;
+      const name = cols[0]?.value || "Unknown";
+      const amount = parseFloat(cols[1]?.value || "0");
+      const fullName = parentName ? `${parentName}:${name}` : name;
+
+      if (amount !== 0) {
+        results.push({ account: fullName, amount });
+      }
+    } else if (row?.Summary?.ColData) {
+      // Summary/total row
+      const cols = row.Summary.ColData;
+      const name = cols[0]?.value || "";
+      const amount = parseFloat(cols[1]?.value || "0");
+      if (name.includes("Total")) {
+        sectionTotal = amount;
+      }
+    }
+  }
+
+  return sectionTotal;
+}
+
+/**
  * Parse QuickBooks P&L report into a simpler structure
  */
 function parseProfitAndLossReport(
@@ -198,44 +261,30 @@ function parseProfitAndLossReport(
     const sectionRows = section?.Rows?.Row || [];
 
     if (sectionType === "Income") {
-      for (const row of sectionRows) {
-        if (row?.Summary?.ColData) {
-          const cols = row.Summary.ColData;
-          const name = cols[0]?.value || "Unknown";
-          const amount = parseFloat(cols[1]?.value || "0");
-          if (name.includes("Total")) {
-            totalIncome = amount;
-          } else if (amount !== 0) {
-            income.push({ account: name, amount });
-          }
-        } else if (row?.ColData) {
-          const cols = row.ColData;
-          const name = cols[0]?.value || "Unknown";
-          const amount = parseFloat(cols[1]?.value || "0");
-          if (amount !== 0) {
-            income.push({ account: name, amount });
-          }
+      const total = extractAccounts(sectionRows, income);
+      // Also check section summary for total
+      if (section?.Summary?.ColData) {
+        const cols = section.Summary.ColData;
+        const name = cols[0]?.value || "";
+        if (name.includes("Total")) {
+          totalIncome = parseFloat(cols[1]?.value || "0");
         }
       }
+      if (totalIncome === 0) {
+        totalIncome = total;
+      }
     } else if (sectionType === "Expenses") {
-      for (const row of sectionRows) {
-        if (row?.Summary?.ColData) {
-          const cols = row.Summary.ColData;
-          const name = cols[0]?.value || "Unknown";
-          const amount = parseFloat(cols[1]?.value || "0");
-          if (name.includes("Total")) {
-            totalExpenses = amount;
-          } else if (amount !== 0) {
-            expenses.push({ account: name, amount });
-          }
-        } else if (row?.ColData) {
-          const cols = row.ColData;
-          const name = cols[0]?.value || "Unknown";
-          const amount = parseFloat(cols[1]?.value || "0");
-          if (amount !== 0) {
-            expenses.push({ account: name, amount });
-          }
+      const total = extractAccounts(sectionRows, expenses);
+      // Also check section summary for total
+      if (section?.Summary?.ColData) {
+        const cols = section.Summary.ColData;
+        const name = cols[0]?.value || "";
+        if (name.includes("Total")) {
+          totalExpenses = parseFloat(cols[1]?.value || "0");
         }
+      }
+      if (totalExpenses === 0) {
+        totalExpenses = total;
       }
     } else if (section?.Summary?.ColData) {
       // Net Income row

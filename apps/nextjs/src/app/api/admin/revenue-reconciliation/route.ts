@@ -2,16 +2,32 @@
  * Revenue Reconciliation API
  * GET /api/admin/revenue-reconciliation?year=2026
  *
- * Compares GymMaster P&L revenue to Stripe charges to bank deposits.
+ * Compares GymMaster P&L revenue to Stripe charges to QuickBooks income to bank deposits.
  * Uses deterministic date matching (charge/payment date) for reconciliation.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { fetchProfitAndLoss } from "~/lib/quickbooks";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-12-18.acacia" as Stripe.LatestApiVersion,
 });
+
+// Expense categories we track
+interface ExpenseBreakdown {
+  advertisingMarketing: number;
+  contractLabor: number;
+  appsSoftware: number;
+  materialsSupplies: number;
+  liabilityInsurance: number;
+  utilities: number;
+  repairsMaintenance: number;
+  businessLicenses: number;
+  clientCompensation: number;
+  other: number;
+  total: number;
+}
 
 // Monthly reconciliation data
 interface MonthlyReconciliation {
@@ -29,6 +45,14 @@ interface MonthlyReconciliation {
     refunds: number;
     net: number;
   };
+  quickbooks: {
+    income: number;
+    stripeIncome: number;
+    otherIncome: number;
+    expenses: ExpenseBreakdown;
+    netIncome: number;
+    connected: boolean;
+  };
   payouts: number;
   variance: number;
   variancePercent: number;
@@ -38,6 +62,7 @@ interface MonthlyReconciliation {
 interface RevenueReconciliationResponse {
   year: number;
   months: MonthlyReconciliation[];
+  quickbooksConnected: boolean;
   totals: {
     gymMasterGross: number;
     gymMasterRefunds: number;
@@ -47,6 +72,11 @@ interface RevenueReconciliationResponse {
     stripeFeePercent: number;
     stripeRefunds: number;
     stripeNet: number;
+    quickbooksIncome: number;
+    quickbooksStripeIncome: number;
+    quickbooksOtherIncome: number;
+    quickbooksExpenses: ExpenseBreakdown;
+    quickbooksNetIncome: number;
     payouts: number;
     variance: number;
     variancePercent: number;
@@ -231,6 +261,124 @@ async function fetchStripePayouts(startDate: string, endDate: string): Promise<n
   return payouts;
 }
 
+// Parse expense account name to category
+function categorizeExpense(accountName: string): keyof Omit<ExpenseBreakdown, 'total'> {
+  const name = accountName.toLowerCase();
+
+  if (name.includes("advertising") || name.includes("marketing")) {
+    return "advertisingMarketing";
+  }
+  if (name.includes("contract") || name.includes("labor")) {
+    return "contractLabor";
+  }
+  if (name.includes("app") || name.includes("software")) {
+    return "appsSoftware";
+  }
+  if (name.includes("material") || name.includes("supplies")) {
+    return "materialsSupplies";
+  }
+  if (name.includes("liability") || name.includes("insurance")) {
+    return "liabilityInsurance";
+  }
+  if (name.includes("utilit")) {
+    return "utilities";
+  }
+  if (name.includes("repair") || name.includes("maintenance")) {
+    return "repairsMaintenance";
+  }
+  if (name.includes("license")) {
+    return "businessLicenses";
+  }
+  if (name.includes("client") && name.includes("compensation")) {
+    return "clientCompensation";
+  }
+  return "other";
+}
+
+// Create empty expense breakdown
+function emptyExpenseBreakdown(): ExpenseBreakdown {
+  return {
+    advertisingMarketing: 0,
+    contractLabor: 0,
+    appsSoftware: 0,
+    materialsSupplies: 0,
+    liabilityInsurance: 0,
+    utilities: 0,
+    repairsMaintenance: 0,
+    businessLicenses: 0,
+    clientCompensation: 0,
+    other: 0,
+    total: 0,
+  };
+}
+
+// Fetch QuickBooks P&L data (income + expenses) for a month
+async function fetchQuickBooksPnL(
+  startDate: string,
+  endDate: string
+): Promise<{
+  income: number;
+  stripeIncome: number;
+  otherIncome: number;
+  expenses: ExpenseBreakdown;
+  netIncome: number;
+  connected: boolean;
+}> {
+  try {
+    // Try to fetch directly - fetchProfitAndLoss handles token validation internally
+    const report = await fetchProfitAndLoss(startDate, endDate);
+    if (!report) {
+      return {
+        income: 0,
+        stripeIncome: 0,
+        otherIncome: 0,
+        expenses: emptyExpenseBreakdown(),
+        netIncome: 0,
+        connected: false,
+      };
+    }
+
+    // Separate Stripe income from other income
+    let stripeIncome = 0;
+    let otherIncome = 0;
+
+    for (const row of report.income) {
+      if (row.account.toLowerCase().includes("stripe")) {
+        stripeIncome += row.amount;
+      } else {
+        otherIncome += row.amount;
+      }
+    }
+
+    // Categorize expenses
+    const expenses = emptyExpenseBreakdown();
+    for (const row of report.expenses) {
+      const category = categorizeExpense(row.account);
+      expenses[category] += row.amount;
+      expenses.total += row.amount;
+    }
+
+    return {
+      income: report.totalIncome,
+      stripeIncome,
+      otherIncome,
+      expenses,
+      netIncome: report.netIncome,
+      connected: true,
+    };
+  } catch (err) {
+    console.error("Failed to fetch QuickBooks P&L:", err);
+    return {
+      income: 0,
+      stripeIncome: 0,
+      otherIncome: 0,
+      expenses: emptyExpenseBreakdown(),
+      netIncome: 0,
+      connected: false,
+    };
+  }
+}
+
 // Fetch all data for a single month
 async function fetchMonthData(
   year: number,
@@ -244,13 +392,14 @@ async function fetchMonthData(
   });
 
   // Fetch all data in parallel
-  const [gmData, stripeCharges, stripeFees, stripeRefunds, payouts] =
+  const [gmData, stripeCharges, stripeFees, stripeRefunds, payouts, qbData] =
     await Promise.all([
       fetchGymMasterPayments(startDate, endDate),
       fetchStripeCharges(startDate, endDate),
       fetchStripeFees(startDate, endDate),
       fetchStripeRefunds(startDate, endDate),
       fetchStripePayouts(startDate, endDate),
+      fetchQuickBooksPnL(startDate, endDate),
     ]);
 
   const gmNet = gmData.gross - gmData.refunds;
@@ -278,6 +427,14 @@ async function fetchMonthData(
       feePercent,
       refunds: stripeRefunds,
       net: stripeNet,
+    },
+    quickbooks: {
+      income: qbData.income,
+      stripeIncome: qbData.stripeIncome,
+      otherIncome: qbData.otherIncome,
+      expenses: qbData.expenses,
+      netIncome: qbData.netIncome,
+      connected: qbData.connected,
     },
     payouts,
     variance,
@@ -309,6 +466,9 @@ export async function GET(request: NextRequest) {
 
     const months = await Promise.all(monthPromises);
 
+    // Check if any month has QB connected
+    const quickbooksConnected = months.some((m) => m.quickbooks.connected);
+
     // Calculate totals
     const totals = months.reduce(
       (acc, m) => ({
@@ -319,6 +479,23 @@ export async function GET(request: NextRequest) {
         stripeFees: acc.stripeFees + m.stripe.fees,
         stripeRefunds: acc.stripeRefunds + m.stripe.refunds,
         stripeNet: acc.stripeNet + m.stripe.net,
+        quickbooksIncome: acc.quickbooksIncome + m.quickbooks.income,
+        quickbooksStripeIncome: acc.quickbooksStripeIncome + m.quickbooks.stripeIncome,
+        quickbooksOtherIncome: acc.quickbooksOtherIncome + m.quickbooks.otherIncome,
+        quickbooksExpenses: {
+          advertisingMarketing: acc.quickbooksExpenses.advertisingMarketing + m.quickbooks.expenses.advertisingMarketing,
+          contractLabor: acc.quickbooksExpenses.contractLabor + m.quickbooks.expenses.contractLabor,
+          appsSoftware: acc.quickbooksExpenses.appsSoftware + m.quickbooks.expenses.appsSoftware,
+          materialsSupplies: acc.quickbooksExpenses.materialsSupplies + m.quickbooks.expenses.materialsSupplies,
+          liabilityInsurance: acc.quickbooksExpenses.liabilityInsurance + m.quickbooks.expenses.liabilityInsurance,
+          utilities: acc.quickbooksExpenses.utilities + m.quickbooks.expenses.utilities,
+          repairsMaintenance: acc.quickbooksExpenses.repairsMaintenance + m.quickbooks.expenses.repairsMaintenance,
+          businessLicenses: acc.quickbooksExpenses.businessLicenses + m.quickbooks.expenses.businessLicenses,
+          clientCompensation: acc.quickbooksExpenses.clientCompensation + m.quickbooks.expenses.clientCompensation,
+          other: acc.quickbooksExpenses.other + m.quickbooks.expenses.other,
+          total: acc.quickbooksExpenses.total + m.quickbooks.expenses.total,
+        },
+        quickbooksNetIncome: acc.quickbooksNetIncome + m.quickbooks.netIncome,
         payouts: acc.payouts + m.payouts,
       }),
       {
@@ -329,6 +506,11 @@ export async function GET(request: NextRequest) {
         stripeFees: 0,
         stripeRefunds: 0,
         stripeNet: 0,
+        quickbooksIncome: 0,
+        quickbooksStripeIncome: 0,
+        quickbooksOtherIncome: 0,
+        quickbooksExpenses: emptyExpenseBreakdown(),
+        quickbooksNetIncome: 0,
         payouts: 0,
       }
     );
@@ -346,6 +528,7 @@ export async function GET(request: NextRequest) {
     const result: RevenueReconciliationResponse = {
       year,
       months,
+      quickbooksConnected,
       totals: {
         ...totals,
         stripeFeePercent,

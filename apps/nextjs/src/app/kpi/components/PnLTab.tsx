@@ -14,63 +14,73 @@ import {
   ReferenceLine,
 } from "recharts";
 
-import {
-  PnLMonthData,
-  MonthData,
-  PersistedPnLData,
-  PersistedReportData,
-} from "../types";
-import {
-  PNL_DATA_STORAGE_KEY,
-  REPORT_DATA_STORAGE_KEY,
-  MONTH_NAMES,
-} from "../constants";
+import { ExpenseBreakdown } from "../types";
+import { MONTH_NAMES } from "../constants";
 
-interface SimplifiedPnLMonth {
-  month: string;
+// Revenue reconciliation data structure (from API)
+interface RevenueMonth {
+  month: string; // "2026-01"
+  monthName: string;
+  gymMaster: { gross: number; refunds: number; net: number };
+  stripe: { gross: number; fees: number; feePercent: number; refunds: number; net: number };
+  quickbooks: {
+    income: number;
+    stripeIncome: number;
+    otherIncome: number;
+    expenses: ExpenseBreakdown;
+    netIncome: number;
+    connected: boolean;
+  };
+  payouts: number;
+}
+
+interface RevenueReconciliationData {
   year: number;
-  revenue: number; // From GymMaster
-  expenses: number; // From QuickBooks
-  netIncome: number; // Calculated
+  months: RevenueMonth[];
+  quickbooksConnected: boolean;
+  totals: {
+    gymMasterGross: number;
+    gymMasterRefunds: number;
+    stripeGross: number;
+    stripeFees: number;
+    stripeRefunds: number;
+    quickbooksStripeIncome: number;
+    quickbooksOtherIncome: number;
+    quickbooksExpenses: ExpenseBreakdown;
+    quickbooksNetIncome: number;
+    payouts: number;
+  };
+}
+
+// Simplified P&L month data for display
+interface PnLDisplayMonth {
+  month: string;
+  monthNum: number;
+  year: number;
+  stripeRevenue: number; // Stripe charged net of refunds
+  otherIncome: number; // QB other income
+  grossRevenue: number;
+  stripeFees: number;
+  netRevenue: number;
+  expenses: number; // QB total expenses
+  expenseBreakdown: ExpenseBreakdown; // QB expenses by category
+  netIncome: number;
 }
 
 export function PnLTab() {
-  const [qbData, setQbData] = useState<PnLMonthData[]>([]);
-  const [gymMasterData, setGymMasterData] = useState<MonthData[]>([]);
+  const [revenueData, setRevenueData] = useState<RevenueReconciliationData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [startMonth, setStartMonth] = useState(1);
-  const [endMonth, setEndMonth] = useState(9);
+  const [endMonth, setEndMonth] = useState(10);
   const [reportYear, setReportYear] = useState(2026);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
 
-  // Load from localStorage on mount
+  // Check QuickBooks connection status on mount
   useEffect(() => {
-    try {
-      // Load QuickBooks P&L data (for expenses)
-      const stored = localStorage.getItem(PNL_DATA_STORAGE_KEY);
-      if (stored) {
-        const parsed: PersistedPnLData = JSON.parse(stored);
-        setQbData(parsed.monthsData);
-        setStartMonth(parsed.startMonth);
-        setEndMonth(parsed.endMonth);
-        setReportYear(parsed.year);
-        setLastSavedAt(parsed.savedAt);
-      }
-
-      // Load GymMaster data (for revenue)
-      const gmStored = localStorage.getItem(REPORT_DATA_STORAGE_KEY);
-      if (gmStored) {
-        const gmParsed: PersistedReportData = JSON.parse(gmStored);
-        setGymMasterData(gmParsed.monthsData);
-      }
-    } catch (e) {
-      console.error("Failed to load from localStorage:", e);
-    }
-
-    // Check QuickBooks connection status
     const checkStatus = async () => {
       try {
         const res = await fetch("/api/quickbooks/status");
@@ -85,84 +95,37 @@ export function PnLTab() {
     checkStatus();
   }, []);
 
-  // Get GymMaster revenue for a given month
-  const getGymMasterRevenue = (month: string, year: number): number => {
-    const gmMonth = gymMasterData.find((m) => m.month === month && m.year === year);
-    return gmMonth?.totalRevenue || 0;
-  };
-
-  // Get QuickBooks expenses for a given month
-  const getQbExpenses = (month: string, year: number): number => {
-    const qbMonth = qbData.find((m) => m.month === month && m.year === year);
-    return qbMonth?.expenses || 0;
-  };
-
-  // Save to localStorage after fetching
-  const saveToLocalStorage = (data: PnLMonthData[]) => {
-    try {
-      const toSave: PersistedPnLData = {
-        monthsData: data,
-        startMonth,
-        endMonth,
-        year: reportYear,
-        savedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(PNL_DATA_STORAGE_KEY, JSON.stringify(toSave));
-      setLastSavedAt(toSave.savedAt);
-    } catch (e) {
-      console.error("Failed to save P&L to localStorage:", e);
-    }
-  };
-
   const clearCache = () => {
-    localStorage.removeItem(PNL_DATA_STORAGE_KEY);
-    setQbData([]);
+    setRevenueData(null);
     setLastSavedAt(null);
   };
 
-  const fetchMonthlyPnL = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     setError(null);
     setNeedsAuth(false);
-    setQbData([]);
-
-    const results: PnLMonthData[] = [];
 
     try {
-      // Fetch QuickBooks data month by month (for expenses)
-      for (let m = startMonth; m <= endMonth; m++) {
-        setLoadingProgress(`Loading QuickBooks ${MONTH_NAMES[m - 1]} ${reportYear}...`);
+      // Fetch all data from reconciliation API (now includes expense breakdown)
+      setLoadingProgress("Loading P&L data from Stripe & QuickBooks...");
+      const revenueRes = await fetch(
+        `/api/admin/revenue-reconciliation?year=${reportYear}&startMonth=${startMonth}&endMonth=${endMonth}`
+      );
+      const revenueJson = await revenueRes.json();
 
-        const startDate = `${reportYear}-${String(m).padStart(2, "0")}-01`;
-        const lastDay = new Date(reportYear, m, 0).getDate();
-        const endDate = `${reportYear}-${String(m).padStart(2, "0")}-${lastDay}`;
-
-        const res = await fetch(`/api/quickbooks/pnl?start_date=${startDate}&end_date=${endDate}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (data.needsAuth) {
-            setNeedsAuth(true);
-            return;
-          }
-          throw new Error(data.error || `Failed to fetch ${MONTH_NAMES[m - 1]}`);
+      if (!revenueRes.ok) {
+        if (revenueJson.needsAuth) {
+          setNeedsAuth(true);
+          return;
         }
-
-        results.push({
-          month: MONTH_NAMES[m - 1]!,
-          year: reportYear,
-          monthNum: m,
-          income: data.totalIncome || 0,
-          expenses: data.totalExpenses || 0,
-          netIncome: data.netIncome || 0,
-        });
+        throw new Error(revenueJson.error || "Failed to fetch P&L data");
       }
 
-      setQbData(results);
-      saveToLocalStorage(results);
+      setRevenueData(revenueJson);
+      setLastSavedAt(new Date().toISOString());
       setLoadingProgress("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch P&L");
+      setError(err instanceof Error ? err.message : "Failed to fetch P&L data");
     } finally {
       setIsLoading(false);
       setLoadingProgress("");
@@ -200,42 +163,119 @@ export function PnLTab() {
     );
   }
 
-  // Build simplified P&L data combining GymMaster revenue + QB expenses
-  const pnlData: SimplifiedPnLMonth[] = [];
-  for (let m = startMonth; m <= endMonth; m++) {
-    const monthName = MONTH_NAMES[m - 1]!;
-    const revenue = getGymMasterRevenue(monthName, reportYear);
-    const expenses = getQbExpenses(monthName, reportYear);
-    const netIncome = revenue - expenses;
+  // Empty expense breakdown helper
+  const emptyExpenses: ExpenseBreakdown = {
+    advertisingMarketing: 0,
+    contractLabor: 0,
+    appsSoftware: 0,
+    materialsSupplies: 0,
+    liabilityInsurance: 0,
+    utilities: 0,
+    repairsMaintenance: 0,
+    businessLicenses: 0,
+    clientCompensation: 0,
+    other: 0,
+    total: 0,
+  };
 
-    pnlData.push({
-      month: monthName,
-      year: reportYear,
-      revenue,
-      expenses,
-      netIncome,
-    });
+  // Build P&L display data
+  const pnlData: PnLDisplayMonth[] = [];
+  if (revenueData) {
+    for (const revMonth of revenueData.months) {
+      const monthNum = parseInt(revMonth.month.split("-")[1]!);
+      const monthName = MONTH_NAMES[monthNum - 1]!;
+
+      // Get expenses from the API response (now includes breakdown)
+      const expenseBreakdown = revMonth.quickbooks.expenses || emptyExpenses;
+      const expenses = expenseBreakdown.total;
+
+      // Stripe revenue = charged net of refunds (gross of fees)
+      const stripeRevenue = revMonth.stripe.gross - revMonth.stripe.refunds;
+      const otherIncome = revMonth.quickbooks.otherIncome;
+      const grossRevenue = stripeRevenue + otherIncome;
+      const stripeFees = revMonth.stripe.fees;
+      const netRevenue = grossRevenue - stripeFees;
+      const netIncome = netRevenue - expenses;
+
+      pnlData.push({
+        month: monthName,
+        monthNum,
+        year: reportYear,
+        stripeRevenue,
+        otherIncome,
+        grossRevenue,
+        stripeFees,
+        netRevenue,
+        expenses,
+        expenseBreakdown,
+        netIncome,
+      });
+    }
   }
 
   // Check if we have data
-  const hasGymMasterData = gymMasterData.length > 0;
-  const hasQbData = qbData.length > 0;
-  const hasData = hasGymMasterData && hasQbData;
+  const hasData = revenueData !== null && revenueData.months.length > 0;
 
   // Calculate totals
-  const totalRevenue = pnlData.reduce((sum, m) => sum + m.revenue, 0);
+  const totalStripeRevenue = pnlData.reduce((sum, m) => sum + m.stripeRevenue, 0);
+  const totalOtherIncome = pnlData.reduce((sum, m) => sum + m.otherIncome, 0);
+  const totalGrossRevenue = pnlData.reduce((sum, m) => sum + m.grossRevenue, 0);
+  const totalStripeFees = pnlData.reduce((sum, m) => sum + m.stripeFees, 0);
+  const totalNetRevenue = pnlData.reduce((sum, m) => sum + m.netRevenue, 0);
   const totalExpenses = pnlData.reduce((sum, m) => sum + m.expenses, 0);
-  const totalNetIncome = totalRevenue - totalExpenses;
+  const totalNetIncome = pnlData.reduce((sum, m) => sum + m.netIncome, 0);
+
+  // Calculate expense breakdown totals
+  const totalExpenseBreakdown: ExpenseBreakdown = pnlData.reduce(
+    (acc, m) => ({
+      advertisingMarketing: acc.advertisingMarketing + m.expenseBreakdown.advertisingMarketing,
+      contractLabor: acc.contractLabor + m.expenseBreakdown.contractLabor,
+      appsSoftware: acc.appsSoftware + m.expenseBreakdown.appsSoftware,
+      materialsSupplies: acc.materialsSupplies + m.expenseBreakdown.materialsSupplies,
+      liabilityInsurance: acc.liabilityInsurance + m.expenseBreakdown.liabilityInsurance,
+      utilities: acc.utilities + m.expenseBreakdown.utilities,
+      repairsMaintenance: acc.repairsMaintenance + m.expenseBreakdown.repairsMaintenance,
+      businessLicenses: acc.businessLicenses + m.expenseBreakdown.businessLicenses,
+      clientCompensation: acc.clientCompensation + m.expenseBreakdown.clientCompensation,
+      other: acc.other + m.expenseBreakdown.other,
+      total: acc.total + m.expenseBreakdown.total,
+    }),
+    { ...emptyExpenses }
+  );
+
   const avgMonthlyProfit = pnlData.length > 0 ? totalNetIncome / pnlData.length : 0;
-  const profitMargin = totalRevenue > 0 ? (totalNetIncome / totalRevenue) * 100 : 0;
+  const profitMargin = totalGrossRevenue > 0 ? (totalNetIncome / totalGrossRevenue) * 100 : 0;
+  const feePercent = totalStripeRevenue > 0 ? (totalStripeFees / totalStripeRevenue) * 100 : 0;
+
+  // Expense category labels for display
+  const expenseCategories: { key: keyof Omit<ExpenseBreakdown, "total">; label: string; color: string }[] = [
+    { key: "advertisingMarketing", label: "Advertising & Marketing", color: "bg-purple-500" },
+    { key: "contractLabor", label: "Contract Labor", color: "bg-blue-500" },
+    { key: "appsSoftware", label: "Apps & Software", color: "bg-cyan-500" },
+    { key: "materialsSupplies", label: "Materials & Supplies", color: "bg-green-500" },
+    { key: "liabilityInsurance", label: "Liability Insurance", color: "bg-yellow-500" },
+    { key: "utilities", label: "Utilities", color: "bg-orange-500" },
+    { key: "repairsMaintenance", label: "Repairs & Maintenance", color: "bg-red-500" },
+    { key: "businessLicenses", label: "Business Licenses", color: "bg-pink-500" },
+    { key: "clientCompensation", label: "Client Compensation", color: "bg-indigo-500" },
+    { key: "other", label: "Other", color: "bg-gray-500" },
+  ];
 
   // Chart data
   const chartData = pnlData.map((m) => ({
-    name: `${m.month} ${m.year}`,
-    revenue: m.revenue,
-    expenses: -m.expenses, // Negative for display below axis
+    name: m.month,
+    revenue: m.grossRevenue,
+    expenses: -m.expenses,
     netIncome: m.netIncome,
   }));
+
+  const formatCurrency = (value: number) => {
+    return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatK = (value: number) => {
+    return value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : formatCurrency(value);
+  };
 
   return (
     <div className="mt-8 space-y-6">
@@ -281,13 +321,13 @@ export function PnLTab() {
           </select>
         </div>
         <button
-          onClick={fetchMonthlyPnL}
+          onClick={fetchData}
           disabled={isLoading}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          {isLoading ? loadingProgress || "Loading..." : "Load Expenses"}
+          {isLoading ? loadingProgress || "Loading..." : "Load P&L Data"}
         </button>
-        {hasQbData && (
+        {hasData && (
           <button onClick={clearCache} className="text-sm text-gray-500 hover:text-red-600 transition-colors">
             Clear Cache
           </button>
@@ -302,108 +342,210 @@ export function PnLTab() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
-      {!hasGymMasterData && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-700">
-          <strong>Missing GymMaster data:</strong> Load data from the Membership Stats tab first to get revenue figures.
-        </div>
-      )}
-
       {hasData && (
         <>
           {/* Monthly P&L Table */}
           <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
-              <div>
-                <h3 className="font-bold text-gray-900">Monthly P&L</h3>
-                <p className="text-xs text-gray-500 mt-1">Revenue from GymMaster, Expenses from QuickBooks</p>
-              </div>
-              <div className="flex gap-2">
-                {avgMonthlyProfit !== 0 && (
-                  <div
-                    className={`${avgMonthlyProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"} border rounded-lg px-3 py-2 text-xs text-right`}
-                  >
-                    <div className={`${avgMonthlyProfit >= 0 ? "text-green-700" : "text-red-700"} font-semibold`}>
-                      ${Math.abs(avgMonthlyProfit).toLocaleString(undefined, { maximumFractionDigits: 0 })} avg
-                    </div>
-                    <div className={avgMonthlyProfit >= 0 ? "text-green-600" : "text-red-600"}>profit/month</div>
-                  </div>
-                )}
-                {profitMargin !== 0 && (
-                  <div
-                    className={`${profitMargin >= 0 ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200"} border rounded-lg px-3 py-2 text-xs text-right`}
-                  >
-                    <div className={`${profitMargin >= 0 ? "text-blue-700" : "text-red-700"} font-semibold`}>
-                      {profitMargin.toFixed(1)}% margin
-                    </div>
-                    <div className={profitMargin >= 0 ? "text-blue-600" : "text-red-600"}>profit margin</div>
-                  </div>
-                )}
-              </div>
+            <div className="px-4 py-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Monthly P&L</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Revenue from Stripe (source of truth) + QB Other Income | Expenses from QuickBooks
+              </p>
             </div>
-            <div className="p-4">
+            <div className="p-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 font-medium text-gray-600 w-32"></th>
+                    <th className="text-left py-2 font-medium text-gray-600 w-40"></th>
                     {pnlData.map((m) => (
-                      <th key={m.month} className="text-center py-2 font-medium text-gray-600">
+                      <th key={m.month} className="text-right py-2 px-3 font-medium text-gray-600 min-w-[80px]">
                         {m.month}
                       </th>
                     ))}
-                    <th className="text-center py-2 font-medium text-gray-900 bg-gray-50">Total</th>
+                    <th className="text-right py-2 px-3 font-bold text-gray-900 bg-gray-50 min-w-[90px]">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Revenue (GymMaster) */}
+                  {/* Stripe Revenue */}
                   <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">Revenue</td>
+                    <td className="py-2 text-gray-600">Stripe Revenue</td>
                     {pnlData.map((m) => (
-                      <td key={m.month} className="text-center py-2 text-green-600 font-medium">
-                        {m.revenue > 0 ? `$${(m.revenue / 1000).toFixed(1)}k` : "-"}
+                      <td key={m.month} className="text-right py-2 px-3 text-gray-900 font-mono">
+                        {formatCurrency(m.stripeRevenue)}
                       </td>
                     ))}
-                    <td className="text-center py-2 text-green-700 font-bold bg-gray-50">
-                      {totalRevenue > 0 ? `$${(totalRevenue / 1000).toFixed(1)}k` : "-"}
+                    <td className="text-right py-2 px-3 text-gray-900 font-bold bg-gray-50 font-mono">
+                      {formatCurrency(totalStripeRevenue)}
                     </td>
                   </tr>
-                  {/* Expenses (QuickBooks) */}
+                  {/* Other Income */}
                   <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">Expenses</td>
+                    <td className="py-2 text-gray-600">Other Income</td>
                     {pnlData.map((m) => (
-                      <td key={m.month} className="text-center py-2 text-red-600 font-medium">
-                        {m.expenses > 0 ? `$${(m.expenses / 1000).toFixed(1)}k` : "-"}
+                      <td key={m.month} className="text-right py-2 px-3 text-gray-600 font-mono">
+                        {m.otherIncome > 0 ? formatCurrency(m.otherIncome) : "—"}
                       </td>
                     ))}
-                    <td className="text-center py-2 text-red-700 font-bold bg-gray-50">
-                      {totalExpenses > 0 ? `$${(totalExpenses / 1000).toFixed(1)}k` : "-"}
+                    <td className="text-right py-2 px-3 text-gray-600 font-bold bg-gray-50 font-mono">
+                      {formatCurrency(totalOtherIncome)}
+                    </td>
+                  </tr>
+                  {/* Gross Revenue */}
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <td className="py-2 font-semibold text-gray-900">Gross Revenue</td>
+                    {pnlData.map((m) => (
+                      <td key={m.month} className="text-right py-2 px-3 text-gray-900 font-bold font-mono">
+                        {formatCurrency(m.grossRevenue)}
+                      </td>
+                    ))}
+                    <td className="text-right py-2 px-3 text-gray-900 font-bold bg-gray-100 font-mono">
+                      {formatCurrency(totalGrossRevenue)}
+                    </td>
+                  </tr>
+                  {/* Stripe Fees */}
+                  <tr className="border-b border-gray-100">
+                    <td className="py-2 text-gray-600">Stripe Fees</td>
+                    {pnlData.map((m) => (
+                      <td key={m.month} className="text-right py-2 px-3 text-red-600 font-mono">
+                        ({formatCurrency(m.stripeFees)})
+                      </td>
+                    ))}
+                    <td className="text-right py-2 px-3 text-red-600 font-bold bg-gray-50 font-mono">
+                      ({formatCurrency(totalStripeFees)})
+                    </td>
+                  </tr>
+                  {/* Net Revenue */}
+                  <tr className="border-b border-gray-200 bg-blue-50">
+                    <td className="py-2 font-semibold text-gray-900">Net Revenue</td>
+                    {pnlData.map((m) => (
+                      <td key={m.month} className="text-right py-2 px-3 text-blue-700 font-bold font-mono">
+                        {formatCurrency(m.netRevenue)}
+                      </td>
+                    ))}
+                    <td className="text-right py-2 px-3 text-blue-700 font-bold bg-blue-100 font-mono">
+                      {formatCurrency(totalNetRevenue)}
+                    </td>
+                  </tr>
+                  {/* Expenses */}
+                  <tr className="border-b border-gray-100">
+                    <td className="py-2 text-gray-600">Operating Expenses</td>
+                    {pnlData.map((m) => (
+                      <td key={m.month} className="text-right py-2 px-3 text-red-600 font-mono">
+                        {m.expenses > 0 ? `(${formatCurrency(m.expenses)})` : "—"}
+                      </td>
+                    ))}
+                    <td className="text-right py-2 px-3 text-red-600 font-bold bg-gray-50 font-mono">
+                      ({formatCurrency(totalExpenses)})
                     </td>
                   </tr>
                   {/* Net Income */}
-                  <tr className="bg-blue-50">
-                    <td className="py-2 font-semibold text-gray-900">Net Income</td>
+                  <tr className="bg-green-50">
+                    <td className="py-3 font-bold text-gray-900">Net Income</td>
                     {pnlData.map((m) => (
                       <td
                         key={m.month}
-                        className={`text-center py-2 font-bold ${m.netIncome >= 0 ? "text-green-700" : "text-red-700"}`}
+                        className={`text-right py-3 px-3 font-bold font-mono ${
+                          m.netIncome >= 0 ? "text-green-700" : "text-red-700"
+                        }`}
                       >
-                        {m.revenue > 0 || m.expenses > 0 ? `$${(m.netIncome / 1000).toFixed(1)}k` : "-"}
+                        {formatCurrency(m.netIncome)}
                       </td>
                     ))}
                     <td
-                      className={`text-center py-2 font-bold bg-blue-100 ${totalNetIncome >= 0 ? "text-green-700" : "text-red-700"}`}
+                      className={`text-right py-3 px-3 font-bold bg-green-100 font-mono ${
+                        totalNetIncome >= 0 ? "text-green-700" : "text-red-700"
+                      }`}
                     >
-                      ${(totalNetIncome / 1000).toFixed(1)}k
+                      {formatCurrency(totalNetIncome)}
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Expense Breakdown Toggle */}
+            <div className="border-t border-gray-100">
+              <button
+                onClick={() => setShowExpenseBreakdown(!showExpenseBreakdown)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    className={`w-4 h-4 text-gray-500 transition-transform ${showExpenseBreakdown ? "rotate-90" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-sm font-semibold text-gray-700">Expense Breakdown by Category</span>
+                </div>
+                <span className="text-xs text-gray-500">{formatCurrency(totalExpenses)} total</span>
+              </button>
+
+              {showExpenseBreakdown && (
+                <div className="p-4 pt-2">
+                  {/* Monthly Expense Breakdown Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-2 font-medium text-gray-600 w-48">Category</th>
+                          {pnlData.map((m) => (
+                            <th key={m.month} className="text-right py-2 px-3 font-medium text-gray-600 min-w-[80px]">
+                              {m.month}
+                            </th>
+                          ))}
+                          <th className="text-right py-2 px-3 font-bold text-gray-900 bg-gray-50 min-w-[90px]">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenseCategories
+                          .filter((cat) => totalExpenseBreakdown[cat.key] > 0)
+                          .sort((a, b) => totalExpenseBreakdown[b.key] - totalExpenseBreakdown[a.key])
+                          .map((cat) => (
+                            <tr key={cat.key} className="border-b border-gray-100">
+                              <td className="py-2 text-gray-700">
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full ${cat.color}`} />
+                                  {cat.label}
+                                </div>
+                              </td>
+                              {pnlData.map((m) => (
+                                <td key={m.month} className="text-right py-2 px-3 text-gray-600 font-mono">
+                                  {m.expenseBreakdown[cat.key] > 0
+                                    ? formatCurrency(m.expenseBreakdown[cat.key])
+                                    : "—"}
+                                </td>
+                              ))}
+                              <td className="text-right py-2 px-3 text-gray-900 font-bold bg-gray-50 font-mono">
+                                {formatCurrency(totalExpenseBreakdown[cat.key])}
+                              </td>
+                            </tr>
+                          ))}
+                        <tr className="bg-red-50 font-semibold">
+                          <td className="py-2 text-gray-900">Total Expenses</td>
+                          {pnlData.map((m) => (
+                            <td key={m.month} className="text-right py-2 px-3 text-red-700 font-mono">
+                              {formatCurrency(m.expenses)}
+                            </td>
+                          ))}
+                          <td className="text-right py-2 px-3 text-red-700 font-bold bg-red-100 font-mono">
+                            {formatCurrency(totalExpenses)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Net Income Chart */}
           <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">Net Income Trend</h3>
+              <h3 className="font-bold text-gray-900">Revenue vs Expenses Trend</h3>
             </div>
             <div className="p-4">
               <ResponsiveContainer width="100%" height={280}>
@@ -427,7 +569,7 @@ export function PnLTab() {
                   <Tooltip
                     formatter={(value: number, name: string) => {
                       const labels: Record<string, string> = {
-                        revenue: "Revenue",
+                        revenue: "Gross Revenue",
                         expenses: "Expenses",
                         netIncome: "Net Income",
                       };
@@ -437,7 +579,6 @@ export function PnLTab() {
                     contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
                   />
                   <ReferenceLine yAxisId="left" y={0} stroke="#e0e0e0" />
-                  {/* Revenue - Green bars going up */}
                   <Bar yAxisId="left" dataKey="revenue" fill="#22c55e" name="revenue" radius={[4, 4, 0, 0]}>
                     <LabelList
                       dataKey="revenue"
@@ -448,7 +589,6 @@ export function PnLTab() {
                       formatter={(value: number) => `$${(value / 1000).toFixed(1)}k`}
                     />
                   </Bar>
-                  {/* Expenses - Red bars going down */}
                   <Bar yAxisId="left" dataKey="expenses" fill="#ef4444" name="expenses" radius={[0, 0, 4, 4]}>
                     <LabelList
                       dataKey="expenses"
@@ -459,7 +599,6 @@ export function PnLTab() {
                       formatter={(value: number) => (value < 0 ? `$${(Math.abs(value) / 1000).toFixed(1)}k` : "")}
                     />
                   </Bar>
-                  {/* Net Income - Line */}
                   <Line
                     yAxisId="right"
                     type="monotone"
@@ -484,7 +623,7 @@ export function PnLTab() {
               <div className="flex justify-center gap-6 mt-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-green-500 rounded-sm" />
-                  <span className="text-gray-600">Revenue (GymMaster)</span>
+                  <span className="text-gray-600">Gross Revenue (Stripe + Other)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-red-500 rounded-sm" />
@@ -497,15 +636,31 @@ export function PnLTab() {
               </div>
             </div>
           </div>
+
+          {/* Data Sources */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Data Sources</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-600">
+              <div>
+                <span className="font-medium">Stripe Revenue:</span> Charged net of refunds (Stripe API)
+              </div>
+              <div>
+                <span className="font-medium">Other Income:</span> Non-Stripe income (QuickBooks)
+              </div>
+              <div>
+                <span className="font-medium">Stripe Fees:</span> Processing fees (Stripe API)
+              </div>
+              <div>
+                <span className="font-medium">Expenses:</span> Operating expenses (QuickBooks)
+              </div>
+            </div>
+          </div>
         </>
       )}
 
       {!hasData && !isLoading && !error && (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
-          {!hasGymMasterData
-            ? "Load GymMaster data from Membership Stats tab first, then click \"Load Expenses\" to fetch QuickBooks data."
-            : "Click \"Load Expenses\" to fetch QuickBooks expense data."
-          }
+          Click "Load P&L Data" to fetch revenue from Stripe and expenses from QuickBooks.
         </div>
       )}
     </div>

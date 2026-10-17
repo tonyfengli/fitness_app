@@ -148,6 +148,21 @@ export interface PersistedPnLData {
   savedAt: string; // ISO timestamp
 }
 
+// Expense breakdown from QuickBooks
+export interface ExpenseBreakdown {
+  advertisingMarketing: number;
+  contractLabor: number;
+  appsSoftware: number;
+  materialsSupplies: number;
+  liabilityInsurance: number;
+  utilities: number;
+  repairsMaintenance: number;
+  businessLicenses: number;
+  clientCompensation: number;
+  other: number;
+  total: number;
+}
+
 // P&L Tab types
 export interface PnLMonthData {
   month: string;
@@ -155,6 +170,7 @@ export interface PnLMonthData {
   monthNum: number;
   income: number;
   expenses: number;
+  expenseBreakdown?: ExpenseBreakdown;
   netIncome: number;
 }
 
@@ -261,7 +277,6 @@ export interface BillingAttempt {
 export interface ClientReviewPaymentHistory {
   monthKey: string;
   monthName: string;
-  expected: number;
   paid: number;
   refunded: number;
   net: number;
@@ -270,7 +285,8 @@ export interface ClientReviewPaymentHistory {
 export interface ClientNeedingReview {
   memberId: string;
   memberName: string;
-  expected: number;
+  membershipType: string;
+  membershipFee: number;
   paid: number;
   refunded: number;
   net: number;
@@ -283,21 +299,18 @@ export interface ClientNeedingReview {
   billingFailReason: string | null;
 }
 
-export interface MonthlyReviewSummary {
-  monthKey: string;
-  monthName: string;
-  clientsNeedingReview: number;
-  refundCount: number;
-  onHoldCount: number;
-  notPaidCount: number;
-  billingFailedCount: number;
-}
-
 export interface ClientsNeedingReviewData {
   year: number;
-  selectedMonth: string | null;
-  monthlySummaries: MonthlyReviewSummary[];
+  month: string;
+  monthName: string;
   clients: ClientNeedingReview[];
+  summary: {
+    total: number;
+    refundCount: number;
+    onHoldCount: number;
+    notPaidCount: number;
+    billingFailedCount: number;
+  };
 }
 
 // Stripe Verification types

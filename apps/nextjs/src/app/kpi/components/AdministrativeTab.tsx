@@ -6,6 +6,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { formatCurrency } from "../lib/parse-all-payments";
 import { GymMasterRefund, AdminRefundsData, ClientNeedingReview, ClientsNeedingReviewData, ReviewStatusFlag, VerifyMemberResponse } from "../types";
 
+// Local storage key for lost member overrides (shared with ReportingTab)
+const OVERRIDES_STORAGE_KEY = "kpi-member-overrides";
+
 // Monthly reconciliation data from new API
 interface MonthlyReconciliation {
   month: string; // "2026-01"
@@ -22,6 +25,12 @@ interface MonthlyReconciliation {
     refunds: number;
     net: number;
   };
+  quickbooks: {
+    income: number;
+    stripeIncome: number;
+    otherIncome: number;
+    connected: boolean;
+  };
   payouts: number;
   variance: number;
   variancePercent: number;
@@ -31,6 +40,7 @@ interface MonthlyReconciliation {
 interface RevenueReconciliationData {
   year: number;
   months: MonthlyReconciliation[];
+  quickbooksConnected: boolean;
   totals: {
     gymMasterGross: number;
     gymMasterRefunds: number;
@@ -40,6 +50,9 @@ interface RevenueReconciliationData {
     stripeFeePercent: number;
     stripeRefunds: number;
     stripeNet: number;
+    quickbooksIncome: number;
+    quickbooksStripeIncome: number;
+    quickbooksOtherIncome: number;
     payouts: number;
     variance: number;
     variancePercent: number;
@@ -107,11 +120,34 @@ export function AdministrativeTab() {
     }
   };
 
-  const fetchClientsNeedingReview = async (month?: string) => {
+  const fetchClientsNeedingReview = async () => {
     setIsLoadingClientsReview(true);
     try {
-      const monthParam = month ? `&month=${month.split("-")[1]}` : "";
-      const res = await fetch(`/api/admin/clients-needing-review?year=${reportYear}${monthParam}`);
+      // Get excludeFromLost from localStorage (shared with ReportingTab)
+      let excludeFromLost: string[] = [];
+      try {
+        const stored = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+        if (stored) {
+          const overrides = JSON.parse(stored);
+          // Collect all member IDs excluded from lost across all months
+          for (const monthKey of Object.keys(overrides)) {
+            const monthOverrides = overrides[monthKey];
+            if (monthOverrides?.excludeFromLost) {
+              excludeFromLost.push(...monthOverrides.excludeFromLost);
+            }
+          }
+          // Remove duplicates
+          excludeFromLost = Array.from(new Set(excludeFromLost));
+        }
+      } catch (e) {
+        console.error("Failed to read overrides from localStorage:", e);
+      }
+
+      const res = await fetch(`/api/admin/clients-needing-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year: reportYear, excludeFromLost }),
+      });
       const json = await res.json();
       if (res.ok) {
         setClientsReviewData(json);
@@ -124,9 +160,92 @@ export function AdministrativeTab() {
   };
 
   useEffect(() => {
-    fetchData();
-    fetchRevenueReconciliation();
-    fetchClientsNeedingReview();
+    let cancelled = false;
+
+    const loadData = async () => {
+      // Fetch refunds data
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/admin/refunds-reconciliation?year=${reportYear}`);
+        const json = await res.json();
+        if (!cancelled) {
+          if (!res.ok) {
+            setError(json.error || "Failed to fetch refunds data");
+          } else {
+            setData(json);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to fetch data");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+
+      // Fetch revenue reconciliation
+      setIsLoadingRevenue(true);
+      setRevenueError(null);
+      try {
+        const res = await fetch(`/api/admin/revenue-reconciliation?year=${reportYear}`);
+        const json = await res.json();
+        if (!cancelled) {
+          if (!res.ok) {
+            setRevenueError(json.error || "Failed to fetch revenue reconciliation");
+          } else {
+            setRevenueData(json);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRevenueError(err instanceof Error ? err.message : "Failed to fetch revenue data");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingRevenue(false);
+      }
+
+      // Fetch clients needing review
+      setIsLoadingClientsReview(true);
+      try {
+        let excludeFromLost: string[] = [];
+        try {
+          const stored = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+          if (stored) {
+            const overrides = JSON.parse(stored);
+            for (const monthKey of Object.keys(overrides)) {
+              const monthOverrides = overrides[monthKey];
+              if (monthOverrides?.excludeFromLost) {
+                excludeFromLost.push(...monthOverrides.excludeFromLost);
+              }
+            }
+            excludeFromLost = Array.from(new Set(excludeFromLost));
+          }
+        } catch (e) {
+          console.error("Failed to read overrides from localStorage:", e);
+        }
+
+        const res = await fetch(`/api/admin/clients-needing-review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ year: reportYear, excludeFromLost }),
+        });
+        const json = await res.json();
+        if (!cancelled && res.ok) {
+          setClientsReviewData(json);
+        }
+      } catch (err) {
+        console.error("Failed to fetch clients needing review:", err);
+      } finally {
+        if (!cancelled) setIsLoadingClientsReview(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [reportYear]);
 
   // Get adjustments for a specific month
@@ -159,14 +278,10 @@ export function AdministrativeTab() {
 
   const getRefundKey = (refund: GymMasterRefund) => `${refund.memberId}-${refund.refundDate}`;
 
-  const handleBarClick = (monthKey: string) => {
-    const newMonth = selectedMonth === monthKey ? null : monthKey;
-    setSelectedMonth(newMonth);
-    setExpandedRefunds(new Set());
+  // Refresh clients needing review when overrides change
+  const refreshClientsReview = () => {
     setExpandedClients(new Set());
-    if (newMonth) {
-      fetchClientsNeedingReview(newMonth);
-    }
+    fetchClientsNeedingReview();
   };
 
   const toggleClientExpand = async (memberId: string) => {
@@ -335,63 +450,47 @@ export function AdministrativeTab() {
       {revenueError && <div className="rounded-md bg-red-50 p-4 text-red-700">{revenueError}</div>}
 
       {/* Revenue Reconciliation Section */}
-      {revenueData && (
-        <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">Revenue Reconciliation</h3>
-              <p className="text-sm text-gray-500">
-                GymMaster P&L vs Stripe Charges vs Bank Deposits ({revenueData.year})
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {revenueData.totals.isReconciled ? (
-                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
-                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  Reconciled
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  Variance: {revenueData.totals.variancePercent.toFixed(1)}%
-                </span>
-              )}
-              <button
-                onClick={fetchRevenueReconciliation}
-                disabled={isLoadingRevenue}
-                className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-              >
-                {isLoadingRevenue ? "Loading..." : "Refresh"}
-              </button>
-            </div>
-          </div>
+      {revenueData && (() => {
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-              <div className="text-xs text-gray-500 uppercase">GymMaster Gross</div>
-              <div className="text-xl font-semibold text-gray-900">{formatCurrency(revenueData.totals.gymMasterGross)}</div>
-              <div className="text-xs text-gray-400">P&L Revenue</div>
-            </div>
-            <div className="p-4 rounded-lg bg-green-50 border border-green-200">
-              <div className="text-xs text-green-600 uppercase">Stripe Gross</div>
-              <div className="text-xl font-semibold text-green-700">{formatCurrency(revenueData.totals.stripeGross)}</div>
-              <div className="text-xs text-green-500">Actually Charged</div>
-            </div>
-            <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-              <div className="text-xs text-blue-600 uppercase">Bank Deposits</div>
-              <div className="text-xl font-semibold text-blue-700">{formatCurrency(revenueData.totals.payouts)}</div>
-              <div className="text-xs text-blue-500">After fees & refunds</div>
-            </div>
-            <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
-              <div className="text-xs text-orange-600 uppercase">Stripe Fees</div>
-              <div className="text-xl font-semibold text-orange-700">{formatCurrency(revenueData.totals.stripeFees)}</div>
-              <div className="text-xs text-orange-500">{revenueData.totals.stripeFeePercent.toFixed(1)}% of gross</div>
-            </div>
+        // Calculate status for each month
+        const getMonthStatus = (m: MonthlyReconciliation) => {
+          const monthNum = parseInt(m.month.split("-")[1]!);
+          const isCurrentMonth = monthNum === currentMonth && revenueData.year === currentYear;
+          // Net of refunds, gross of fees
+          const billedNet = m.gymMaster.gross - m.gymMaster.refunds;
+          const chargedNet = m.stripe.gross - m.stripe.refunds;
+          const billedVsCharged = chargedNet - billedNet;
+          const payoutVsQb = revenueData.quickbooksConnected
+            ? m.quickbooks.stripeIncome - m.payouts
+            : 0;
+
+          if (isCurrentMonth) {
+            return { closed: false, reason: "month in progress" };
+          }
+          if (Math.abs(billedVsCharged) >= 5) {
+            return { closed: false, reason: billedVsCharged > 0 ? "charged more than billed" : "billed more than charged" };
+          }
+          if (revenueData.quickbooksConnected && Math.abs(payoutVsQb) >= 5) {
+            return { closed: false, reason: "QB short of payout" };
+          }
+          return { closed: true, reason: "" };
+        };
+
+        const openCount = revenueData.months.filter(m => !getMonthStatus(m).closed).length;
+
+        return (
+        <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-medium text-gray-900">Revenue Reconciliation</h3>
+            <button
+              onClick={fetchRevenueReconciliation}
+              disabled={isLoadingRevenue}
+              className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+            >
+              {isLoadingRevenue ? "Loading..." : "Refresh"}
+            </button>
           </div>
 
           {/* Monthly Reconciliation Table */}
@@ -399,99 +498,155 @@ export function AdministrativeTab() {
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-2 text-xs font-medium text-gray-500 uppercase">Month</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-gray-500 uppercase">GM Gross</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-gray-500 uppercase">GM Refunds</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-green-600 uppercase">Stripe Gross</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-orange-600 uppercase">Fees</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-red-500 uppercase">Refunds</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-blue-600 uppercase">Payouts</th>
-                  <th className="text-right py-3 px-2 text-xs font-medium text-gray-500 uppercase">Variance</th>
-                  <th className="text-center py-3 px-2 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="text-left py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Month</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <div>Billed</div>
+                    <div className="font-normal normal-case text-gray-400">GymMaster</div>
+                  </th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <div>Charged</div>
+                    <div className="font-normal normal-case text-gray-400">Stripe</div>
+                  </th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Δ Billed→Charged</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Fees</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Fee %</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <div>Paid Out</div>
+                    <div className="font-normal normal-case text-gray-400">Stripe</div>
+                  </th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <div>Stripe Income</div>
+                    <div className="font-normal normal-case text-gray-400">QuickBooks</div>
+                  </th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Δ Payout→QB</th>
+                  <th className="text-left py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {revenueData.months.map((m) => (
-                  <tr key={m.month} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-2 text-sm font-medium text-gray-900">{m.monthName}</td>
-                    <td className="py-3 px-2 text-sm text-gray-700 text-right font-mono">
-                      {formatCurrency(m.gymMaster.gross)}
+                {revenueData.months.map((m) => {
+                  const monthNum = parseInt(m.month.split("-")[1]!);
+                  const isCurrentMonth = monthNum === currentMonth && revenueData.year === currentYear;
+                  // Net of refunds, gross of fees
+                  const billedNet = m.gymMaster.gross - m.gymMaster.refunds;
+                  const chargedNet = m.stripe.gross - m.stripe.refunds;
+                  const billedVsCharged = chargedNet - billedNet;
+                  const payoutVsQb = revenueData.quickbooksConnected
+                    ? m.quickbooks.stripeIncome - m.payouts
+                    : 0;
+                  const status = getMonthStatus(m);
+                  const monthLabel = m.monthName.replace(` ${revenueData.year}`, "");
+
+                  return (
+                  <tr key={m.month} className="border-b border-gray-100">
+                    <td className="py-4 px-3 text-sm text-gray-900">
+                      <span className="font-medium">{monthLabel}</span>
+                      {isCurrentMonth && <span className="text-gray-400 text-xs ml-1">· to date</span>}
                     </td>
-                    <td className="py-3 px-2 text-sm text-red-600 text-right font-mono">
-                      {m.gymMaster.refunds > 0 ? `-${formatCurrency(m.gymMaster.refunds)}` : "—"}
+                    <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono">
+                      {formatCurrency(billedNet)}
                     </td>
-                    <td className="py-3 px-2 text-sm text-green-700 text-right font-mono font-medium">
-                      {formatCurrency(m.stripe.gross)}
+                    <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono">
+                      {formatCurrency(chargedNet)}
                     </td>
-                    <td className="py-3 px-2 text-sm text-orange-600 text-right font-mono">
+                    <td className={`py-4 px-3 text-sm text-right font-mono ${
+                      Math.abs(billedVsCharged) < 5 ? "text-gray-400" : billedVsCharged > 0 ? "text-green-600" : "text-red-600"
+                    }`}>
+                      {Math.abs(billedVsCharged) < 5 ? "—" : (billedVsCharged > 0 ? "+" : "") + formatCurrency(billedVsCharged)}
+                    </td>
+                    <td className="py-4 px-3 text-sm text-gray-600 text-right font-mono">
                       {formatCurrency(m.stripe.fees)}
-                      <span className="text-orange-400 text-xs ml-1">({m.stripe.feePercent.toFixed(1)}%)</span>
                     </td>
-                    <td className="py-3 px-2 text-sm text-red-500 text-right font-mono">
-                      {m.stripe.refunds > 0 ? `-${formatCurrency(m.stripe.refunds)}` : "—"}
+                    <td className="py-4 px-3 text-sm text-gray-600 text-right font-mono">
+                      {m.stripe.feePercent.toFixed(1)}%
                     </td>
-                    <td className="py-3 px-2 text-sm text-blue-600 text-right font-mono font-medium">
+                    <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono">
                       {formatCurrency(m.payouts)}
                     </td>
-                    <td className={`py-3 px-2 text-sm text-right font-mono ${
-                      Math.abs(m.variance) < 5 ? "text-gray-400" : m.variance > 0 ? "text-yellow-600" : "text-red-600"
-                    }`}>
-                      {m.variance >= 0 ? "+" : ""}{formatCurrency(m.variance)}
+                    <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono font-medium">
+                      {m.quickbooks.connected ? formatCurrency(m.quickbooks.stripeIncome) : "—"}
                     </td>
-                    <td className="py-3 px-2 text-center">
-                      {m.isReconciled ? (
-                        <svg className="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                    <td className={`py-4 px-3 text-sm text-right font-mono ${
+                      !m.quickbooks.connected ? "text-gray-400" : Math.abs(payoutVsQb) < 5 ? "text-gray-400" : payoutVsQb > 0 ? "text-green-600" : "text-red-600"
+                    }`}>
+                      {!m.quickbooks.connected ? "—" : Math.abs(payoutVsQb) < 5 ? "—" : (payoutVsQb > 0 ? "+" : "") + formatCurrency(payoutVsQb)}
+                    </td>
+                    <td className="py-4 px-3 text-sm">
+                      {status.closed ? (
+                        <span className="inline-flex items-center text-green-700">
+                          <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                          Closed
+                        </span>
                       ) : (
-                        <span className="text-xs text-yellow-600">{Math.abs(m.variancePercent).toFixed(1)}%</span>
+                        <span className="inline-flex items-center text-yellow-700">
+                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                          Open
+                          {status.reason && <span className="text-gray-400 ml-1">· {status.reason}</span>}
+                        </span>
                       )}
                     </td>
                   </tr>
-                ))}
-                {/* Totals Row */}
-                <tr className="bg-gray-50 font-medium">
-                  <td className="py-3 px-2 text-sm text-gray-900">Total</td>
-                  <td className="py-3 px-2 text-sm text-gray-900 text-right font-mono">
-                    {formatCurrency(revenueData.totals.gymMasterGross)}
+                  );
+                })}
+                {/* YTD Row */}
+                {(() => {
+                  const ytdBilledNet = revenueData.totals.gymMasterGross - revenueData.totals.gymMasterRefunds;
+                  const ytdChargedNet = revenueData.totals.stripeGross - revenueData.totals.stripeRefunds;
+                  const ytdVariance = ytdChargedNet - ytdBilledNet;
+                  return (
+                <tr className="border-t-2 border-gray-300 font-medium">
+                  <td className="py-4 px-3 text-sm text-gray-900 font-semibold">YTD</td>
+                  <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono">
+                    {formatCurrency(ytdBilledNet)}
                   </td>
-                  <td className="py-3 px-2 text-sm text-red-600 text-right font-mono">
-                    -{formatCurrency(revenueData.totals.gymMasterRefunds)}
+                  <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono">
+                    {formatCurrency(ytdChargedNet)}
                   </td>
-                  <td className="py-3 px-2 text-sm text-green-700 text-right font-mono">
-                    {formatCurrency(revenueData.totals.stripeGross)}
+                  <td className={`py-4 px-3 text-sm text-right font-mono ${
+                    Math.abs(ytdVariance) < 5 ? "text-gray-400" : ytdVariance > 0 ? "text-green-600" : "text-red-600"
+                  }`}>
+                    {Math.abs(ytdVariance) < 5 ? "—" : (ytdVariance > 0 ? "+" : "") + formatCurrency(ytdVariance)}
                   </td>
-                  <td className="py-3 px-2 text-sm text-orange-600 text-right font-mono">
+                  <td className="py-4 px-3 text-sm text-gray-600 text-right font-mono">
                     {formatCurrency(revenueData.totals.stripeFees)}
-                    <span className="text-orange-400 text-xs ml-1">({revenueData.totals.stripeFeePercent.toFixed(1)}%)</span>
                   </td>
-                  <td className="py-3 px-2 text-sm text-red-500 text-right font-mono">
-                    -{formatCurrency(revenueData.totals.stripeRefunds)}
+                  <td className="py-4 px-3 text-sm text-gray-600 text-right font-mono">
+                    {revenueData.totals.stripeFeePercent.toFixed(1)}%
                   </td>
-                  <td className="py-3 px-2 text-sm text-blue-600 text-right font-mono">
+                  <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono">
                     {formatCurrency(revenueData.totals.payouts)}
                   </td>
-                  <td className={`py-3 px-2 text-sm text-right font-mono ${
-                    Math.abs(revenueData.totals.variance) < 50 ? "text-gray-400" : revenueData.totals.variance > 0 ? "text-yellow-600" : "text-red-600"
-                  }`}>
-                    {revenueData.totals.variance >= 0 ? "+" : ""}{formatCurrency(revenueData.totals.variance)}
+                  <td className="py-4 px-3 text-sm text-gray-900 text-right font-mono font-medium">
+                    {revenueData.quickbooksConnected ? formatCurrency(revenueData.totals.quickbooksStripeIncome) : "—"}
                   </td>
-                  <td className="py-3 px-2 text-center">
-                    {revenueData.totals.isReconciled ? (
-                      <svg className="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <span className="text-xs text-yellow-600">{Math.abs(revenueData.totals.variancePercent).toFixed(1)}%</span>
-                    )}
+                  <td className={`py-4 px-3 text-sm text-right font-mono ${
+                    !revenueData.quickbooksConnected ? "text-gray-400" :
+                    Math.abs(revenueData.totals.quickbooksStripeIncome - revenueData.totals.payouts) < 5
+                      ? "text-gray-400"
+                      : (revenueData.totals.quickbooksStripeIncome - revenueData.totals.payouts) > 0
+                        ? "text-green-600"
+                        : "text-red-600"
+                  }`}>
+                    {(() => {
+                      if (!revenueData.quickbooksConnected) return "—";
+                      const diff = revenueData.totals.quickbooksStripeIncome - revenueData.totals.payouts;
+                      return Math.abs(diff) < 5 ? "—" : (diff > 0 ? "+" : "") + formatCurrency(diff);
+                    })()}
+                  </td>
+                  <td className="py-4 px-3 text-sm text-gray-600">
+                    {openCount > 0 ? `${openCount} open` : "All closed"}
                   </td>
                 </tr>
+                  );
+                })()}
               </tbody>
             </table>
           </div>
+        </div>
+        );
+      })()}
 
           {/* Refund Reconciliation - Collapsible Section */}
-          {data && (
+          {data && revenueData && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <button
                 onClick={() => setShowRefundSection(!showRefundSection)}
@@ -675,8 +830,6 @@ export function AdministrativeTab() {
               )}
             </div>
           )}
-        </div>
-      )}
 
       {isLoadingRevenue && !revenueData && (
         <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
@@ -687,103 +840,55 @@ export function AdministrativeTab() {
         </div>
       )}
 
-      {/* Clients Needing Review - Chart Section */}
-      {clientsReviewData && clientsReviewData.monthlySummaries.length > 0 && (
-        <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Clients that Need Review</h3>
-            {selectedMonth && (
-              <button
-                onClick={() => {
-                  setSelectedMonth(null);
-                  fetchClientsNeedingReview();
-                }}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Clear selection
-              </button>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mb-4">Click on a bar to view client details (refunds, on-hold, underpayments)</p>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={clientsReviewData.monthlySummaries} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="monthKey"
-                  tick={{ fontSize: 12, fill: "#6b7280" }}
-                  tickFormatter={(value) => {
-                    const parts = value.split("-");
-                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                    return monthNames[parseInt(parts[1], 10) - 1] || value;
-                  }}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: "#6b7280" }}
-                  tickFormatter={(value) => value.toString()}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  formatter={(value, name) => {
-                    if (name === "clientsNeedingReview") return [value, "Clients"];
-                    return [value, name];
-                  }}
-                  labelFormatter={(label) => {
-                    if (!label || typeof label !== "string") return String(label);
-                    const parts = label.split("-");
-                    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                    return `${monthNames[parseInt(parts[1] || "0", 10) - 1] || ""} ${parts[0] || ""}`;
-                  }}
-                  contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb" }}
-                />
-                <Bar
-                  dataKey="clientsNeedingReview"
-                  radius={[4, 4, 0, 0]}
-                  cursor="pointer"
-                  onClick={(_data, index) => {
-                    const monthKey = clientsReviewData.monthlySummaries[index]?.monthKey;
-                    if (monthKey) handleBarClick(monthKey);
-                  }}
-                >
-                  {clientsReviewData.monthlySummaries.map((entry) => (
-                    <Cell
-                      key={entry.monthKey}
-                      fill={selectedMonth === entry.monthKey ? "#7c3aed" : "#8b5cf6"}
-                      opacity={selectedMonth && selectedMonth !== entry.monthKey ? 0.4 : 1}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {isLoadingClientsReview && !clientsReviewData && (
-        <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
-            <span className="ml-3 text-gray-500">Loading clients needing review...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Clients Needing Review Detail Table - Show when month is selected */}
-      {selectedMonth && clientsReviewData && clientsReviewData.clients.length > 0 && (
+      {/* Clients Needing Review Section */}
+      {clientsReviewData && (
         <div className="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">
-              Clients that Need Review - {clientsReviewData.monthlySummaries.find((m) => m.monthKey === selectedMonth)?.monthName || selectedMonth}
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">
-              {clientsReviewData.clients.length} client{clientsReviewData.clients.length !== 1 ? "s" : ""} needing attention
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">
+                  Clients that Need Review - {clientsReviewData.monthName}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {clientsReviewData.summary.total} active member{clientsReviewData.summary.total !== 1 ? "s" : ""} with payment issues
+                </p>
+              </div>
+              <button
+                onClick={refreshClientsReview}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Refresh
+              </button>
+            </div>
+            {clientsReviewData.summary.total > 0 && (
+              <div className="flex gap-4 mt-2 text-xs">
+                {clientsReviewData.summary.refundCount > 0 && (
+                  <span className="text-red-600">{clientsReviewData.summary.refundCount} refund{clientsReviewData.summary.refundCount !== 1 ? "s" : ""}</span>
+                )}
+                {clientsReviewData.summary.onHoldCount > 0 && (
+                  <span className="text-yellow-600">{clientsReviewData.summary.onHoldCount} on hold</span>
+                )}
+                {clientsReviewData.summary.notPaidCount > 0 && (
+                  <span className="text-orange-600">{clientsReviewData.summary.notPaidCount} not paid</span>
+                )}
+                {clientsReviewData.summary.billingFailedCount > 0 && (
+                  <span className="text-purple-600">{clientsReviewData.summary.billingFailedCount} billing failed</span>
+                )}
+              </div>
+            )}
           </div>
+
+          {clientsReviewData.clients.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-500">
+              No active members with payment issues this month.
+            </div>
+          ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Expected</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Membership</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Fee</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Paid</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Refunded</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Net</th>
@@ -801,8 +906,11 @@ export function AdministrativeTab() {
                         <span className="text-gray-400 text-xs">#{client.memberId}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 max-w-32 truncate" title={client.membershipType}>
+                      {client.membershipType || "—"}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-600 text-right font-mono">
-                      {formatCurrency(client.expected)}
+                      {formatCurrency(client.membershipFee)}
                     </td>
                     <td className="px-4 py-3 text-sm text-green-600 text-right font-mono">
                       {formatCurrency(client.paid)}
@@ -811,7 +919,7 @@ export function AdministrativeTab() {
                       {client.refunded > 0 ? `-${formatCurrency(client.refunded)}` : "—"}
                     </td>
                     <td className={`px-4 py-3 text-sm text-right font-mono font-medium ${
-                      client.net < client.expected ? "text-red-600" : "text-green-600"
+                      client.net < client.membershipFee ? "text-red-600" : "text-green-600"
                     }`}>
                       {formatCurrency(client.net)}
                     </td>
@@ -838,7 +946,7 @@ export function AdministrativeTab() {
                   </tr>
                   {expandedClients.has(client.memberId) && (
                     <tr>
-                      <td colSpan={7} className="bg-gray-50 px-4 py-4">
+                      <td colSpan={8} className="bg-gray-50 px-4 py-4">
                         <div className="space-y-4">
                           {/* Billing Status Section */}
                           <div className="flex items-start gap-6">
@@ -951,14 +1059,6 @@ export function AdministrativeTab() {
                                 </thead>
                                 <tbody>
                                   <tr>
-                                    <td className="px-3 py-2 text-xs text-gray-500">Expected</td>
-                                    {client.paymentHistory.map((h) => (
-                                      <td key={`exp-${h.monthKey}`} className="px-3 py-2 text-center text-xs text-gray-700">
-                                        {formatCurrency(h.expected)}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                  <tr>
                                     <td className="px-3 py-2 text-xs text-gray-500">Paid</td>
                                     {client.paymentHistory.map((h) => (
                                       <td key={`paid-${h.monthKey}`} className="px-3 py-2 text-center text-xs text-green-600">
@@ -980,7 +1080,7 @@ export function AdministrativeTab() {
                                       <td
                                         key={`net-${h.monthKey}`}
                                         className={`px-3 py-2 text-center text-xs font-semibold ${
-                                          h.net < h.expected && h.expected > 0 ? "text-red-600 bg-red-50" : "text-green-600"
+                                          h.net < client.membershipFee && client.membershipFee > 0 ? "text-red-600 bg-red-50" : "text-green-600"
                                         }`}
                                       >
                                         {formatCurrency(h.net)}
@@ -999,12 +1099,7 @@ export function AdministrativeTab() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {selectedMonth && clientsReviewData && clientsReviewData.clients.length === 0 && (
-        <div className="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
-          <div className="py-8 text-center text-gray-500">No clients needing review for this month</div>
+          )}
         </div>
       )}
 
