@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { validateApiAccess } from "~/lib/api-auth";
 
 const REPORT_ID_ALL_PAYMENTS = 103;
 
@@ -43,6 +44,9 @@ async function fetchPaymentsReport(
 }
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const startDate = searchParams.get("start_date") || "2026-06-01";
   const endDate = searchParams.get("end_date") || "2026-09-30";

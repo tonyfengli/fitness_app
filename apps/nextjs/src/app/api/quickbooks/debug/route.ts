@@ -4,10 +4,14 @@
  * Shows connection details for debugging
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { loadTokens, getValidTokens } from "~/lib/quickbooks";
+import { validateApiAccess } from "~/lib/api-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const tokens = await loadTokens();
 
   if (!tokens) {

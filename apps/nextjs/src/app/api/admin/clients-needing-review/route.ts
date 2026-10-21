@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { validateApiAccess } from "~/lib/api-auth";
 
 // Types
 type ReviewStatusFlag = "Refund" | "On Hold" | "Not Paid" | "Billing Failed";
@@ -126,6 +127,9 @@ function getPreviousMonthKey(monthKey: string, monthsBack: number): string {
 }
 
 export async function POST(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const year = body.year || new Date().getFullYear();
@@ -370,6 +374,9 @@ export async function POST(request: NextRequest) {
 
 // Keep GET for backwards compatibility (without filtering)
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
 

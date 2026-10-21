@@ -6,8 +6,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getBalanceTransactionsRaw } from "~/lib/stripe";
+import { validateApiAccess } from "~/lib/api-auth";
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const startDate = searchParams.get("start_date") || "2026-01-01";
   const endDate = searchParams.get("end_date") || "2026-09-30";

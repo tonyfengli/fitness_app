@@ -6,8 +6,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getMonthlyStripeSummary } from "~/lib/stripe";
+import { validateApiAccess } from "~/lib/api-auth";
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const startMonth = parseInt(searchParams.get("start_month") || "1");
   const endMonth = parseInt(searchParams.get("end_month") || "9");

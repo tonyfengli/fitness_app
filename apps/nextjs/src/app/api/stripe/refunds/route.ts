@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { validateApiAccess } from "~/lib/api-auth";
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -32,6 +33,9 @@ interface MonthRefunds {
 }
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const startMonth = parseInt(searchParams.get("start_month") || "1");
   const endMonth = parseInt(searchParams.get("end_month") || "9");

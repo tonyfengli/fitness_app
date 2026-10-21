@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { validateApiAccess } from "~/lib/api-auth";
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -197,6 +198,9 @@ function isStripePaymentMethod(method: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const memberId = searchParams.get("memberId");
   const startDate = searchParams.get("startDate") || "2026-01-01";

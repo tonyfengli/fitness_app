@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { validateApiAccess } from "~/lib/api-auth";
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -58,6 +59,9 @@ async function fetchGymMasterPayments(
 }
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const year = parseInt(searchParams.get("year") || "2026");
 

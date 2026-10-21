@@ -6,8 +6,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchProfitAndLoss, isQuickBooksConnected } from "~/lib/quickbooks";
+import { validateApiAccess } from "~/lib/api-auth";
 
 export async function GET(request: NextRequest) {
+  const authError = await validateApiAccess(request);
+  if (authError) return authError;
+
   const connected = await isQuickBooksConnected();
   if (!connected) {
     return NextResponse.json(
