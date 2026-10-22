@@ -5,7 +5,7 @@
  * PATCH /api/kpi/snapshot - Update status (finalize/reopen)
  */
 
-import { eq, and } from "@acme/db";
+import { eq, and, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
@@ -58,7 +58,11 @@ export async function GET(request: NextRequest) {
         month,
         year,
         snapshot: null,
-        overrides: [],
+        overrides: overrides.map(o => ({
+          memberId: o.memberId,
+          overrideType: o.overrideType,
+          reason: o.reason,
+        })),
       });
     }
 
@@ -204,9 +208,12 @@ export async function POST(request: NextRequest) {
 
 // PATCH - Update snapshot status (finalize/reopen)
 export async function PATCH(request: NextRequest) {
+  console.log("[PATCH] Starting...");
+
   try {
     const body = await request.json();
     const { month, year, status } = body;
+    console.log("[PATCH] Parsed body:", { month, year, status });
 
     if (!month || !year || !status) {
       return NextResponse.json(
@@ -222,6 +229,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    console.log("[PATCH] Querying existing snapshot...");
     const existing = await db
       .select()
       .from(KpiMonthlySnapshot)
@@ -232,6 +240,7 @@ export async function PATCH(request: NextRequest) {
         )
       )
       .limit(1);
+    console.log("[PATCH] Found existing:", existing.length > 0 ? { id: existing[0]?.id, status: existing[0]?.status } : "none");
 
     if (!existing.length) {
       return NextResponse.json(
@@ -240,20 +249,45 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    await db
-      .update(KpiMonthlySnapshot)
-      .set({
-        status,
-        finalizedAt: status === "finalized" ? new Date() : null,
-      })
-      .where(eq(KpiMonthlySnapshot.id, existing[0].id));
+    console.log("[PATCH] About to update with status:", status);
 
+    // Use raw SQL because finalizedAt column has mode: "date" which doesn't work with sql`now()`
+    if (status === "finalized") {
+      console.log("[PATCH] Executing finalize update with raw SQL...");
+      try {
+        await db.execute(
+          sql`UPDATE kpi_monthly_snapshot
+              SET status = 'finalized', finalized_at = NOW(), updated_at = NOW()
+              WHERE id = ${existing[0].id}`
+        );
+        console.log("[PATCH] Finalize update completed");
+      } catch (updateError) {
+        console.error("[PATCH] Finalize update error:", updateError);
+        throw updateError;
+      }
+    } else {
+      console.log("[PATCH] Executing draft update with raw SQL...");
+      try {
+        await db.execute(
+          sql`UPDATE kpi_monthly_snapshot
+              SET status = 'draft', finalized_at = NULL, updated_at = NOW()
+              WHERE id = ${existing[0].id}`
+        );
+        console.log("[PATCH] Draft update completed");
+      } catch (updateError) {
+        console.error("[PATCH] Draft update error:", updateError);
+        throw updateError;
+      }
+    }
+
+    console.log("[PATCH] Success!");
     return NextResponse.json({
       success: true,
       message: status === "finalized" ? "Month finalized" : "Month reopened for editing",
     });
   } catch (error) {
     console.error("[API /kpi/snapshot PATCH] Error:", error);
+    console.error("[API /kpi/snapshot PATCH] Error stack:", error instanceof Error ? error.stack : "no stack");
     return NextResponse.json(
       { error: "Failed to update snapshot status" },
       { status: 500 }

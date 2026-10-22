@@ -44,6 +44,13 @@ interface AtRiskMember {
   returnRate: number;
   monthlyRevenue: number;
   lastClass: string | null;
+  memberSince: string | null;
+}
+
+interface CurrentMemberRow {
+  "Member ID": number;
+  Name: string;
+  "Membership Start Date": string;
 }
 
 function getStatusTier(daysGone: number): { label: string; returnRate: number } {
@@ -88,6 +95,41 @@ async function fetchGymMasterBookings(startDate: string, endDate: string): Promi
     },
     body: JSON.stringify({
       report_id: 9, // Bookings report
+      start_date: startDate,
+      end_date: endDate,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`GymMaster API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.result || [];
+}
+
+async function fetchGymMasterCurrentMembers(): Promise<CurrentMemberRow[]> {
+  const baseUrl = process.env.GYMMASTER_BASE_URL;
+  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
+
+  if (!baseUrl || !apiKey) {
+    throw new Error("Missing GymMaster configuration");
+  }
+
+  // Get current month date range
+  const now = new Date();
+  const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const endDate = now.toISOString().split("T")[0];
+
+  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-GM-API-KEY": apiKey,
+    },
+    body: JSON.stringify({
+      report_id: 1, // Current Members report
       start_date: startDate,
       end_date: endDate,
     }),
@@ -162,23 +204,44 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 2. Query GymMaster for booking data (last 60 days)
+    // 2. Query GymMaster for booking data (last 60 days) and current members
     const endDate = now.toISOString().split("T")[0];
     const startDateObj = new Date(now);
     startDateObj.setDate(startDateObj.getDate() - 60);
     const startDate = startDateObj.toISOString().split("T")[0];
 
     let bookings: BookingRow[] = [];
+    let currentMembers: CurrentMemberRow[] = [];
     let gymMasterError: string | null = null;
 
     try {
-      bookings = await fetchGymMasterBookings(startDate, endDate);
+      // Fetch bookings and current members in parallel
+      const [bookingsResult, membersResult] = await Promise.all([
+        fetchGymMasterBookings(startDate, endDate),
+        fetchGymMasterCurrentMembers(),
+      ]);
+      bookings = bookingsResult;
+      currentMembers = membersResult;
     } catch (err) {
       gymMasterError = err instanceof Error ? err.message : "Unknown error";
       console.error("[API /agent/at-risk] GymMaster error:", gymMasterError);
     }
 
-    // 3. Build a map of member ID -> last valid attendance
+    // 3. Build a map of member ID -> membership start date
+    const memberSinceMap = new Map<string, string>();
+    for (const member of currentMembers) {
+      const memberId = String(member["Member ID"]);
+      const startDate = member["Membership Start Date"];
+      if (memberId && startDate) {
+        // Normalize date format to YYYY-MM-DD
+        const parsed = parseGymMasterDate(startDate);
+        if (!isNaN(parsed.getTime())) {
+          memberSinceMap.set(memberId, parsed.toISOString().split("T")[0]);
+        }
+      }
+    }
+
+    // 4. Build a map of member ID -> last valid attendance
     const lastAttendanceMap = new Map<string, { date: Date; className: string | null }>();
 
     for (const booking of bookings) {
@@ -194,7 +257,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Calculate days gone for each paying member
+    // 5. Calculate days gone for each paying member
     const atRiskMembers: AtRiskMember[] = [];
 
     for (const member of payingMembers) {
@@ -225,6 +288,7 @@ export async function GET(request: NextRequest) {
           returnRate: tier.returnRate,
           monthlyRevenue: member.revenue,
           lastClass,
+          memberSince: memberSinceMap.get(member.memberId) || null,
         });
       }
     }

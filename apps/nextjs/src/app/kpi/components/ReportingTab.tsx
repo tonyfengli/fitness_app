@@ -69,26 +69,94 @@ export function ReportingTab() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  // Load overrides and report data from localStorage on mount
+  // Load overrides from Supabase for a given year
+  const loadOverridesFromSupabase = async (year: number): Promise<AllOverrides> => {
+    const supabaseOverrides: AllOverrides = {};
+
+    // Query all 12 months for the year
+    for (let month = 1; month <= 12; month++) {
+      try {
+        const response = await fetch(`/api/kpi/snapshot?month=${month}&year=${year}`);
+        if (response.ok) {
+          const data = await response.json();
+          // Load overrides regardless of whether snapshot exists
+          if (data.overrides && data.overrides.length > 0) {
+            const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+            const excludeFromNew: string[] = [];
+            const excludeFromLost: string[] = [];
+
+            for (const override of data.overrides) {
+              if (override.overrideType === "exclude_from_new") {
+                excludeFromNew.push(override.memberId);
+              } else if (override.overrideType === "exclude_from_lost") {
+                excludeFromLost.push(override.memberId);
+              }
+            }
+
+            if (excludeFromNew.length > 0 || excludeFromLost.length > 0) {
+              supabaseOverrides[monthKey] = { excludeFromNew, excludeFromLost };
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to load overrides for ${year}-${month}:`, err);
+      }
+    }
+
+    return supabaseOverrides;
+  };
+
+  // Load overrides and report data from localStorage on mount, then sync with Supabase
   useEffect(() => {
-    try {
-      const storedOverrides = localStorage.getItem(OVERRIDES_STORAGE_KEY);
-      if (storedOverrides) {
-        setOverrides(JSON.parse(storedOverrides));
+    const loadData = async () => {
+      let localOverrides: AllOverrides = {};
+      let loadedYear = new Date().getFullYear();
+
+      try {
+        // First load from localStorage (fast)
+        const storedOverrides = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+        if (storedOverrides) {
+          localOverrides = JSON.parse(storedOverrides);
+          setOverrides(localOverrides);
+        }
+
+        const storedReport = localStorage.getItem(REPORT_DATA_STORAGE_KEY);
+        if (storedReport) {
+          const parsed: PersistedReportData = JSON.parse(storedReport);
+          setMonthsData(parsed.monthsData);
+          setStartMonth(parsed.startMonth);
+          setEndMonth(parsed.endMonth);
+          setReportYear(parsed.year);
+          setLastSavedAt(parsed.savedAt);
+          loadedYear = parsed.year;
+        }
+      } catch (e) {
+        console.error("Failed to load from localStorage:", e);
       }
 
-      const storedReport = localStorage.getItem(REPORT_DATA_STORAGE_KEY);
-      if (storedReport) {
-        const parsed: PersistedReportData = JSON.parse(storedReport);
-        setMonthsData(parsed.monthsData);
-        setStartMonth(parsed.startMonth);
-        setEndMonth(parsed.endMonth);
-        setReportYear(parsed.year);
-        setLastSavedAt(parsed.savedAt);
+      // Then load from Supabase (source of truth) and merge
+      try {
+        const supabaseOverrides = await loadOverridesFromSupabase(loadedYear);
+
+        // Merge: Supabase takes precedence, but keep localStorage entries for months not in Supabase
+        const mergedOverrides: AllOverrides = { ...localOverrides };
+        for (const [monthKey, data] of Object.entries(supabaseOverrides)) {
+          mergedOverrides[monthKey] = data;
+        }
+
+        // Update state and localStorage with merged data
+        setOverrides(mergedOverrides);
+        localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(mergedOverrides));
+
+        if (Object.keys(supabaseOverrides).length > 0) {
+          console.log(`Loaded ${Object.keys(supabaseOverrides).length} months of overrides from Supabase`);
+        }
+      } catch (e) {
+        console.error("Failed to load overrides from Supabase:", e);
       }
-    } catch (e) {
-      console.error("Failed to load from localStorage:", e);
-    }
+    };
+
+    loadData();
   }, []);
 
   // Save overrides to localStorage when they change
