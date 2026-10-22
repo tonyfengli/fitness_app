@@ -30,6 +30,7 @@ interface BookingRow {
   "Member ID": number;
   Name: string;
   "Booking Date": string;
+  "Booking Start Time": string;
   "Booking Result": string;
   "Class Name": string | null;
   Service: string;
@@ -40,6 +41,7 @@ interface AtRiskMember {
   name: string;
   daysGone: number;
   lastAttendance: string | null;
+  lastAttendanceTime: string | null;
   statusTier: string;
   returnRate: number;
   monthlyRevenue: number;
@@ -242,18 +244,19 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Build a map of member ID -> last valid attendance
-    const lastAttendanceMap = new Map<string, { date: Date; className: string | null }>();
+    const lastAttendanceMap = new Map<string, { date: Date; time: string | null; className: string | null }>();
 
     for (const booking of bookings) {
       if (!VALID_ATTENDANCE.includes(booking["Booking Result"])) continue;
 
       const memberId = String(booking["Member ID"]);
       const bookingDate = parseGymMasterDate(booking["Booking Date"]);
+      const bookingTime = booking["Booking Start Time"] || null;
       const className = booking["Class Name"] || booking["Service"] || null;
 
       const existing = lastAttendanceMap.get(memberId);
       if (!existing || bookingDate > existing.date) {
-        lastAttendanceMap.set(memberId, { date: bookingDate, className });
+        lastAttendanceMap.set(memberId, { date: bookingDate, time: bookingTime, className });
       }
     }
 
@@ -265,11 +268,13 @@ export async function GET(request: NextRequest) {
 
       let daysGone: number;
       let lastAttendanceStr: string | null = null;
+      let lastAttendanceTime: string | null = null;
       let lastClass: string | null = null;
 
       if (lastAttendance) {
         daysGone = daysBetween(lastAttendance.date, now);
         lastAttendanceStr = lastAttendance.date.toISOString().split("T")[0];
+        lastAttendanceTime = lastAttendance.time;
         lastClass = lastAttendance.className;
       } else {
         // No booking found in last 60 days
@@ -284,6 +289,7 @@ export async function GET(request: NextRequest) {
           name: member.name,
           daysGone,
           lastAttendance: lastAttendanceStr,
+          lastAttendanceTime,
           statusTier: tier.label,
           returnRate: tier.returnRate,
           monthlyRevenue: member.revenue,

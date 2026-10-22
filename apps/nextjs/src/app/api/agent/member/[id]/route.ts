@@ -166,6 +166,7 @@ export async function GET(
       .filter((b) => VALID_ATTENDANCE.includes(String(b["Booking Result"] || "")))
       .map((b) => ({
         date: String(b["Booking Date"] || ""),
+        time: String(b["Booking Start Time"] || ""),
         className: String(b["Class Name"] || b["Service"] || ""),
         result: String(b["Booking Result"] || ""),
       }))
