@@ -622,3 +622,136 @@ export { user, account } from "./auth-schema";
 
 // Re-export workout selections schema items (only swaps now)
 export { workoutExerciseSwaps } from "./schema/workout-selections";
+
+// ============================================================================
+// KPI MONTHLY SNAPSHOTS - Finalized monthly KPI data for agent queries
+// ============================================================================
+
+export const kpiSnapshotStatusEnum = pgEnum("kpi_snapshot_status", [
+  "draft",
+  "finalized",
+]);
+
+export const KpiMonthlySnapshot = pgTable(
+  "kpi_monthly_snapshot",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    month: t.integer().notNull(), // 1-12
+    year: t.integer().notNull(), // e.g., 2026
+    status: kpiSnapshotStatusEnum("status").notNull().default("draft"),
+    finalizedAt: t.timestamp({ mode: "date", withTimezone: true }),
+
+    // Full KPI data as JSONB - includes payingMembers[], newMembers[], lostMembers[], revenue, ARM, etc.
+    data: t.jsonb().notNull().$type<{
+      month: string;
+      year: number;
+      monthKey: string;
+
+      // Revenue
+      totalRevenue: number;
+      ptRevenue: number;
+      smallGroupRevenue: number;
+      openGymRevenue: number;
+      arm: number;
+      armGroups: number;
+
+      // Membership totals
+      totalMembers: number;
+      groupMembers: number;
+
+      // Member lists with details
+      payingMembers: Array<{ memberId: string; name: string; revenue: number }>;
+      newMembers: Array<{ memberId: string; name: string; revenue: number }>;
+      lostMembers: Array<{ memberId: string; name: string; revenue: number; type: "loss" | "hold" }>;
+      onHoldMembers: Array<{ memberId: string; name: string; revenue: number }>;
+
+      // Counts
+      newMembersCount: number;
+      newMembersRevenue: number;
+      lostMembersCount: number;
+      lostMembersRevenue: number;
+      onHoldCount: number;
+      onHoldRevenue: number;
+    }>(),
+
+    createdAt: t.timestamp().defaultNow().notNull(),
+    updatedAt: t
+      .timestamp({ mode: "date", withTimezone: true })
+      .$onUpdateFn(() => sql`now()`),
+  }),
+  (table) => ({
+    // Unique constraint: one snapshot per month/year
+    monthYearUnique: unique().on(table.month, table.year),
+  })
+);
+
+export const CreateKpiMonthlySnapshotSchema = createInsertSchema(KpiMonthlySnapshot, {
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020).max(2100),
+  status: z.enum(["draft", "finalized"]).default("draft"),
+  finalizedAt: z.date().optional(),
+  data: z.object({
+    month: z.string(),
+    year: z.number(),
+    monthKey: z.string(),
+    totalRevenue: z.number(),
+    ptRevenue: z.number(),
+    smallGroupRevenue: z.number(),
+    openGymRevenue: z.number(),
+    arm: z.number(),
+    armGroups: z.number(),
+    totalMembers: z.number(),
+    groupMembers: z.number(),
+    payingMembers: z.array(z.object({ memberId: z.string(), name: z.string(), revenue: z.number() })),
+    newMembers: z.array(z.object({ memberId: z.string(), name: z.string(), revenue: z.number() })),
+    lostMembers: z.array(z.object({ memberId: z.string(), name: z.string(), revenue: z.number(), type: z.enum(["loss", "hold"]) })),
+    onHoldMembers: z.array(z.object({ memberId: z.string(), name: z.string(), revenue: z.number() })),
+    newMembersCount: z.number(),
+    newMembersRevenue: z.number(),
+    lostMembersCount: z.number(),
+    lostMembersRevenue: z.number(),
+    onHoldCount: z.number(),
+    onHoldRevenue: z.number(),
+  }),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// ============================================================================
+// KPI MEMBER OVERRIDES - Exclusions for KPI calculations
+// ============================================================================
+
+export const kpiOverrideTypeEnum = pgEnum("kpi_override_type", [
+  "exclude_from_new",
+  "exclude_from_lost",
+]);
+
+export const KpiMemberOverride = pgTable(
+  "kpi_member_override",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    month: t.integer().notNull(), // 1-12
+    year: t.integer().notNull(), // e.g., 2026
+    memberId: t.varchar({ length: 50 }).notNull(), // GymMaster member ID
+    overrideType: kpiOverrideTypeEnum("override_type").notNull(),
+    reason: t.text(), // Optional reason for the override
+    createdAt: t.timestamp().defaultNow().notNull(),
+  }),
+  (table) => ({
+    // Unique constraint: one override per member/month/year/type
+    memberMonthTypeUnique: unique().on(table.memberId, table.month, table.year, table.overrideType),
+  })
+);
+
+export const CreateKpiMemberOverrideSchema = createInsertSchema(KpiMemberOverride, {
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020).max(2100),
+  memberId: z.string().min(1).max(50),
+  overrideType: z.enum(["exclude_from_new", "exclude_from_lost"]),
+  reason: z.string().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});

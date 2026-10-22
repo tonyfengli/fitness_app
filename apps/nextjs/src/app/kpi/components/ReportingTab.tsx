@@ -33,6 +33,13 @@ import {
   FULL_MONTH_NAMES,
 } from "../constants";
 
+interface SnapshotStatus {
+  month: number;
+  year: number;
+  status: "draft" | "finalized";
+  finalizedAt: string | null;
+}
+
 interface DerivedMonthData extends MonthData {
   derivedTotalMembers: number;
   filteredNewMembers: MemberRecord[];
@@ -58,6 +65,9 @@ export function ReportingTab() {
   const [overrides, setOverrides] = useState<AllOverrides>({});
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [snapshotStatuses, setSnapshotStatuses] = useState<Map<string, SnapshotStatus>>(new Map());
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   // Load overrides and report data from localStorage on mount
   useEffect(() => {
@@ -90,6 +100,188 @@ export function ReportingTab() {
       console.error("Failed to save overrides to localStorage:", e);
     }
   };
+
+  // Save a single month's data to Supabase
+  const saveToSupabase = async (monthData: MonthData) => {
+    const monthNum = MONTH_NAMES.indexOf(monthData.month) + 1;
+    if (monthNum === 0) return;
+
+    const snapshotData = {
+      month: monthData.month,
+      year: monthData.year,
+      monthKey: monthData.monthKey,
+      totalRevenue: Math.round(monthData.totalRevenue * 100) / 100,
+      ptRevenue: Math.round(monthData.ptRevenue * 100) / 100,
+      smallGroupRevenue: Math.round(monthData.smallGroupRevenue * 100) / 100,
+      openGymRevenue: Math.round(monthData.openGymRevenue * 100) / 100,
+      arm: Math.round(monthData.arm * 100) / 100,
+      armGroups: Math.round(monthData.armGroups * 100) / 100,
+      totalMembers: monthData.totalMembers,
+      groupMembers: monthData.groupMembers,
+      payingMembers: monthData.payingMembers.map(m => ({
+        memberId: m.memberId,
+        name: m.name,
+        revenue: Math.round(m.amount * 100) / 100,
+      })),
+      newMembers: monthData.newMembers.map(m => ({
+        memberId: m.memberId,
+        name: m.name,
+        revenue: Math.round(m.amount * 100) / 100,
+      })),
+      lostMembers: [
+        ...monthData.lostMembers.map(m => ({
+          memberId: m.memberId,
+          name: m.name,
+          revenue: Math.round(m.amount * 100) / 100,
+          type: m.type as "loss" | "hold",
+        })),
+        ...monthData.onHoldMembers.map(m => ({
+          memberId: m.memberId,
+          name: m.name,
+          revenue: Math.round(m.amount * 100) / 100,
+          type: "hold" as const,
+        })),
+      ],
+      onHoldMembers: monthData.onHoldMembers.map(m => ({
+        memberId: m.memberId,
+        name: m.name,
+        revenue: Math.round(m.amount * 100) / 100,
+      })),
+      newMembersCount: monthData.newMembersCount,
+      newMembersRevenue: Math.round(monthData.newMembersRevenue * 100) / 100,
+      lostMembersCount: monthData.lostMembersCount,
+      lostMembersRevenue: Math.round(monthData.lostMembersRevenue * 100) / 100,
+      onHoldCount: monthData.onHoldCount,
+      onHoldRevenue: Math.round(monthData.onHoldRevenue * 100) / 100,
+    };
+
+    try {
+      const response = await fetch("/api/kpi/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month: monthNum,
+          year: monthData.year,
+          data: snapshotData,
+          overrides,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save to Supabase");
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Failed to save to Supabase:", err);
+      return false;
+    }
+  };
+
+  // Save all months to Supabase
+  const saveAllToSupabase = async () => {
+    setIsSaving(true);
+    setSaveMessage("Saving to database...");
+
+    let successCount = 0;
+    for (const monthData of monthsData) {
+      const success = await saveToSupabase(monthData);
+      if (success) successCount++;
+    }
+
+    if (successCount === monthsData.length) {
+      setSaveMessage(`Saved ${successCount} months to database`);
+    } else {
+      setSaveMessage(`Saved ${successCount}/${monthsData.length} months (some failed)`);
+    }
+
+    setIsSaving(false);
+    setTimeout(() => setSaveMessage(null), 3000);
+  };
+
+  // Toggle finalization status for a month
+  const toggleFinalization = async (month: string, year: number) => {
+    const monthNum = MONTH_NAMES.indexOf(month) + 1;
+    if (monthNum === 0) return;
+
+    const key = `${year}-${String(monthNum).padStart(2, "0")}`;
+    const currentStatus = snapshotStatuses.get(key);
+    const newStatus = currentStatus?.status === "finalized" ? "draft" : "finalized";
+
+    setIsSaving(true);
+    setSaveMessage(newStatus === "finalized" ? "Finalizing month..." : "Reopening month...");
+
+    try {
+      const response = await fetch("/api/kpi/snapshot", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month: monthNum,
+          year,
+          status: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update status");
+      }
+
+      // Update local state
+      const newStatuses = new Map(snapshotStatuses);
+      newStatuses.set(key, {
+        month: monthNum,
+        year,
+        status: newStatus,
+        finalizedAt: newStatus === "finalized" ? new Date().toISOString() : null,
+      });
+      setSnapshotStatuses(newStatuses);
+
+      setSaveMessage(newStatus === "finalized" ? "Month finalized!" : "Month reopened for editing");
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      setSaveMessage("Failed to update status");
+    }
+
+    setIsSaving(false);
+    setTimeout(() => setSaveMessage(null), 3000);
+  };
+
+  // Load snapshot statuses from Supabase
+  const loadSnapshotStatuses = async () => {
+    const newStatuses = new Map<string, SnapshotStatus>();
+
+    for (const monthData of monthsData) {
+      const monthNum = MONTH_NAMES.indexOf(monthData.month) + 1;
+      if (monthNum === 0) continue;
+
+      try {
+        const response = await fetch(`/api/kpi/snapshot?month=${monthNum}&year=${monthData.year}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.exists && data.snapshot) {
+            const key = `${monthData.year}-${String(monthNum).padStart(2, "0")}`;
+            newStatuses.set(key, {
+              month: monthNum,
+              year: monthData.year,
+              status: data.snapshot.status,
+              finalizedAt: data.snapshot.finalizedAt,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load snapshot status:", err);
+      }
+    }
+
+    setSnapshotStatuses(newStatuses);
+  };
+
+  // Load snapshot statuses when monthsData changes
+  useEffect(() => {
+    if (monthsData.length > 0) {
+      loadSnapshotStatuses();
+    }
+  }, [monthsData.length]);
 
   // Toggle a member's exclusion from new or lost
   const toggleExclusion = (monthKey: string, memberId: string, type: "new" | "lost") => {
@@ -568,6 +760,16 @@ export function ReportingTab() {
           {lastSavedAt && <p className="text-xs text-gray-500 mt-0.5">Cached: {formatSavedAt(lastSavedAt)}</p>}
         </div>
         <div className="flex items-center gap-3">
+          {saveMessage && (
+            <span className="text-sm text-green-600">{saveMessage}</span>
+          )}
+          <button
+            onClick={saveAllToSupabase}
+            disabled={isSaving || monthsData.length === 0}
+            className="text-sm text-green-600 hover:text-green-700 disabled:text-gray-400"
+          >
+            {isSaving ? "Saving..." : "Save to Database"}
+          </button>
           <button onClick={clearCache} className="text-sm text-gray-500 hover:text-gray-700">
             Clear Cache
           </button>
@@ -829,6 +1031,76 @@ export function ReportingTab() {
                     return (
                       <tr key={`detail-${m.month}`} className="bg-gray-50">
                         <td colSpan={derivedData.length + 1} className="p-4">
+                          {/* Month Status & Finalization */}
+                          {(() => {
+                            const monthNum = MONTH_NAMES.indexOf(m.month) + 1;
+                            const key = `${m.year}-${String(monthNum).padStart(2, "0")}`;
+                            const status = snapshotStatuses.get(key);
+                            const isFinalized = status?.status === "finalized";
+                            const hasSavedData = !!status;
+
+                            return (
+                              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+                                <div className="flex items-center gap-3">
+                                  <span className="font-semibold text-gray-900">{m.month} {m.year}</span>
+                                  {hasSavedData ? (
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      isFinalized
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-yellow-100 text-yellow-700"
+                                    }`}>
+                                      {isFinalized ? "Finalized" : "Draft"}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                                      Not saved
+                                    </span>
+                                  )}
+                                  {isFinalized && status?.finalizedAt && (
+                                    <span className="text-xs text-gray-500">
+                                      {new Date(status.finalizedAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {!hasSavedData && (
+                                    <button
+                                      onClick={async () => {
+                                        setIsSaving(true);
+                                        setSaveMessage(`Saving ${m.month}...`);
+                                        const success = await saveToSupabase(m);
+                                        if (success) {
+                                          setSaveMessage(`${m.month} saved!`);
+                                          await loadSnapshotStatuses();
+                                        } else {
+                                          setSaveMessage(`Failed to save ${m.month}`);
+                                        }
+                                        setIsSaving(false);
+                                        setTimeout(() => setSaveMessage(null), 3000);
+                                      }}
+                                      disabled={isSaving}
+                                      className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+                                    >
+                                      Save to Database
+                                    </button>
+                                  )}
+                                  {hasSavedData && (
+                                    <button
+                                      onClick={() => toggleFinalization(m.month, m.year)}
+                                      disabled={isSaving}
+                                      className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                                        isFinalized
+                                          ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                                          : "bg-green-600 text-white hover:bg-green-700"
+                                      } disabled:opacity-50`}
+                                    >
+                                      {isFinalized ? "Reopen for Editing" : "Mark as Final"}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                           <div className="text-xs text-gray-500 mb-3 flex items-center gap-1">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
