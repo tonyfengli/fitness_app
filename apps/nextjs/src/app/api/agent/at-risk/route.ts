@@ -7,9 +7,9 @@
  * with live GymMaster booking data (attendance tracking).
  */
 
-import { desc, eq, and } from "@acme/db";
+import { desc, eq, and, or, inArray } from "@acme/db";
 import { db } from "@acme/db/client";
-import { KpiMonthlySnapshot } from "@acme/db/schema";
+import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiAccess } from "~/lib/api-auth";
 
@@ -206,6 +206,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // 1b. Get member overrides to exclude from at-risk list
+    // Respect both "exclude_from_at_risk" and "exclude_from_new" (data anomalies)
+    const overrides = await db
+      .select()
+      .from(KpiMemberOverride)
+      .where(
+        or(
+          eq(KpiMemberOverride.overrideType, "exclude_from_at_risk"),
+          eq(KpiMemberOverride.overrideType, "exclude_from_new")
+        )
+      );
+
+    const excludedMemberIds = new Set(overrides.map(o => o.memberId));
+
     // 2. Query GymMaster for booking data (last 60 days) and current members
     const endDate = now.toISOString().split("T")[0];
     const startDateObj = new Date(now);
@@ -281,8 +295,8 @@ export async function GET(request: NextRequest) {
         daysGone = 60;
       }
 
-      // Only include members who are "at risk" (14+ days gone)
-      if (daysGone >= 14) {
+      // Only include members who are "at risk" (14+ days gone) and not excluded
+      if (daysGone >= 14 && !excludedMemberIds.has(member.memberId)) {
         const tier = getStatusTier(daysGone);
         atRiskMembers.push({
           memberId: member.memberId,
@@ -329,6 +343,7 @@ export async function GET(request: NextRequest) {
         snapshotStatus: snapshot[0].status,
         bookingsQueried: bookings.length,
         lookbackDays: 60,
+        excludedByOverride: excludedMemberIds.size,
       },
     });
   } catch (error) {
