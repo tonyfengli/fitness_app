@@ -1,12 +1,14 @@
 /**
  * Churned Members API for OpenClaw Retention Specialist
- * GET /api/agent/churned-members?month=10&year=2026
  *
- * Returns members who left (cancelled or went on hold) in the specified month.
+ * Single month: GET /api/agent/churned-members?month=10&year=2026
+ * Range:        GET /api/agent/churned-members?startMonth=1&endMonth=9&year=2026
+ *
+ * Returns members who left (cancelled or went on hold) in the specified month(s).
  * Reads from finalized KPI snapshots in Supabase.
  */
 
-import { eq, and } from "@acme/db";
+import { eq, and, gte, lte } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
@@ -19,6 +21,15 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+interface ChurnedMember {
+  memberId: string;
+  name: string;
+  revenue: number;
+  type: string;
+  month?: number;
+  monthName?: string;
+}
+
 export async function GET(request: NextRequest) {
   // Validate API key or session
   const authError = await validateApiAccess(request);
@@ -26,40 +37,69 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
   const monthStr = searchParams.get("month");
+  const startMonthStr = searchParams.get("startMonth");
+  const endMonthStr = searchParams.get("endMonth");
   const yearStr = searchParams.get("year");
 
-  // Default to current month if not specified
+  // Default to current month/year if not specified
   const now = new Date();
-  const month = monthStr ? parseInt(monthStr, 10) : now.getMonth() + 1;
   const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
 
-  if (month < 1 || month > 12) {
+  // Determine if this is a range query or single month
+  const isRangeQuery = startMonthStr && endMonthStr;
+
+  let startMonth: number;
+  let endMonth: number;
+
+  if (isRangeQuery) {
+    startMonth = parseInt(startMonthStr, 10);
+    endMonth = parseInt(endMonthStr, 10);
+  } else {
+    // Single month query (backwards compatible)
+    const month = monthStr ? parseInt(monthStr, 10) : now.getMonth() + 1;
+    startMonth = month;
+    endMonth = month;
+  }
+
+  // Validate months
+  if (startMonth < 1 || startMonth > 12 || endMonth < 1 || endMonth > 12) {
     return NextResponse.json(
       { error: "Invalid month. Must be 1-12." },
       { status: 400 }
     );
   }
 
+  if (startMonth > endMonth) {
+    return NextResponse.json(
+      { error: "startMonth must be <= endMonth." },
+      { status: 400 }
+    );
+  }
+
   try {
-    // 1. Get the snapshot for the requested month
-    const snapshot = await db
+    // 1. Get snapshots for the requested month range
+    const snapshots = await db
       .select()
       .from(KpiMonthlySnapshot)
       .where(
         and(
-          eq(KpiMonthlySnapshot.month, month),
+          gte(KpiMonthlySnapshot.month, startMonth),
+          lte(KpiMonthlySnapshot.month, endMonth),
           eq(KpiMonthlySnapshot.year, year)
         )
       )
-      .limit(1);
+      .orderBy(KpiMonthlySnapshot.month);
 
-    if (!snapshot.length) {
+    if (!snapshots.length) {
+      const monthRange = isRangeQuery
+        ? `${MONTH_NAMES[startMonth - 1]} - ${MONTH_NAMES[endMonth - 1]} ${year}`
+        : `${MONTH_NAMES[startMonth - 1]} ${year}`;
       return NextResponse.json({
         status: "no_data",
-        message: `No KPI data found for ${MONTH_NAMES[month - 1]} ${year}. Load data in the KPI dashboard first.`,
-        month,
+        message: `No KPI data found for ${monthRange}. Load data in the KPI dashboard first.`,
         year,
-        monthName: MONTH_NAMES[month - 1],
+        startMonth,
+        endMonth,
         churnedMembers: [],
         _meta: {
           generatedAt: new Date().toISOString(),
@@ -67,61 +107,104 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const kpiData = snapshot[0].data;
-    const snapshotStatus = snapshot[0].status;
-
-    // 2. Get any exclusions for this month
+    // 2. Get all exclusions for the month range
     const overrides = await db
       .select()
       .from(KpiMemberOverride)
       .where(
         and(
-          eq(KpiMemberOverride.month, month),
+          gte(KpiMemberOverride.month, startMonth),
+          lte(KpiMemberOverride.month, endMonth),
           eq(KpiMemberOverride.year, year),
           eq(KpiMemberOverride.overrideType, "exclude_from_lost")
         )
       );
 
-    const excludedMemberIds = new Set(overrides.map(o => o.memberId));
+    // Build a map of month -> excluded member IDs
+    const exclusionsByMonth = new Map<number, Set<string>>();
+    for (const override of overrides) {
+      if (!exclusionsByMonth.has(override.month)) {
+        exclusionsByMonth.set(override.month, new Set());
+      }
+      exclusionsByMonth.get(override.month)!.add(override.memberId);
+    }
 
-    // 3. Filter lost members (apply exclusions)
-    const allLostMembers = kpiData.lostMembers || [];
-    const includedMembers = allLostMembers.filter(m => !excludedMemberIds.has(m.memberId));
-    const excludedMembers = allLostMembers.filter(m => excludedMemberIds.has(m.memberId));
+    // 3. Aggregate churned members across all months
+    const allChurnedMembers: ChurnedMember[] = [];
+    const allExcludedMembers: Array<{ memberId: string; name: string; revenue: number; reason: string; month: number; monthName: string }> = [];
+    const byMonth: Array<{ month: number; monthName: string; count: number; revenue: number }> = [];
+    let hasAnyDraft = false;
+
+    for (const snapshot of snapshots) {
+      const month = snapshot.month;
+      const kpiData = snapshot.data;
+      const excludedIds = exclusionsByMonth.get(month) || new Set();
+
+      if (snapshot.status === "draft") {
+        hasAnyDraft = true;
+      }
+
+      const lostMembers = kpiData.lostMembers || [];
+      const included = lostMembers.filter(m => !excludedIds.has(m.memberId));
+      const excluded = lostMembers.filter(m => excludedIds.has(m.memberId));
+
+      // Add to aggregated list with month info
+      for (const m of included) {
+        allChurnedMembers.push({
+          memberId: m.memberId,
+          name: m.name,
+          revenue: m.revenue,
+          type: m.type === "hold" ? "On Hold" : "Cancelled",
+          month,
+          monthName: MONTH_NAMES[month - 1],
+        });
+      }
+
+      for (const m of excluded) {
+        allExcludedMembers.push({
+          memberId: m.memberId,
+          name: m.name,
+          revenue: m.revenue,
+          reason: overrides.find(o => o.memberId === m.memberId && o.month === month)?.reason || "Data correction",
+          month,
+          monthName: MONTH_NAMES[month - 1],
+        });
+      }
+
+      byMonth.push({
+        month,
+        monthName: MONTH_NAMES[month - 1],
+        count: included.length,
+        revenue: Math.round(included.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100,
+      });
+    }
 
     // 4. Build response
     const response = {
-      status: snapshotStatus,
-      month,
+      status: hasAnyDraft ? "partial" : "finalized",
       year,
-      monthName: MONTH_NAMES[month - 1],
+      startMonth,
+      endMonth,
+      isRangeQuery,
       summary: {
-        totalLost: includedMembers.length,
-        lostRevenue: Math.round(includedMembers.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100,
-        excluded: excludedMembers.length,
+        totalLost: allChurnedMembers.length,
+        lostRevenue: Math.round(allChurnedMembers.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100,
+        excluded: allExcludedMembers.length,
         byType: {
-          cancellations: includedMembers.filter(m => m.type === "loss").length,
-          onHold: includedMembers.filter(m => m.type === "hold").length,
+          cancellations: allChurnedMembers.filter(m => m.type === "Cancelled").length,
+          onHold: allChurnedMembers.filter(m => m.type === "On Hold").length,
         },
+        byMonth,
       },
-      churnedMembers: includedMembers.map(m => ({
-        memberId: m.memberId,
-        name: m.name,
-        revenue: m.revenue,
-        type: m.type === "hold" ? "On Hold" : "Cancelled",
-      })),
-      excludedMembers: excludedMembers.map(m => ({
-        memberId: m.memberId,
-        name: m.name,
-        revenue: m.revenue,
-        reason: overrides.find(o => o.memberId === m.memberId)?.reason || "Data correction",
-      })),
+      churnedMembers: allChurnedMembers,
+      excludedMembers: allExcludedMembers,
       _meta: {
         generatedAt: new Date().toISOString(),
         dataSource: "supabase",
-        snapshotStatus,
-        note: snapshotStatus === "draft"
-          ? "This data is not yet finalized. Numbers may change after month close."
+        monthsCovered: snapshots.length,
+        monthsRequested: endMonth - startMonth + 1,
+        note: hasAnyDraft
+          ? "Some months contain draft data that is not yet finalized."
           : null,
       },
     };

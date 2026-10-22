@@ -755,3 +755,62 @@ export const CreateKpiMemberOverrideSchema = createInsertSchema(KpiMemberOverrid
   id: true,
   createdAt: true,
 });
+
+// ============================================================================
+// RETENTION EVENTS - Track retention activities and outcomes
+// ============================================================================
+
+export const retentionEventTypeEnum = pgEnum("retention_event_type", [
+  "flagged_at_risk",    // Member flagged as at-risk
+  "outreach_sent",      // Outreach message sent to member
+  "returned",           // Member returned after being at-risk
+  "churned",            // Member churned (cancelled or went on hold)
+]);
+
+export const RetentionEvent = pgTable(
+  "retention_event",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    memberId: t.varchar({ length: 50 }).notNull(), // GymMaster member ID
+    memberName: t.varchar({ length: 255 }).notNull(),
+    eventType: retentionEventTypeEnum("event_type").notNull(),
+    eventDate: t.date().notNull(),
+
+    // Context for the event
+    atRiskTier: t.varchar({ length: 50 }), // "Best odds", "Fading", "Long shot", "Critical"
+    daysGone: t.integer(), // Days since last attendance when flagged
+    monthlyRevenue: numeric("monthly_revenue", { precision: 10, scale: 2 }), // Revenue at stake
+
+    // Outreach details (for outreach_sent events)
+    outreachMethod: t.varchar({ length: 50 }), // "sms", "email", "phone", "in_person"
+    outreachMessage: t.text(), // Message sent or notes
+
+    // Notes and metadata
+    notes: t.text(),
+    createdBy: t.varchar({ length: 100 }), // Who created this event (agent, staff name)
+    createdAt: t.timestamp().defaultNow().notNull(),
+  }),
+  (table) => ({
+    // Index for querying by member
+    memberIdx: index("idx_retention_event_member").on(table.memberId),
+    // Index for querying by event type and date
+    eventTypeIdx: index("idx_retention_event_type_date").on(table.eventType, table.eventDate),
+  })
+);
+
+export const CreateRetentionEventSchema = createInsertSchema(RetentionEvent, {
+  memberId: z.string().min(1).max(50),
+  memberName: z.string().min(1).max(255),
+  eventType: z.enum(["flagged_at_risk", "outreach_sent", "returned", "churned"]),
+  eventDate: z.string(), // YYYY-MM-DD format
+  atRiskTier: z.string().optional(),
+  daysGone: z.number().int().optional(),
+  monthlyRevenue: z.string().optional(), // String for decimal
+  outreachMethod: z.enum(["sms", "email", "phone", "in_person"]).optional(),
+  outreachMessage: z.string().optional(),
+  notes: z.string().optional(),
+  createdBy: z.string().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
