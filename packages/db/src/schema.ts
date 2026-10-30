@@ -758,6 +758,35 @@ export const CreateKpiMemberOverrideSchema = createInsertSchema(KpiMemberOverrid
 });
 
 // ============================================================================
+// KPI BILLING LINKS - Members whose membership is paid by another member
+// ============================================================================
+// GymMaster records the payment under the payer, so these members never show as
+// paying. A link counts them as members while their payer is, from the start month.
+
+export const KpiBillingLink = pgTable("kpi_billing_link", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  memberId: t.varchar({ length: 50 }).notNull().unique(), // GymMaster member ID of the person paid for
+  memberName: t.text().notNull(),
+  paidByMemberId: t.varchar({ length: 50 }).notNull(), // GymMaster member ID of the payer
+  paidByName: t.text().notNull(),
+  startMonth: t.integer().notNull(), // 1-12, first month the link counts
+  startYear: t.integer().notNull(),
+  createdAt: t.timestamp().defaultNow().notNull(),
+}));
+
+export const CreateKpiBillingLinkSchema = createInsertSchema(KpiBillingLink, {
+  memberId: z.string().min(1).max(50),
+  memberName: z.string().min(1),
+  paidByMemberId: z.string().min(1).max(50),
+  paidByName: z.string().min(1),
+  startMonth: z.number().int().min(1).max(12),
+  startYear: z.number().int().min(2020).max(2100),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+// ============================================================================
 // RETENTION EVENTS - Track retention activities and outcomes
 // ============================================================================
 

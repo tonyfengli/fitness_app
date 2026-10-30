@@ -125,6 +125,8 @@ export async function POST(request: NextRequest) {
         .update(KpiMonthlySnapshot)
         .set({
           data,
+          // Explicit date: the column's $onUpdateFn returns sql`now()`, which a mode "date" column can't serialize
+          updatedAt: new Date(),
           // Don't change status - keep draft/finalized as is
         })
         .where(eq(KpiMonthlySnapshot.id, existing[0].id));

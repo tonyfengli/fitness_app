@@ -48,7 +48,21 @@ interface DerivedMonthData extends MonthData {
   filteredLostCount: number;
   filteredNewRevenue: number;
   filteredLostRevenue: number;
+  linkedAdded: BillingLink[]; // included (paid-for) members counted as new this month
+  linkedLost: BillingLink[]; // included members counted as lost because their payer was lost
 }
+
+// A member whose membership another member pays for (GymMaster records the payment under the payer)
+interface BillingLink {
+  memberId: string;
+  memberName: string;
+  paidByMemberId: string;
+  paidByName: string;
+  startMonth: number;
+  startYear: number;
+}
+
+const linkMonthKey = (l: BillingLink) => `${l.startYear}-${String(l.startMonth).padStart(2, "0")}`;
 
 export function ReportingTab() {
   const [monthsData, setMonthsData] = useState<MonthData[]>([]);
@@ -66,6 +80,8 @@ export function ReportingTab() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snapshotStatuses, setSnapshotStatuses] = useState<Map<string, SnapshotStatus>>(new Map());
+  const [billingLinks, setBillingLinks] = useState<BillingLink[]>([]);
+  const [linkForm, setLinkForm] = useState({ memberId: "", paidByMemberId: "" });
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -246,21 +262,29 @@ export function ReportingTab() {
     }
   };
 
-  // Save all months to Supabase
+  // Save all months to Supabase. Finalized months are skipped: to change one, reopen it first.
   const saveAllToSupabase = async () => {
     setIsSaving(true);
     setSaveMessage("Saving to database...");
 
+    const toSave = monthsData.filter((monthData) => {
+      const key = `${monthData.year}-${String(MONTH_NAMES.indexOf(monthData.month) + 1).padStart(2, "0")}`;
+      return snapshotStatuses.get(key)?.status !== "finalized";
+    });
+    const skipped = monthsData.length - toSave.length;
+
     let successCount = 0;
-    for (const monthData of monthsData) {
+    for (const monthData of toSave) {
       const success = await saveToSupabase(monthData);
       if (success) successCount++;
     }
+    await loadSnapshotStatuses();
 
-    if (successCount === monthsData.length) {
-      setSaveMessage(`Saved ${successCount} months to database`);
+    const skippedNote = skipped ? ` (${skipped} finalized skipped)` : "";
+    if (successCount === toSave.length) {
+      setSaveMessage(`Saved ${successCount} months to database${skippedNote}`);
     } else {
-      setSaveMessage(`Saved ${successCount}/${monthsData.length} months (some failed)`);
+      setSaveMessage(`Saved ${successCount}/${toSave.length} months (some failed)${skippedNote}`);
     }
 
     setIsSaving(false);
@@ -344,6 +368,57 @@ export function ReportingTab() {
     setSnapshotStatuses(newStatuses);
   };
 
+  const loadBillingLinks = async () => {
+    try {
+      const response = await fetch("/api/kpi/billing-links");
+      if (response.ok) setBillingLinks((await response.json()).links || []);
+    } catch (err) {
+      console.error("Failed to load billing links:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadBillingLinks();
+  }, []);
+
+  const addBillingLink = async (m: MonthData) => {
+    const payer = m.payingMembers.find((p) => p.memberId === linkForm.paidByMemberId);
+    if (!linkForm.memberId.trim() || !payer) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/kpi/billing-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: linkForm.memberId.trim(), // name is looked up in GymMaster
+          paidByMemberId: payer.memberId,
+          paidByName: payer.name,
+          startMonth: MONTH_NAMES.indexOf(m.month) + 1,
+          startYear: m.year,
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json()).error);
+      setLinkForm({ memberId: "", paidByMemberId: "" });
+      await loadBillingLinks();
+    } catch (err) {
+      console.error("Failed to save billing link:", err);
+      setSaveMessage(err instanceof Error && err.message ? err.message : "Failed to include member");
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+    setIsSaving(false);
+  };
+
+  const removeBillingLink = async (memberId: string) => {
+    setIsSaving(true);
+    try {
+      await fetch(`/api/kpi/billing-links?memberId=${encodeURIComponent(memberId)}`, { method: "DELETE" });
+      await loadBillingLinks();
+    } catch (err) {
+      console.error("Failed to remove billing link:", err);
+    }
+    setIsSaving(false);
+  };
+
   // Load snapshot statuses when monthsData changes
   useEffect(() => {
     if (monthsData.length > 0) {
@@ -402,15 +477,24 @@ export function ReportingTab() {
         (member) => !monthOverrides.excludeFromLost.includes(member.memberId)
       );
 
-      const filteredNewCount = filteredNew.length;
-      const filteredLostCount = filteredLost.length;
+      // Includes (members paid for by someone else) count as new in their start month if the
+      // payer paid, and as lost when their payer is lost
+      const linkedAdded = billingLinks.filter(
+        (l) => linkMonthKey(l) === m.monthKey && m.payingMembers.some((p) => p.memberId === l.paidByMemberId)
+      );
+      const linkedLost = billingLinks.filter(
+        (l) => linkMonthKey(l) < m.monthKey && filteredLost.some((x) => x.memberId === l.paidByMemberId)
+      );
+
+      const filteredNewCount = filteredNew.length + linkedAdded.length;
+      const filteredLostCount = filteredLost.length + linkedLost.length;
       const filteredNewRevenue = filteredNew.reduce((sum, x) => sum + x.amount, 0);
       const filteredLostRevenue = filteredLost.reduce((sum, x) => sum + x.amount, 0);
 
       // Calculate derived total
       let derivedTotal: number;
       if (i === 0) {
-        derivedTotal = m.totalMembers;
+        derivedTotal = m.totalMembers + linkedAdded.length;
       } else {
         const prevDerived = result[i - 1]!.derivedTotalMembers;
         derivedTotal = prevDerived + filteredNewCount - filteredLostCount;
@@ -425,11 +509,13 @@ export function ReportingTab() {
         filteredLostCount,
         filteredNewRevenue,
         filteredLostRevenue,
+        linkedAdded,
+        linkedLost,
       });
     }
 
     return result;
-  }, [monthsData, overrides]);
+  }, [monthsData, overrides, billingLinks]);
 
   // Simple CSV parser
   const parseCsvSimple = (csv: string): Record<string, string>[] => {
@@ -1131,7 +1217,7 @@ export function ReportingTab() {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  {!hasSavedData && (
+                                  {!isFinalized && (
                                     <button
                                       onClick={async () => {
                                         setIsSaving(true);
@@ -1188,8 +1274,27 @@ export function ReportingTab() {
                                   +{formatCurrency(m.filteredNewRevenue)}/mo
                                 </span>
                               </div>
-                              {m.newMembers.length > 0 ? (
+                              {m.newMembers.length + m.linkedAdded.length > 0 ? (
                                 <div className="grid gap-2">
+                                  {m.linkedAdded.map((l) => (
+                                    <div
+                                      key={`include-${l.memberId}`}
+                                      className="flex items-center justify-between rounded-lg px-3 py-2 shadow-sm border-l-4 bg-white border-green-400"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="font-medium text-gray-700">{l.memberName}</span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">INCLUDED</span>
+                                        <span className="text-xs text-gray-500 truncate">paid by {l.paidByName}</span>
+                                      </div>
+                                      <button
+                                        onClick={() => removeBillingLink(l.memberId)}
+                                        disabled={isSaving}
+                                        className="text-xs text-gray-500 hover:text-red-600 disabled:opacity-50"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  ))}
                                   {m.newMembers.map((member) => {
                                     const excluded = isExcluded(m.monthKey, member.memberId, "new");
                                     return (
@@ -1236,8 +1341,18 @@ export function ReportingTab() {
                                   -{formatCurrency(m.filteredLostRevenue)}/mo
                                 </span>
                               </div>
-                              {allLostWithHold.length > 0 ? (
+                              {allLostWithHold.length + m.linkedLost.length > 0 ? (
                                 <div className="grid gap-2">
+                                  {m.linkedLost.map((l) => (
+                                    <div
+                                      key={`include-lost-${l.memberId}`}
+                                      className="flex items-center gap-2 rounded-lg px-3 py-2 shadow-sm border-l-4 bg-white border-red-400"
+                                    >
+                                      <span className="font-medium text-gray-700">{l.memberName}</span>
+                                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">LOST</span>
+                                      <span className="text-xs text-gray-500">payer {l.paidByName} lost</span>
+                                    </div>
+                                  ))}
                                   {allLostWithHold.map((member) => {
                                     const excluded = isExcluded(m.monthKey, member.memberId, "lost");
                                     const isHold = member.type === "hold";
@@ -1282,6 +1397,44 @@ export function ReportingTab() {
                                   No lost members this month
                                 </div>
                               )}
+                            </div>
+                          </div>
+
+                          {/* Include a member paid for by someone else */}
+                          <div className="mt-6 pt-4 border-t border-gray-200">
+                            <div className="text-sm font-semibold text-gray-900 mb-1">Include a member</div>
+                            <div className="text-xs text-gray-500 mb-3">
+                              For members paid for through someone else&apos;s account. They count as new in {m.month} and stay
+                              in Total Members while their payer pays.
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                value={linkForm.memberId}
+                                onChange={(e) => setLinkForm({ ...linkForm, memberId: e.target.value })}
+                                placeholder="GymMaster ID"
+                                className="w-32 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                              />
+                              <select
+                                value={linkForm.paidByMemberId}
+                                onChange={(e) => setLinkForm({ ...linkForm, paidByMemberId: e.target.value })}
+                                className="w-56 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                              >
+                                <option value="">Paid by…</option>
+                                {[...m.payingMembers]
+                                  .sort((a, b) => a.name.localeCompare(b.name))
+                                  .map((p) => (
+                                    <option key={p.memberId} value={p.memberId}>
+                                      {p.name}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={() => addBillingLink(m)}
+                                disabled={isSaving || !linkForm.memberId.trim() || !linkForm.paidByMemberId}
+                                className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-40"
+                              >
+                                Include from {m.month}
+                              </button>
                             </div>
                           </div>
                         </td>

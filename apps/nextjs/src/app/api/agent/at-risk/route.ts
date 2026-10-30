@@ -7,11 +7,12 @@
  * with live GymMaster booking data (attendance tracking).
  */
 
-import { desc, eq, and, or, inArray } from "@acme/db";
+import { eq } from "@acme/db";
 import { db } from "@acme/db/client";
-import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
+import { KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiAccess } from "~/lib/api-auth";
+import { getKpiRoster } from "~/lib/kpi-roster";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,14 @@ interface BookingRow {
   Service: string;
 }
 
+interface WeeklyVisits {
+  week0: number;
+  week1: number;
+  week2: number;
+  week3: number;
+  week4: number;
+}
+
 interface AtRiskMember {
   memberId: string;
   name: string;
@@ -45,14 +54,26 @@ interface AtRiskMember {
   statusTier: string;
   returnRate: number;
   monthlyRevenue: number;
+  paidBy: string | null; // payer's name when another member pays for them
   lastClass: string | null;
   memberSince: string | null;
+  membershipType: string | null;
+  phone: string | null;
+  tenureMonths: number;
+  weeklyVisits: WeeklyVisits;
+  totalVisits: number;
 }
 
 interface CurrentMemberRow {
   "Member ID": number;
-  Name: string;
+  Name?: string;
+  "Member Name"?: string;
   "Membership Start Date": string;
+  "Membership Type Name"?: string;
+  "Membership Type"?: string;
+  "Member Cell"?: string;
+  "Mobile"?: string;
+  "Phone"?: string;
 }
 
 function getStatusTier(daysGone: number): { label: string; returnRate: number } {
@@ -78,6 +99,11 @@ function parseGymMasterDate(dateStr: string): Date {
 function daysBetween(date1: Date, date2: Date): number {
   const diffTime = Math.abs(date2.getTime() - date1.getTime());
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+function getWeekNumber(date: Date, referenceDate: Date): number {
+  const diffTime = referenceDate.getTime() - date.getTime();
+  return Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000));
 }
 
 async function fetchGymMasterBookings(startDate: string, endDate: string): Promise<BookingRow[]> {
@@ -167,19 +193,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Get the most recent finalized snapshot to determine paying members
-    const snapshot = await db
-      .select()
-      .from(KpiMonthlySnapshot)
-      .where(
-        and(
-          eq(KpiMonthlySnapshot.status, "finalized"),
-        )
-      )
-      .orderBy(desc(KpiMonthlySnapshot.year), desc(KpiMonthlySnapshot.month))
-      .limit(1);
+    // 1. Members the KPI overview counts (rolled from finalized snapshots + KPI overrides)
+    const roster = await getKpiRoster();
 
-    if (!snapshot.length) {
+    if (!roster) {
       return NextResponse.json({
         status: "no_data",
         message: "No finalized KPI snapshot found. Please finalize a month first.",
@@ -190,41 +207,41 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const kpiData = snapshot[0].data;
-    const payingMembers = kpiData.payingMembers || [];
+    const snapshotData = { month: roster.month, year: roster.year, status: "finalized" };
+    const payingMembers = roster.members;
 
     if (payingMembers.length === 0) {
       return NextResponse.json({
         status: "no_members",
-        message: "No paying members found in the finalized snapshot.",
+        message: "No members in the KPI roster.",
         atRiskMembers: [],
         _meta: {
           generatedAt: new Date().toISOString(),
-          snapshotMonth: snapshot[0].month,
-          snapshotYear: snapshot[0].year,
+          snapshotMonth: snapshotData.month,
+          snapshotYear: snapshotData.year,
         },
       });
     }
 
-    // 1b. Get member overrides to exclude from at-risk list
-    // Respect both "exclude_from_at_risk" and "exclude_from_new" (data anomalies)
-    const overrides = await db
-      .select()
-      .from(KpiMemberOverride)
-      .where(
-        or(
-          eq(KpiMemberOverride.overrideType, "exclude_from_at_risk"),
-          eq(KpiMemberOverride.overrideType, "exclude_from_new")
-        )
-      );
+    // 1b. Members manually excluded from the at-risk list
+    // (exclude_from_new / exclude_from_lost are already applied by the roster)
+    let overrides: { memberId: string }[] = [];
+    try {
+      overrides = await db
+        .select({ memberId: KpiMemberOverride.memberId })
+        .from(KpiMemberOverride)
+        .where(eq(KpiMemberOverride.overrideType, "exclude_from_at_risk"));
+    } catch (err) {
+      console.warn("[at-risk] exclude_from_at_risk enum not migrated, no at-risk exclusions applied");
+    }
 
     const excludedMemberIds = new Set(overrides.map(o => o.memberId));
 
     // 2. Query GymMaster for booking data (last 60 days) and current members
-    const endDate = now.toISOString().split("T")[0];
+    const endDate = now.toISOString().split("T")[0]!;
     const startDateObj = new Date(now);
     startDateObj.setDate(startDateObj.getDate() - 60);
-    const startDate = startDateObj.toISOString().split("T")[0];
+    const startDate = startDateObj.toISOString().split("T")[0]!;
 
     let bookings: BookingRow[] = [];
     let currentMembers: CurrentMemberRow[] = [];
@@ -243,22 +260,43 @@ export async function GET(request: NextRequest) {
       console.error("[API /agent/at-risk] GymMaster error:", gymMasterError);
     }
 
-    // 3. Build a map of member ID -> membership start date
-    const memberSinceMap = new Map<string, string>();
+    // 3. Build a map of member ID -> member info (start date, type, phone)
+    const memberInfoMap = new Map<string, {
+      memberSince: string | null;
+      membershipType: string | null;
+      phone: string | null;
+      tenureMonths: number;
+    }>();
     for (const member of currentMembers) {
       const memberId = String(member["Member ID"]);
-      const startDate = member["Membership Start Date"];
-      if (memberId && startDate) {
-        // Normalize date format to YYYY-MM-DD
-        const parsed = parseGymMasterDate(startDate);
+      const startDateStr = member["Membership Start Date"];
+      const membershipType = member["Membership Type Name"] || member["Membership Type"] || null;
+      const phone = member["Member Cell"] || member["Mobile"] || member["Phone"] || null;
+
+      let memberSince: string | null = null;
+      let tenureMonths = 0;
+
+      if (startDateStr) {
+        const parsed = parseGymMasterDate(startDateStr);
         if (!isNaN(parsed.getTime())) {
-          memberSinceMap.set(memberId, parsed.toISOString().split("T")[0]);
+          memberSince = parsed.toISOString().split("T")[0] ?? null;
+          tenureMonths = Math.floor((now.getTime() - parsed.getTime()) / (1000 * 60 * 60 * 24 * 30));
         }
+      }
+
+      if (memberId) {
+        memberInfoMap.set(memberId, {
+          memberSince,
+          membershipType: membershipType ? String(membershipType) : null,
+          phone: phone ? String(phone) : null,
+          tenureMonths,
+        });
       }
     }
 
-    // 4. Build a map of member ID -> last valid attendance
+    // 4. Build a map of member ID -> last valid attendance AND weekly visits
     const lastAttendanceMap = new Map<string, { date: Date; time: string | null; className: string | null }>();
+    const weeklyVisitsMap = new Map<string, WeeklyVisits>();
 
     for (const booking of bookings) {
       if (!VALID_ATTENDANCE.includes(booking["Booking Result"])) continue;
@@ -268,9 +306,24 @@ export async function GET(request: NextRequest) {
       const bookingTime = booking["Booking Start Time"] || null;
       const className = booking["Class Name"] || booking["Service"] || null;
 
+      // Track last attendance
       const existing = lastAttendanceMap.get(memberId);
       if (!existing || bookingDate > existing.date) {
         lastAttendanceMap.set(memberId, { date: bookingDate, time: bookingTime, className });
+      }
+
+      // Track weekly visits
+      const weeksAgo = getWeekNumber(bookingDate, now);
+      if (weeksAgo >= 0 && weeksAgo <= 4) {
+        if (!weeklyVisitsMap.has(memberId)) {
+          weeklyVisitsMap.set(memberId, { week0: 0, week1: 0, week2: 0, week3: 0, week4: 0 });
+        }
+        const visits = weeklyVisitsMap.get(memberId)!;
+        if (weeksAgo === 0) visits.week0++;
+        else if (weeksAgo === 1) visits.week1++;
+        else if (weeksAgo === 2) visits.week2++;
+        else if (weeksAgo === 3) visits.week3++;
+        else if (weeksAgo === 4) visits.week4++;
       }
     }
 
@@ -287,7 +340,7 @@ export async function GET(request: NextRequest) {
 
       if (lastAttendance) {
         daysGone = daysBetween(lastAttendance.date, now);
-        lastAttendanceStr = lastAttendance.date.toISOString().split("T")[0];
+        lastAttendanceStr = lastAttendance.date.toISOString().split("T")[0] ?? null;
         lastAttendanceTime = lastAttendance.time;
         lastClass = lastAttendance.className;
       } else {
@@ -298,6 +351,9 @@ export async function GET(request: NextRequest) {
       // Only include members who are "at risk" (14+ days gone) and not excluded
       if (daysGone >= 14 && !excludedMemberIds.has(member.memberId)) {
         const tier = getStatusTier(daysGone);
+        const memberInfo = memberInfoMap.get(member.memberId);
+        const weeklyVisits = weeklyVisitsMap.get(member.memberId) || { week0: 0, week1: 0, week2: 0, week3: 0, week4: 0 };
+        const totalVisits = weeklyVisits.week0 + weeklyVisits.week1 + weeklyVisits.week2 + weeklyVisits.week3;
         atRiskMembers.push({
           memberId: member.memberId,
           name: member.name,
@@ -307,8 +363,14 @@ export async function GET(request: NextRequest) {
           statusTier: tier.label,
           returnRate: tier.returnRate,
           monthlyRevenue: member.revenue,
+          paidBy: member.paidBy?.name ?? null,
           lastClass,
-          memberSince: memberSinceMap.get(member.memberId) || null,
+          memberSince: memberInfo?.memberSince || null,
+          membershipType: memberInfo?.membershipType || null,
+          phone: memberInfo?.phone || null,
+          tenureMonths: memberInfo?.tenureMonths || 0,
+          weeklyVisits,
+          totalVisits,
         });
       }
     }
@@ -338,9 +400,9 @@ export async function GET(request: NextRequest) {
       _meta: {
         generatedAt: new Date().toISOString(),
         dataSource: gymMasterError ? "supabase_only" : "supabase+gymmaster",
-        snapshotMonth: snapshot[0].month,
-        snapshotYear: snapshot[0].year,
-        snapshotStatus: snapshot[0].status,
+        snapshotMonth: snapshotData.month,
+        snapshotYear: snapshotData.year,
+        snapshotStatus: snapshotData.status,
         bookingsQueried: bookings.length,
         lookbackDays: 60,
         excludedByOverride: excludedMemberIds.size,
