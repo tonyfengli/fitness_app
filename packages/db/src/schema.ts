@@ -758,6 +758,22 @@ export const CreateKpiMemberOverrideSchema = createInsertSchema(KpiMemberOverrid
 });
 
 // ============================================================================
+// QUICKBOOKS CONNECTION - OAuth tokens for the QuickBooks Online company
+// ============================================================================
+// Tokens are AES-256-GCM encrypted (key: QUICKBOOKS_TOKEN_KEY). Intuit rotates the
+// refresh token on every refresh, so this row is rewritten each time.
+
+export const QuickBooksConnection = pgTable("quickbooks_connection", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  realmId: t.varchar({ length: 50 }).notNull().unique(), // QuickBooks company ID
+  accessToken: t.text().notNull(), // encrypted
+  refreshToken: t.text().notNull(), // encrypted
+  accessTokenExpiresAt: t.timestamp({ mode: "date", withTimezone: true }).notNull(),
+  refreshTokenExpiresAt: t.timestamp({ mode: "date", withTimezone: true }).notNull(),
+  updatedAt: t.timestamp({ mode: "date", withTimezone: true }).notNull().defaultNow(),
+}));
+
+// ============================================================================
 // KPI BILLING LINKS - Members whose membership is paid by another member
 // ============================================================================
 // GymMaster records the payment under the payer, so these members never show as

@@ -4,20 +4,16 @@
  * Redirects user to Intuit's authorization page
  */
 
+import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import OAuthClient from "intuit-oauth";
-
-function getOAuthClient() {
-  return new OAuthClient({
-    clientId: process.env.QUICKBOOKS_CLIENT_ID!,
-    clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET!,
-    environment: process.env.QUICKBOOKS_ENVIRONMENT as "sandbox" | "production",
-    redirectUri: process.env.QUICKBOOKS_REDIRECT_URI!,
-  });
-}
+import { getOAuthClient, QB_STATE_COOKIE } from "~/lib/quickbooks";
 
 export async function GET() {
   const oauthClient = getOAuthClient();
+
+  // CSRF protection: random state, checked against this cookie in the callback
+  const state = randomBytes(16).toString("hex");
 
   // Generate authorization URL with required scopes
   const authUri = oauthClient.authorizeUri({
@@ -25,8 +21,16 @@ export async function GET() {
       OAuthClient.scopes.Accounting, // For P&L and financial reports
       OAuthClient.scopes.OpenId,     // For user info
     ],
-    state: "kpi-dashboard", // CSRF protection - in production, use a random token
+    state,
   });
 
-  return NextResponse.redirect(authUri);
+  const response = NextResponse.redirect(authUri);
+  response.cookies.set(QB_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/auth/quickbooks",
+    maxAge: 10 * 60,
+  });
+  return response;
 }

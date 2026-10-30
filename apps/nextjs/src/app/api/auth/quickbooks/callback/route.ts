@@ -1,47 +1,11 @@
 /**
  * QuickBooks OAuth Callback
  * GET /api/auth/quickbooks/callback
- * Exchanges authorization code for tokens and stores them
+ * Exchanges authorization code for tokens and stores them (encrypted, in the database)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import OAuthClient from "intuit-oauth";
-import { writeFile, readFile } from "fs/promises";
-import { join } from "path";
-import { clearTokenInvalidated } from "~/lib/quickbooks";
-
-const TOKEN_FILE = join(process.cwd(), ".quickbooks-tokens.json");
-
-function getOAuthClient() {
-  return new OAuthClient({
-    clientId: process.env.QUICKBOOKS_CLIENT_ID!,
-    clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET!,
-    environment: process.env.QUICKBOOKS_ENVIRONMENT as "sandbox" | "production",
-    redirectUri: process.env.QUICKBOOKS_REDIRECT_URI!,
-  });
-}
-
-export interface QuickBooksTokens {
-  accessToken: string;
-  refreshToken: string;
-  realmId: string;
-  accessTokenExpiresAt: string;
-  refreshTokenExpiresAt: string;
-  updatedAt: string;
-}
-
-export async function saveTokens(tokens: QuickBooksTokens): Promise<void> {
-  await writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2));
-}
-
-export async function loadTokens(): Promise<QuickBooksTokens | null> {
-  try {
-    const data = await readFile(TOKEN_FILE, "utf-8");
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
+import { getOAuthClient, QB_STATE_COOKIE, saveTokens, tokensFromResponse } from "~/lib/quickbooks";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -50,18 +14,26 @@ export async function GET(request: NextRequest) {
   const realmId = searchParams.get("realmId");
   const error = searchParams.get("error");
 
+  const redirect = (path: string) => {
+    const response = NextResponse.redirect(new URL(path, request.url));
+    response.cookies.delete({ name: QB_STATE_COOKIE, path: "/api/auth/quickbooks" });
+    return response;
+  };
+
   // Handle errors from Intuit
   if (error) {
     const errorDescription = searchParams.get("error_description") || "Unknown error";
-    return NextResponse.redirect(
-      new URL(`/kpi?error=${encodeURIComponent(errorDescription)}`, request.url)
-    );
+    return redirect(`/kpi?error=${encodeURIComponent(errorDescription)}`);
+  }
+
+  // Must match the state set when the connect flow started
+  const expectedState = request.cookies.get(QB_STATE_COOKIE)?.value;
+  if (!state || !expectedState || state !== expectedState) {
+    return redirect("/kpi?error=QuickBooks connection expired or was not started here. Please try again.");
   }
 
   if (!code || !realmId) {
-    return NextResponse.redirect(
-      new URL("/kpi?error=Missing authorization code or realm ID", request.url)
-    );
+    return redirect("/kpi?error=Missing authorization code or realm ID");
   }
 
   try {
@@ -69,36 +41,13 @@ export async function GET(request: NextRequest) {
 
     // Exchange code for tokens
     const authResponse = await oauthClient.createToken(request.url);
-    const tokenData = authResponse.getJson();
-
-    // Store tokens
-    const tokens: QuickBooksTokens = {
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token,
-      realmId: realmId,
-      accessTokenExpiresAt: new Date(
-        Date.now() + tokenData.expires_in * 1000
-      ).toISOString(),
-      refreshTokenExpiresAt: new Date(
-        Date.now() + tokenData.x_refresh_token_expires_in * 1000
-      ).toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await saveTokens(tokens);
-
-    // Clear any invalidated token flag
-    clearTokenInvalidated();
+    await saveTokens(tokensFromResponse(realmId, authResponse.getJson()));
 
     // Redirect to KPI dashboard with success message
-    return NextResponse.redirect(
-      new URL("/kpi?quickbooks=connected", request.url)
-    );
+    return redirect("/kpi?quickbooks=connected");
   } catch (err) {
     console.error("QuickBooks OAuth error:", err);
     const message = err instanceof Error ? err.message : "Token exchange failed";
-    return NextResponse.redirect(
-      new URL(`/kpi?error=${encodeURIComponent(message)}`, request.url)
-    );
+    return redirect(`/kpi?error=${encodeURIComponent(message)}`);
   }
 }

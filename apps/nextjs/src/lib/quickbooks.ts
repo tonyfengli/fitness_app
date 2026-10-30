@@ -1,16 +1,18 @@
 /**
  * QuickBooks API Client
- * Handles token refresh and API calls
+ * Handles token storage, refresh and API calls.
+ *
+ * Tokens live in the quickbooks_connection table, encrypted with AES-256-GCM
+ * (QUICKBOOKS_TOKEN_KEY: 32 bytes, base64). Intuit rotates the refresh token on
+ * every refresh, so each refresh rewrites the row. The refresh token expires after
+ * 100 days without a refresh; after that, QuickBooks needs reconnecting.
  */
 
+import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import OAuthClient from "intuit-oauth";
-import { readFile, writeFile, unlink } from "fs/promises";
-import { join } from "path";
-
-const TOKEN_FILE = join(process.cwd(), ".quickbooks-tokens.json");
-
-// Track if we've detected an invalid token (refresh failed)
-let tokenInvalidated = false;
+import { and, desc, eq } from "@acme/db";
+import { db } from "@acme/db/client";
+import { QuickBooksConnection } from "@acme/db/schema";
 
 export interface QuickBooksTokens {
   accessToken: string;
@@ -38,7 +40,10 @@ export interface ProfitAndLossReport {
   raw?: unknown;
 }
 
-function getOAuthClient() {
+// Cookie holding the OAuth state between the connect redirect and the callback
+export const QB_STATE_COOKIE = "qb_oauth_state";
+
+export function getOAuthClient() {
   return new OAuthClient({
     clientId: process.env.QUICKBOOKS_CLIENT_ID!,
     clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET!,
@@ -47,91 +52,175 @@ function getOAuthClient() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Encryption at rest: "v1:<iv>:<auth tag>:<ciphertext>", all base64
+// ---------------------------------------------------------------------------
+
+function tokenKey(): Buffer {
+  const key = Buffer.from(process.env.QUICKBOOKS_TOKEN_KEY ?? "", "base64");
+  if (key.length !== 32) throw new Error("QUICKBOOKS_TOKEN_KEY must be 32 bytes, base64-encoded");
+  return key;
+}
+
+function encrypt(plain: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", tokenKey(), iv);
+  const data = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  return ["v1", iv.toString("base64"), cipher.getAuthTag().toString("base64"), data.toString("base64")].join(":");
+}
+
+function decrypt(stored: string): string {
+  const [version, iv, tag, data] = stored.split(":");
+  if (version !== "v1" || !iv || !tag || !data) throw new Error("Unrecognized QuickBooks token format");
+  const decipher = createDecipheriv("aes-256-gcm", tokenKey(), Buffer.from(iv, "base64"));
+  decipher.setAuthTag(Buffer.from(tag, "base64"));
+  return Buffer.concat([decipher.update(Buffer.from(data, "base64")), decipher.final()]).toString("utf8");
+}
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+
+type ConnectionRow = typeof QuickBooksConnection.$inferSelect;
+
+function rowToTokens(row: ConnectionRow): QuickBooksTokens {
+  return {
+    accessToken: decrypt(row.accessToken),
+    refreshToken: decrypt(row.refreshToken),
+    realmId: row.realmId,
+    accessTokenExpiresAt: row.accessTokenExpiresAt.toISOString(),
+    refreshTokenExpiresAt: row.refreshTokenExpiresAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+async function loadRow(): Promise<ConnectionRow | null> {
+  const [row] = await db.select().from(QuickBooksConnection).orderBy(desc(QuickBooksConnection.updatedAt)).limit(1);
+  return row ?? null;
+}
+
 export async function loadTokens(): Promise<QuickBooksTokens | null> {
   try {
-    const data = await readFile(TOKEN_FILE, "utf-8");
-    return JSON.parse(data);
-  } catch {
+    const row = await loadRow();
+    return row ? rowToTokens(row) : null;
+  } catch (err) {
+    console.error("Failed to load QuickBooks tokens:", err);
     return null;
   }
+}
+
+// Intuit token response → stored tokens
+export function tokensFromResponse(
+  realmId: string,
+  data: { access_token: string; refresh_token: string; expires_in: number; x_refresh_token_expires_in: number }
+): QuickBooksTokens {
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    realmId,
+    accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000).toISOString(),
+    refreshTokenExpiresAt: new Date(Date.now() + data.x_refresh_token_expires_in * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function toRow(tokens: QuickBooksTokens) {
+  return {
+    realmId: tokens.realmId,
+    accessToken: encrypt(tokens.accessToken),
+    refreshToken: encrypt(tokens.refreshToken),
+    accessTokenExpiresAt: new Date(tokens.accessTokenExpiresAt),
+    refreshTokenExpiresAt: new Date(tokens.refreshTokenExpiresAt),
+    updatedAt: new Date(),
+  };
 }
 
 export async function saveTokens(tokens: QuickBooksTokens): Promise<void> {
-  await writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2));
+  const row = toRow(tokens);
+  await db.insert(QuickBooksConnection).values(row).onConflictDoUpdate({ target: QuickBooksConnection.realmId, set: row });
 }
 
-export async function getValidTokens(): Promise<QuickBooksTokens | null> {
-  const tokens = await loadTokens();
-  if (!tokens) return null;
+// ---------------------------------------------------------------------------
+// Refresh
+// ---------------------------------------------------------------------------
 
-  // Check if access token is expired (with 5 minute buffer)
-  const expiresAt = new Date(tokens.accessTokenExpiresAt);
-  const now = new Date();
-  const bufferMs = 5 * 60 * 1000; // 5 minutes
+const ACCESS_BUFFER_MS = 5 * 60 * 1000;
 
-  if (expiresAt.getTime() - now.getTime() > bufferMs) {
-    // Token is still valid
-    return tokens;
-  }
+// Only one refresh at a time within this server instance
+let refreshInFlight: Promise<QuickBooksTokens | null> | null = null;
 
-  // Check if refresh token is expired
-  const refreshExpiresAt = new Date(tokens.refreshTokenExpiresAt);
-  if (refreshExpiresAt < now) {
-    console.error("QuickBooks refresh token expired - re-authorization required");
-    return null;
-  }
+function isInvalidGrant(err: unknown): boolean {
+  const e = err as { error?: string; authResponse?: { json?: { error?: string } }; message?: string };
+  return (
+    e?.error === "invalid_grant" ||
+    e?.authResponse?.json?.error === "invalid_grant" ||
+    String(e?.message ?? err).includes("invalid_grant")
+  );
+}
 
-  // Refresh the token
+async function refreshTokens(row: ConnectionRow): Promise<QuickBooksTokens | null> {
+  const current = rowToTokens(row);
   try {
     const oauthClient = getOAuthClient();
     oauthClient.setToken({
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
+      access_token: current.accessToken,
+      refresh_token: current.refreshToken,
       token_type: "Bearer",
       expires_in: 0,
       x_refresh_token_expires_in: 0,
-      realmId: tokens.realmId,
+      realmId: current.realmId,
     });
+    const fresh = tokensFromResponse(current.realmId, (await oauthClient.refresh()).getJson());
 
-    const response = await oauthClient.refresh();
-    const newTokenData = response.getJson();
-
-    const newTokens: QuickBooksTokens = {
-      accessToken: newTokenData.access_token,
-      refreshToken: newTokenData.refresh_token,
-      realmId: tokens.realmId,
-      accessTokenExpiresAt: new Date(
-        Date.now() + newTokenData.expires_in * 1000
-      ).toISOString(),
-      refreshTokenExpiresAt: new Date(
-        Date.now() + newTokenData.x_refresh_token_expires_in * 1000
-      ).toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await saveTokens(newTokens);
-    tokenInvalidated = false;
+    // Save only if nobody else refreshed since we read the row; otherwise use theirs
+    const saved = await db
+      .update(QuickBooksConnection)
+      .set(toRow(fresh))
+      .where(and(eq(QuickBooksConnection.realmId, row.realmId), eq(QuickBooksConnection.updatedAt, row.updatedAt)))
+      .returning({ id: QuickBooksConnection.id });
+    if (!saved.length) {
+      console.log("QuickBooks tokens were refreshed concurrently; using the stored ones");
+      return loadTokens();
+    }
     console.log("QuickBooks token refreshed successfully");
-    return newTokens;
+    return fresh;
   } catch (err) {
-    console.error("Failed to refresh QuickBooks token:", err);
-    // Mark token as invalidated and delete the file
-    tokenInvalidated = true;
-    try {
-      await unlink(TOKEN_FILE);
-      console.log("Deleted invalid QuickBooks token file");
-    } catch {
-      // File may not exist, ignore
+    if (isInvalidGrant(err)) {
+      // The refresh token is revoked or expired: the connection is gone until re-authorized
+      console.error("QuickBooks refresh token rejected (invalid_grant) - re-authorization required");
+      await db.delete(QuickBooksConnection).where(eq(QuickBooksConnection.realmId, row.realmId));
+    } else {
+      // Network or Intuit hiccup: keep the tokens and try again on the next request
+      console.error("Failed to refresh QuickBooks token (will retry):", err);
     }
     return null;
   }
 }
 
 /**
- * Clear the invalidated flag (call after successful re-auth)
+ * Valid tokens, refreshing when the access token is within 5 minutes of expiring
  */
-export function clearTokenInvalidated(): void {
-  tokenInvalidated = false;
+export async function getValidTokens(): Promise<QuickBooksTokens | null> {
+  const row = await loadRow().catch((err) => {
+    console.error("Failed to load QuickBooks tokens:", err);
+    return null;
+  });
+  if (!row) return null;
+
+  if (row.refreshTokenExpiresAt <= new Date()) {
+    console.error("QuickBooks refresh token expired - re-authorization required");
+    return null;
+  }
+  if (row.accessTokenExpiresAt.getTime() - Date.now() > ACCESS_BUFFER_MS) {
+    return rowToTokens(row);
+  }
+
+  if (!refreshInFlight) {
+    refreshInFlight = refreshTokens(row).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 /**
@@ -323,13 +412,6 @@ function parseProfitAndLossReport(
  * Check if QuickBooks is connected
  */
 export async function isQuickBooksConnected(): Promise<boolean> {
-  // If we've detected an invalid token, return false immediately
-  if (tokenInvalidated) return false;
-
-  const tokens = await loadTokens();
-  if (!tokens) return false;
-
-  // Check if refresh token is still valid
-  const refreshExpiresAt = new Date(tokens.refreshTokenExpiresAt);
-  return refreshExpiresAt > new Date();
+  const row = await loadRow().catch(() => null);
+  return !!row && row.refreshTokenExpiresAt > new Date();
 }
