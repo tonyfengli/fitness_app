@@ -895,6 +895,8 @@ export function ReportingTab() {
     classesRevenue: m.smallGroupRevenue, // Classes revenue
     groupRevenue: m.groupRevenue,
     totalRevenue: m.totalRevenue,
+    // Top of the Revenue Breakdown stack: the three sources it draws
+    sourceTotal: m.openGymRevenue + m.smallGroupRevenue + m.ptRevenue,
     arm: m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0,
     armGroups: Math.round(m.armGroups),
   }));
@@ -1725,23 +1727,43 @@ export function ReportingTab() {
                 tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
-                formatter={(value: number, name: string) => {
-                  const labels: Record<string, string> = {
-                    openGymRevenue: "Open Gym",
-                    classesRevenue: "Classes",
-                    ptRevenue: "PT",
-                  };
-                  return [`$${value.toLocaleString()}`, labels[name] || name];
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]!.payload as (typeof chartData)[number];
+                  // Top of the stack first, then the month's total
+                  const sources = [
+                    { name: "PT", value: row.ptRevenue, color: "#a855f7" },
+                    { name: "Classes", value: row.classesRevenue, color: "#3b82f6" },
+                    { name: "Open Gym", value: row.openGymRevenue, color: "#22c55e" },
+                  ];
+                  return (
+                    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm">
+                      <div className="mb-1 font-medium text-gray-900">{label}</div>
+                      {sources.map((src) => (
+                        <div key={src.name} className="flex items-center justify-between gap-6">
+                          <span className="flex items-center gap-1.5 text-gray-600">
+                            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: src.color }} />
+                            {src.name}
+                          </span>
+                          <span className="tabular-nums text-gray-900">${Math.round(src.value).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="mt-1 flex justify-between gap-6 border-t border-gray-100 pt-1 font-semibold text-gray-900">
+                        <span>Total</span>
+                        <span className="tabular-nums">${Math.round(row.sourceTotal).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  );
                 }}
-                contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
               />
               <Bar dataKey="openGymRevenue" stackId="a" fill="#22c55e" name="openGymRevenue" />
               <Bar dataKey="classesRevenue" stackId="a" fill="#3b82f6" name="classesRevenue" />
               <Bar dataKey="ptRevenue" stackId="a" fill="#a855f7" name="ptRevenue" radius={[4, 4, 0, 0]}>
+                {/* Month total above each stack */}
                 <LabelList
-                  dataKey="ptRevenue"
+                  dataKey="sourceTotal"
                   position="top"
-                  fill="#7c3aed"
+                  fill="#374151"
                   fontSize={12}
                   fontWeight="bold"
                   formatter={(value: number) => (value > 0 ? `$${(value / 1000).toFixed(1)}k` : "")}

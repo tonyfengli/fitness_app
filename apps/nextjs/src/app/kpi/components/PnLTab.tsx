@@ -34,6 +34,14 @@ interface RevenueMonth {
   payouts: number;
 }
 
+// Saved month status (from /api/pnl/snapshots)
+interface PnlSnapshotStatus {
+  month: number;
+  status: "draft" | "finalized";
+  finalizedAt: string | null;
+  refreshedAt: string;
+}
+
 interface RevenueReconciliationData {
   year: number;
   months: RevenueMonth[];
@@ -69,99 +77,92 @@ interface PnLDisplayMonth {
 
 export function PnLTab() {
   const [revenueData, setRevenueData] = useState<RevenueReconciliationData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState("");
+  const [snapshots, setSnapshots] = useState<PnlSnapshotStatus[]>([]);
+  const [quickbooksConnected, setQuickbooksConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [needsAuth, setNeedsAuth] = useState(false);
   const [startMonth, setStartMonth] = useState(1);
   const [endMonth, setEndMonth] = useState(10);
   const [reportYear, setReportYear] = useState(2026);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
 
-  // Check QuickBooks connection status on mount
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const res = await fetch("/api/quickbooks/status");
-        const data = await res.json();
-        if (!data.connected) {
-          setNeedsAuth(true);
-        }
-      } catch {
-        setNeedsAuth(true);
-      }
-    };
-    checkStatus();
-  }, []);
-
-  const clearCache = () => {
-    setRevenueData(null);
-    setLastSavedAt(null);
+  // Default load: the saved P&L from the database (no QuickBooks needed)
+  const loadSaved = async (year: number) => {
+    try {
+      const res = await fetch(`/api/pnl/snapshots?year=${year}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to load saved P&L data");
+      setRevenueData(json);
+      setSnapshots(json.snapshots || []);
+      setQuickbooksConnected(!!json.quickbooksConnected);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load saved P&L data");
+    }
   };
 
-  const fetchData = async () => {
+  useEffect(() => {
     setIsLoading(true);
+    loadSaved(reportYear).finally(() => setIsLoading(false));
+  }, [reportYear]);
+
+  // QuickBooks is only for pulling new data into the saved months (finalized months are skipped)
+  const refreshFromQuickBooks = async () => {
+    setIsRefreshing(true);
+    setMessage(null);
     setError(null);
-    setNeedsAuth(false);
-
     try {
-      // Fetch all data from reconciliation API (now includes expense breakdown)
-      setLoadingProgress("Loading P&L data from Stripe & QuickBooks...");
-      const revenueRes = await fetch(
-        `/api/admin/revenue-reconciliation?year=${reportYear}&startMonth=${startMonth}&endMonth=${endMonth}`
-      );
-      const revenueJson = await revenueRes.json();
-
-      if (!revenueRes.ok) {
-        if (revenueJson.needsAuth) {
-          setNeedsAuth(true);
-          return;
-        }
-        throw new Error(revenueJson.error || "Failed to fetch P&L data");
+      const res = await fetch("/api/pnl/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year: reportYear, startMonth, endMonth }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json.needsAuth) setQuickbooksConnected(false);
+        throw new Error(json.error || "Failed to refresh P&L data");
       }
-
-      setRevenueData(revenueJson);
-      setLastSavedAt(new Date().toISOString());
-      setLoadingProgress("");
+      const names = (months: number[]) => months.map((m) => MONTH_NAMES[m - 1]).join(", ");
+      setMessage(
+        [
+          json.refreshed.length ? `Refreshed ${json.refreshed.length} month${json.refreshed.length === 1 ? "" : "s"}` : "Nothing refreshed",
+          json.skippedFinalized.length ? `${names(json.skippedFinalized)} finalized, skipped` : "",
+          json.failed.length ? `${names(json.failed)} failed, try again` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      );
+      await loadSaved(reportYear);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch P&L data");
+      setError(err instanceof Error ? err.message : "Failed to refresh P&L data");
     } finally {
-      setIsLoading(false);
-      setLoadingProgress("");
+      setIsRefreshing(false);
     }
+  };
+
+  const toggleFinalized = async (snapshot: PnlSnapshotStatus) => {
+    const finalize = snapshot.status !== "finalized";
+    const monthName = MONTH_NAMES[snapshot.month - 1];
+    if (!confirm(finalize ? `Finalize ${monthName}? Refreshes will skip it until it's reopened.` : `Reopen ${monthName} for refreshing?`)) return;
+    const res = await fetch("/api/pnl/snapshots", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: snapshot.month, year: reportYear, status: finalize ? "finalized" : "draft" }),
+    });
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error || "Failed to update month");
+      return;
+    }
+    await loadSaved(reportYear);
   };
 
   const handleConnect = () => {
     window.location.href = "/api/auth/quickbooks";
   };
 
-  if (needsAuth) {
-    return (
-      <div className="mt-8">
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-          <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect QuickBooks</h3>
-          <p className="text-gray-600 mb-6">
-            Connect your QuickBooks account to pull expense data for P&L calculations.
-          </p>
-          <button
-            onClick={handleConnect}
-            className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-            </svg>
-            Connect to QuickBooks
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const lastRefreshedAt = snapshots.reduce<string | null>((latest, s) => (!latest || s.refreshedAt > latest ? s.refreshedAt : latest), null);
 
   // Empty expense breakdown helper
   const emptyExpenses: ExpenseBreakdown = {
@@ -183,6 +184,7 @@ export function PnLTab() {
   if (revenueData) {
     for (const revMonth of revenueData.months) {
       const monthNum = parseInt(revMonth.month.split("-")[1]!);
+      if (monthNum < startMonth || monthNum > endMonth) continue;
       const monthName = MONTH_NAMES[monthNum - 1]!;
 
       // Get expenses from the API response (now includes breakdown)
@@ -214,7 +216,8 @@ export function PnLTab() {
   }
 
   // Check if we have data
-  const hasData = revenueData !== null && revenueData.months.length > 0;
+  const hasData = pnlData.length > 0;
+  const snapshotsInRange = snapshots.filter((s) => s.month >= startMonth && s.month <= endMonth);
 
   // Calculate totals
   const totalStripeRevenue = pnlData.reduce((sum, m) => sum + m.stripeRevenue, 0);
@@ -320,26 +323,51 @@ export function PnLTab() {
             <option value={2025}>2025</option>
           </select>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={isLoading}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {isLoading ? loadingProgress || "Loading..." : "Load P&L Data"}
-        </button>
-        {hasData && (
-          <button onClick={clearCache} className="text-sm text-gray-500 hover:text-red-600 transition-colors">
-            Clear Cache
+        {quickbooksConnected ? (
+          <button
+            onClick={refreshFromQuickBooks}
+            disabled={isRefreshing}
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {isRefreshing ? "Refreshing from QuickBooks & Stripe..." : "Refresh from QuickBooks"}
+          </button>
+        ) : (
+          <button
+            onClick={handleConnect}
+            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            Connect QuickBooks to refresh
           </button>
         )}
-        {lastSavedAt && (
-          <span className="text-xs text-gray-400 ml-auto">
-            Last synced: {new Date(lastSavedAt).toLocaleDateString()}{" "}
-            {new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        )}
+        <span className="text-xs text-gray-500 md:ml-auto">
+          {lastRefreshedAt
+            ? `Saved data · last refreshed ${new Date(lastRefreshedAt).toLocaleDateString()} ${new Date(lastRefreshedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+            : "No saved data yet"}
+        </span>
       </div>
 
+      {/* Month status: finalized months are locked from refreshes, like the KPI snapshots */}
+      {snapshotsInRange.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-gray-500">Months:</span>
+          {snapshotsInRange.map((snap) => (
+            <button
+              key={snap.month}
+              onClick={() => toggleFinalized(snap)}
+              title={snap.status === "finalized" ? "Finalized: click to reopen" : "Draft: click to finalize"}
+              className={`px-2 py-1 rounded-full border transition-colors ${
+                snap.status === "finalized"
+                  ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {MONTH_NAMES[snap.month - 1]?.slice(0, 3)} · {snap.status === "finalized" ? "Finalized" : "Draft"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {message && <div className="text-sm text-gray-600">{message}</div>}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
       {hasData && (
@@ -636,31 +664,17 @@ export function PnLTab() {
               </div>
             </div>
           </div>
-
-          {/* Data Sources */}
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Data Sources</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-600">
-              <div>
-                <span className="font-medium">Stripe Revenue:</span> Charged net of refunds (Stripe API)
-              </div>
-              <div>
-                <span className="font-medium">Other Income:</span> Non-Stripe income (QuickBooks)
-              </div>
-              <div>
-                <span className="font-medium">Stripe Fees:</span> Processing fees (Stripe API)
-              </div>
-              <div>
-                <span className="font-medium">Expenses:</span> Operating expenses (QuickBooks)
-              </div>
-            </div>
-          </div>
         </>
       )}
 
+      {isLoading && <div className="text-center py-12 text-gray-500">Loading saved P&L...</div>}
+
       {!hasData && !isLoading && !error && (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
-          Click "Load P&L Data" to fetch revenue from Stripe and expenses from QuickBooks.
+          No saved P&L data for this range yet.{" "}
+          {quickbooksConnected
+            ? 'Click "Refresh from QuickBooks" to pull it in.'
+            : "Someone with QuickBooks access needs to connect it and refresh once."}
         </div>
       )}
     </div>

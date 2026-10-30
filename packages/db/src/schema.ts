@@ -758,6 +758,29 @@ export const CreateKpiMemberOverrideSchema = createInsertSchema(KpiMemberOverrid
 });
 
 // ============================================================================
+// P&L MONTHLY SNAPSHOTS - Saved P&L data per month (default load for the P&L tab)
+// ============================================================================
+// Refreshed from GymMaster + Stripe + QuickBooks on demand; finalized months are
+// locked until reopened, same as KPI snapshots. data = one month of the revenue
+// reconciliation (GymMaster, Stripe, QuickBooks income/expenses, payouts).
+
+export const PnlMonthlySnapshot = pgTable(
+  "pnl_monthly_snapshot",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    month: t.integer().notNull(), // 1-12
+    year: t.integer().notNull(),
+    status: kpiSnapshotStatusEnum("status").notNull().default("draft"),
+    finalizedAt: t.timestamp({ mode: "date", withTimezone: true }),
+    data: t.jsonb().notNull().$type<Record<string, unknown>>(),
+    refreshedAt: t.timestamp({ mode: "date", withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => ({
+    monthYearUnique: unique().on(table.month, table.year),
+  })
+);
+
+// ============================================================================
 // QUICKBOOKS CONNECTION - OAuth tokens for the QuickBooks Online company
 // ============================================================================
 // Tokens are AES-256-GCM encrypted (key: QUICKBOOKS_TOKEN_KEY). Intuit rotates the
