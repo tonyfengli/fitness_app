@@ -45,7 +45,7 @@ const hasNoCard = (m: PaymentRow) => m.cardStatus === "none";
 const hasUnrecoveredFailure = (m: PaymentRow) => m.ledger.some(l => l.failed.some(f => !f.recovered));
 // Billed less than usual (or not at all) on a billing date, which GymMaster doesn't count as owed
 const gapTotal = (m: PaymentRow) => m.billingGaps.reduce((t, g) => t + g.expected - g.charged, 0);
-const needsAttention = (m: PaymentRow) => m.owed > 0 || hasNoCard(m) || hasUnrecoveredFailure(m) || m.billingGaps.length > 0;
+export const needsAttention = (m: PaymentRow) => m.owed > 0 || hasNoCard(m) || hasUnrecoveredFailure(m) || m.billingGaps.length > 0;
 const isDueSoon = (m: PaymentRow) => {
   const due = daysUntil(m.nextCharge);
   return due >= 0 && due <= 7;
@@ -238,21 +238,21 @@ function PaymentMemberRow({
     // Row dividers set per side: divide-y's border-color would override the status color on the left edge
     <div className={`border-l-4 ${borderColor(member)} border-t border-t-gray-100 first:border-t-0`}>
       {/* Main row */}
-      <div className="flex items-center hover:bg-gray-50 py-3 px-4 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      <div
+        className="flex flex-wrap md:flex-nowrap items-center gap-y-2 hover:bg-gray-50 py-3 px-4 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
         <div className="w-6 flex-shrink-0 mr-2">
           <ChevronIcon className="w-4 h-4 text-gray-400" expanded={expanded} />
         </div>
 
         {/* Member info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 basis-[calc(100%-2rem)] md:basis-0 min-w-0">
           <div className="font-medium text-gray-900">{member.name}</div>
-          <div className="text-sm text-gray-500 truncate">
-            {[member.plan, member.price].filter(Boolean).join(" · ") || "No live plan"}
-          </div>
         </div>
 
         {/* Balance */}
-        <div className="w-32 flex-shrink-0 px-2">
+        <div className="ml-8 md:ml-0 md:w-32 flex-shrink-0 md:px-2">
           <span
             className={`inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
               owes
@@ -274,35 +274,43 @@ function PaymentMemberRow({
           </span>
         </div>
 
+        {/* Plan price per month */}
+        <div className="md:w-28 flex-shrink-0 pl-2 md:pl-0">
+          <span className="inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-700">{member.planPrice || "No plan price"}</span>
+        </div>
+
         {/* Next charge */}
-        <div className="w-28 text-center flex-shrink-0">
+        <div className="pl-3 md:pl-0 md:w-28 md:text-center flex-shrink-0">
           {member.nextCharge ? (
-            <>
+            <div className="flex items-baseline gap-1 md:block">
               <div className={`text-sm font-semibold ${isDueSoon(member) ? "text-yellow-600" : "text-gray-900"}`}>
                 {formatDate(member.nextCharge)}
               </div>
               <div className="text-xs text-gray-400">next charge</div>
-            </>
+            </div>
           ) : (
             <div className="text-xs text-gray-400">No charge scheduled</div>
           )}
         </div>
 
         {/* Phone & Actions */}
-        <div className="w-56 flex-shrink-0 flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="w-full md:w-56 ml-8 md:ml-0 flex-shrink-0 flex items-center justify-start md:justify-end gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           {member.phone ? (
             <>
               <span className="text-sm text-gray-600 whitespace-nowrap">{member.phone}</span>
               <button
                 onClick={onCopyPhone}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-3 md:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                 title="Copy phone number"
               >
                 <CopyIcon className="w-4 h-4" />
               </button>
               <a
                 href={`tel:${member.phone.replace(/[^\d]/g, "")}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2.5 md:px-3 md:py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
               >
                 <PhoneIcon className="w-3.5 h-3.5" />
                 Call

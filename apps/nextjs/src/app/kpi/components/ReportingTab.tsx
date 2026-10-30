@@ -17,6 +17,10 @@ import {
 } from "recharts";
 
 import { formatCurrency } from "../lib/parse-all-payments";
+import { MobileMembershipChart } from "./MobileMembershipChart";
+import { MobileArmChart } from "./MobileArmChart";
+import { MobileChurnChart } from "./MobileChurnChart";
+import { MobileRevenueChart } from "./MobileRevenueChart";
 import { calculateNewMembers } from "../lib/calculate-new-members";
 import { calculateLostMembers } from "../lib/calculate-lost-members";
 import {
@@ -70,7 +74,7 @@ export function ReportingTab() {
   const [loadingProgress, setLoadingProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
-  const [membersViewMonth, setMembersViewMonth] = useState<string | null>(null);
+  const [focusSection, setFocusSection] = useState<"new" | "lost" | "members" | null>(null);
   const [showMemberDetails, setShowMemberDetails] = useState(false);
   const [showChurnDetails, setShowChurnDetails] = useState(false);
   const [startMonth, setStartMonth] = useState(1);
@@ -749,13 +753,24 @@ export function ReportingTab() {
 
   const toggleMonth = (month: string) => {
     setExpandedMonth(expandedMonth === month ? null : month);
-    setMembersViewMonth(null);
+    setFocusSection(null);
   };
 
-  const toggleMembersView = (month: string) => {
-    setMembersViewMonth(membersViewMonth === month ? null : month);
-    setExpandedMonth(null);
+  // A number in the Member Details table opens that month's panel at its section
+  const openMonthSection = (month: string, section: "new" | "lost" | "members") => {
+    setExpandedMonth(month);
+    setFocusSection(section);
   };
+
+  useEffect(() => {
+    if (!expandedMonth || !focusSection) return;
+    document.getElementById(`month-${expandedMonth}-${focusSection}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [expandedMonth, focusSection]);
+
+  // Member Details starts open on desktop, closed on phones
+  useEffect(() => {
+    if (window.matchMedia("(min-width: 768px)").matches) setShowMemberDetails(true);
+  }, []);
 
   if (monthsData.length === 0) {
     return (
@@ -884,13 +899,22 @@ export function ReportingTab() {
     armGroups: Math.round(m.armGroups),
   }));
 
+  // Churn per month for the phone chart (the desktop churn section computes the same inline)
+  const churnPoints = derivedData.map((m, i) => {
+    const prevTotal = i > 0 ? derivedData[i - 1]?.derivedTotalMembers || 0 : 0;
+    const rate = prevTotal > 0 ? (m.filteredLostCount / prevTotal) * 100 : 0;
+    return { name: `${m.month} ${m.year}`, churn: i === 0 ? null : Math.round(rate * 10) / 10, rate, lostCount: m.filteredLostCount, prevTotal };
+  });
+  const avgChurnRate =
+    churnPoints.length > 1 ? churnPoints.slice(1).reduce((sum, p) => sum + p.rate, 0) / (churnPoints.length - 1) : 0;
+
   const firstPt = derivedData[0]?.ptRevenue ?? 0;
   const lastPt = derivedData[derivedData.length - 1]?.ptRevenue ?? 0;
 
   return (
     <div className="mt-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold text-gray-900">
@@ -913,7 +937,7 @@ export function ReportingTab() {
           </div>
           {lastSavedAt && <p className="text-xs text-gray-500 mt-0.5">Cached: {formatSavedAt(lastSavedAt)}</p>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {saveMessage && (
             <span className="text-sm text-green-600">{saveMessage}</span>
           )}
@@ -935,7 +959,7 @@ export function ReportingTab() {
 
       {/* Inline Date Picker */}
       {showDatePicker && (
-        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">From:</label>
             <select
@@ -994,9 +1018,10 @@ export function ReportingTab() {
 
       {/* Chart 1: Membership Overview */}
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap gap-2 justify-between items-start">
           <h3 className="font-bold text-gray-900">Membership Overview</h3>
-          <div className="flex gap-2">
+          {/* Desktop stat chips; on phones these move into the mobile chart's headline */}
+          <div className="hidden md:flex gap-2">
             {avgNewMembersPerMonth > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-right">
                 <div className="text-blue-700 font-semibold">{avgNewMembersPerMonth} avg</div>
@@ -1013,7 +1038,17 @@ export function ReportingTab() {
             )}
           </div>
         </div>
-        <div className="p-4">
+        {/* Phones: number-first chart with a total line and a new/lost strip */}
+        <div className="md:hidden">
+          <MobileMembershipChart
+            data={chartData}
+            avgNewMembersPerMonth={avgNewMembersPerMonth}
+            memberGrowth={memberGrowth}
+          />
+        </div>
+
+        {/* Desktop chart */}
+        <div className="hidden md:block p-4">
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1078,7 +1113,7 @@ export function ReportingTab() {
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
-          <div className="flex justify-center gap-6 mt-2 text-sm">
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 bg-green-500 rounded-sm" />
               <span className="text-gray-600">New Members</span>
@@ -1111,11 +1146,11 @@ export function ReportingTab() {
               </svg>
               <span className="text-sm font-medium text-gray-700">Member Details</span>
             </div>
-            <span className="text-xs text-blue-500 font-medium">↓ Click a month below to see members</span>
+            <span className="hidden md:inline text-xs text-blue-500 font-medium">↓ Click a month below to see members</span>
           </button>
           {showMemberDetails && (
-            <div className="p-4 pt-2">
-              <table className="w-full text-sm">
+            <div className="p-4 pt-2 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-2 font-medium text-gray-600 w-32"></th>
@@ -1151,11 +1186,12 @@ export function ReportingTab() {
                     <td className="py-2 text-green-600 font-medium">New Members</td>
                     {derivedData.map((m) => (
                       <td key={m.month} className="text-center py-2">
-                        <span
-                          className={`px-3 py-1 rounded-full font-medium ${expandedMonth === m.month ? "bg-green-100" : ""} text-green-600`}
+                        <button
+                          onClick={() => openMonthSection(m.month, "new")}
+                          className={`px-3 py-1 rounded-full font-medium hover:bg-green-100 ${expandedMonth === m.month ? "bg-green-100" : ""} text-green-600`}
                         >
                           +{m.filteredNewCount}
-                        </span>
+                        </button>
                       </td>
                     ))}
                   </tr>
@@ -1165,11 +1201,27 @@ export function ReportingTab() {
                     <td className="py-2 text-red-600 font-medium">Lost / On Hold</td>
                     {derivedData.map((m) => (
                       <td key={m.month} className="text-center py-2">
-                        <span
-                          className={`px-3 py-1 rounded-full font-medium ${expandedMonth === m.month ? "bg-red-100" : ""} text-red-600`}
+                        <button
+                          onClick={() => openMonthSection(m.month, "lost")}
+                          className={`px-3 py-1 rounded-full font-medium hover:bg-red-100 ${expandedMonth === m.month ? "bg-red-100" : ""} text-red-600`}
                         >
                           {m.filteredLostCount > 0 ? `-${m.filteredLostCount}` : "0"}
-                        </span>
+                        </button>
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Members Row: running total, same as the chart's Total Members */}
+                  <tr className="border-b border-gray-100">
+                    <td className="py-2 text-gray-900 font-medium">Members</td>
+                    {derivedData.map((m) => (
+                      <td key={m.month} className="text-center py-2">
+                        <button
+                          onClick={() => openMonthSection(m.month, "members")}
+                          className={`px-3 py-1 rounded-full font-semibold text-gray-900 hover:bg-gray-200 ${expandedMonth === m.month ? "bg-gray-200" : ""}`}
+                        >
+                          {m.derivedTotalMembers}
+                        </button>
                       </td>
                     ))}
                   </tr>
@@ -1181,6 +1233,10 @@ export function ReportingTab() {
                       ...m.lostMembers,
                       ...m.onHoldMembers.map((oh) => ({ ...oh, type: "hold" as const })),
                     ];
+                    // Ring around the section a clicked number pointed to
+                    const focusClass = (section: "new" | "lost" | "members") =>
+                      focusSection === section ? "rounded-lg ring-2 ring-blue-300 ring-offset-4 ring-offset-gray-50" : "";
+                    const derivedArm = m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0;
 
                     return (
                       <tr key={`detail-${m.month}`} className="bg-gray-50">
@@ -1255,6 +1311,21 @@ export function ReportingTab() {
                               </div>
                             );
                           })()}
+                          {/* Month stats, kept small */}
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs text-gray-500">
+                            <span>
+                              Revenue <span className="font-medium text-gray-700">{formatCurrency(m.totalRevenue)}</span>
+                            </span>
+                            <span>
+                              ARM <span className="font-medium text-gray-700">${derivedArm}</span>
+                            </span>
+                            <span>
+                              ARM groups <span className="font-medium text-gray-700">${Math.round(m.armGroups)}</span>
+                            </span>
+                            <span>
+                              Group members <span className="font-medium text-gray-700">{m.groupMembers}</span>
+                            </span>
+                          </div>
                           <div className="text-xs text-gray-500 mb-3 flex items-center gap-1">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1263,7 +1334,7 @@ export function ReportingTab() {
                           </div>
                           <div className="grid md:grid-cols-2 gap-6">
                             {/* New Members */}
-                            <div>
+                            <div id={`month-${m.month}-new`} className={focusClass("new")}>
                               <div className="flex items-center gap-2 mb-3">
                                 <div className="w-2 h-2 rounded-full bg-green-500" />
                                 <span className="text-sm font-semibold text-green-700">New Members</span>
@@ -1330,7 +1401,7 @@ export function ReportingTab() {
                             </div>
 
                             {/* Lost / On Hold */}
-                            <div>
+                            <div id={`month-${m.month}-lost`} className={focusClass("lost")}>
                               <div className="flex items-center gap-2 mb-3">
                                 <div className="w-2 h-2 rounded-full bg-red-500" />
                                 <span className="text-sm font-semibold text-red-700">Lost / On Hold</span>
@@ -1400,6 +1471,36 @@ export function ReportingTab() {
                             </div>
                           </div>
 
+                          {/* Members: running total, with the paying list behind it */}
+                          <div id={`month-${m.month}-members`} className={`mt-6 ${focusClass("members")}`}>
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-2 h-2 rounded-full bg-gray-500" />
+                              <span className="text-sm font-semibold text-gray-900">Members</span>
+                              <span className="text-xs text-gray-700 bg-gray-200 px-2 py-0.5 rounded-full">
+                                {m.derivedTotalMembers}
+                              </span>
+                              <span className="text-xs text-gray-500 ml-auto">
+                                {m.payingMembers.length} paid in {m.month}
+                              </span>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-sm max-h-64 overflow-y-auto divide-y divide-gray-100">
+                              {m.payingMembers.map((member) => {
+                                const isNew = m.filteredNewMembers.some((n) => n.memberId === member.memberId);
+                                return (
+                                  <div key={member.memberId} className="flex items-center justify-between px-3 py-2 text-sm">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-gray-700">{member.name}</span>
+                                      {isNew && (
+                                        <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">NEW</span>
+                                      )}
+                                    </div>
+                                    <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
                           {/* Include a member paid for by someone else */}
                           <div className="mt-6 pt-4 border-t border-gray-200">
                             <div className="text-sm font-semibold text-gray-900 mb-1">Include a member</div>
@@ -1442,123 +1543,6 @@ export function ReportingTab() {
                     );
                   })}
 
-                  {/* Net Change Row */}
-                  <tr className="bg-gray-50 font-medium">
-                    <td className="py-2 text-gray-900">Net Change</td>
-                    {derivedData.map((m) => {
-                      const net = m.filteredNewCount - m.filteredLostCount;
-                      return (
-                        <td key={m.month} className="text-center py-2">
-                          <button
-                            onClick={() => toggleMembersView(m.month)}
-                            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                              membersViewMonth === m.month
-                                ? "bg-blue-600 text-white"
-                                : net >= 0
-                                  ? "text-green-600 hover:bg-green-100"
-                                  : "text-red-600 hover:bg-red-100"
-                            }`}
-                          >
-                            {net >= 0 ? "+" : ""}
-                            {net}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-
-                  {/* Expanded Paying Members View */}
-                  {derivedData.map((m, idx) => {
-                    if (membersViewMonth !== m.month) return null;
-                    const net = m.filteredNewCount - m.filteredLostCount;
-                    const prevMonth = idx > 0 ? derivedData[idx - 1] : null;
-                    const derivedArm = m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0;
-
-                    return (
-                      <tr key={`members-${m.month}`} className="bg-blue-50">
-                        <td colSpan={derivedData.length + 1} className="p-4">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
-                                  <span className="text-white font-bold text-lg">{m.derivedTotalMembers}</span>
-                                </div>
-                                <div>
-                                  <div className="text-sm font-semibold text-gray-900">Paying Members</div>
-                                  <div className="text-xs text-gray-500">
-                                    {m.month} {m.year}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm">
-                                {prevMonth && (
-                                  <>
-                                    <span className="text-gray-500">{prevMonth.derivedTotalMembers}</span>
-                                    <span className="text-gray-400">→</span>
-                                  </>
-                                )}
-                                <span className="text-green-600 font-medium">+{m.filteredNewCount}</span>
-                                <span className="text-gray-400">/</span>
-                                <span className="text-red-600 font-medium">-{m.filteredLostCount}</span>
-                                <span className="text-gray-400">=</span>
-                                <span className={`font-bold ${net >= 0 ? "text-green-600" : "text-red-600"}`}>
-                                  {net >= 0 ? "+" : ""}
-                                  {net} net
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold text-gray-900">{formatCurrency(m.totalRevenue)}</div>
-                              <div className="text-xs text-gray-500">Total Revenue</div>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-3 mb-4">
-                            <div className="bg-white rounded-lg p-3 shadow-sm">
-                              <div className="text-2xl font-bold text-blue-600">${derivedArm}</div>
-                              <div className="text-xs text-gray-500">ARM (All)</div>
-                            </div>
-                            <div className="bg-white rounded-lg p-3 shadow-sm">
-                              <div className="text-2xl font-bold text-purple-600">${Math.round(m.armGroups)}</div>
-                              <div className="text-xs text-gray-500">ARM (Groups)</div>
-                            </div>
-                            <div className="bg-white rounded-lg p-3 shadow-sm">
-                              <div className="text-2xl font-bold text-gray-700">{m.groupMembers}</div>
-                              <div className="text-xs text-gray-500">Group Members</div>
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-gray-700">All Paying Members</span>
-                              <span className="text-xs text-gray-500">{m.payingMembers.length} members</span>
-                            </div>
-                            <div className="bg-white rounded-lg shadow-sm max-h-64 overflow-y-auto">
-                              <div className="divide-y divide-gray-100">
-                                {m.payingMembers.map((member) => {
-                                  const isNew = m.filteredNewMembers.some((n) => n.memberId === member.memberId);
-                                  return (
-                                    <div
-                                      key={member.memberId}
-                                      className="flex items-center justify-between px-3 py-2 hover:bg-gray-50"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-gray-700">{member.name}</span>
-                                        {isNew && (
-                                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">NEW</span>
-                                        )}
-                                      </div>
-                                      <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
                 </tbody>
               </table>
             </div>
@@ -1579,14 +1563,20 @@ export function ReportingTab() {
               });
               const avgChurn = churnRates.length > 0 ? churnRates.reduce((a, b) => a + b, 0) / churnRates.length : 0;
               return (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-right">
+                <div className="hidden md:block bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-right">
                   <div className="text-orange-700 font-semibold">{avgChurn.toFixed(1)}% avg</div>
                   <div className="text-orange-600 text-xs">monthly churn</div>
                 </div>
               );
             })()}
           </div>
-          <div className="p-4">
+          {/* Phones: rate-first chart with an average line */}
+          <div className="md:hidden">
+            <MobileChurnChart data={churnPoints} avgChurn={avgChurnRate} />
+          </div>
+
+          {/* Desktop chart */}
+          <div className="hidden md:block p-4">
             {(() => {
               const churnData = derivedData.map((m, i) => {
                 if (i === 0) {
@@ -1648,8 +1638,8 @@ export function ReportingTab() {
             <span className="text-sm font-medium text-gray-700">Churn Details</span>
           </button>
           {showChurnDetails && (
-            <div className="px-4 pb-4">
-              <table className="w-full text-sm">
+            <div className="px-4 pb-4 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-2 font-medium text-gray-600 w-32"></th>
@@ -1710,7 +1700,7 @@ export function ReportingTab() {
         <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
           <h3 className="font-bold text-gray-900">Revenue Breakdown by Source</h3>
           {lastPt > 0 && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-right">
+            <div className="hidden md:block bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-right">
               <div className="text-purple-700 font-semibold">PT Revenue</div>
               <div className="text-purple-600">
                 ${firstPt.toLocaleString()} → ${lastPt.toLocaleString()}
@@ -1718,7 +1708,13 @@ export function ReportingTab() {
             </div>
           )}
         </div>
-        <div className="p-4">
+        {/* Phones: total-first chart, sources in their bar colors */}
+        <div className="md:hidden">
+          <MobileRevenueChart data={chartData} />
+        </div>
+
+        {/* Desktop chart */}
+        <div className="hidden md:block p-4">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1753,7 +1749,7 @@ export function ReportingTab() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <div className="flex justify-center gap-6 mt-2 text-sm">
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 bg-green-500 rounded-sm" />
               <span className="text-gray-600">Open Gym</span>
@@ -1775,7 +1771,13 @@ export function ReportingTab() {
         <div className="px-4 py-3 border-b border-gray-100">
           <h3 className="font-bold text-gray-900">Average Revenue per Member (ARM)</h3>
         </div>
-        <div className="p-4">
+        {/* Phones: values-first chart, unlabeled lines */}
+        <div className="md:hidden">
+          <MobileArmChart data={chartData} />
+        </div>
+
+        {/* Desktop chart */}
+        <div className="hidden md:block p-4">
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData} margin={{ top: 30, right: 30, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1829,7 +1831,7 @@ export function ReportingTab() {
               </Line>
             </LineChart>
           </ResponsiveContainer>
-          <div className="flex justify-center gap-6 mt-2">
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-2">
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <span className="w-3 h-3 rounded-full bg-blue-500" />
               ARM (All Members)

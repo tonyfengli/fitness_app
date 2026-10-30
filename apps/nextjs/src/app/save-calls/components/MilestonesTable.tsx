@@ -11,7 +11,7 @@ interface MilestonesTableProps {
 
 // Who to celebrate now, and who to get ready for
 export const JUST_HIT_DAYS = 14;
-const COMING_UP_WITHIN = 3;
+export const COMING_UP_WITHIN = 3;
 
 function ChevronIcon({ className, expanded }: { className?: string; expanded?: boolean }) {
   return (
@@ -74,25 +74,27 @@ function MilestoneMemberRow({ member, onCopyPhone }: { member: MilestoneRow; onC
   return (
     <div className={`border-l-4 ${recent ? "border-l-green-500" : "border-l-gray-300"} border-t border-t-gray-100 first:border-t-0`}>
       {/* Main row */}
-      <div className="flex items-center hover:bg-gray-50 py-3 px-4 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      <div
+        className="flex flex-wrap md:flex-nowrap items-center gap-y-2 hover:bg-gray-50 py-3 px-4 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
         <div className="w-6 flex-shrink-0 mr-2">
           <ChevronIcon className="w-4 h-4 text-gray-400" expanded={expanded} />
         </div>
 
         {/* Member info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 basis-[calc(100%-2rem)] md:basis-0 min-w-0">
           <div className="font-medium text-gray-900">{member.name}</div>
-          <div className="text-sm text-gray-500 truncate">{member.plan || "No live plan"}</div>
         </div>
 
         {/* Classes */}
-        <div className="w-28 text-center flex-shrink-0">
+        <div className="ml-8 md:ml-0 md:w-28 md:text-center flex-shrink-0 flex items-baseline gap-1 md:block">
           <div className="text-lg font-semibold text-gray-900">{member.classes}</div>
           <div className="text-xs text-gray-400">classes</div>
         </div>
 
         {/* Milestone */}
-        <div className="w-44 flex-shrink-0 px-2">
+        <div className="md:w-44 flex-shrink-0 px-2">
           <span
             className={`inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
               recent ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
@@ -102,21 +104,29 @@ function MilestoneMemberRow({ member, onCopyPhone }: { member: MilestoneRow; onC
           </span>
         </div>
 
+        {/* Plan price per month */}
+        <div className="md:w-28 flex-shrink-0">
+          <span className="inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-700">{member.planPrice || "No plan price"}</span>
+        </div>
+
         {/* Phone & Actions */}
-        <div className="w-56 flex-shrink-0 flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="w-full md:w-56 ml-8 md:ml-0 flex-shrink-0 flex items-center justify-start md:justify-end gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           {member.phone ? (
             <>
               <span className="text-sm text-gray-600 whitespace-nowrap">{member.phone}</span>
               <button
                 onClick={onCopyPhone}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-3 md:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                 title="Copy phone number"
               >
                 <CopyIcon className="w-4 h-4" />
               </button>
               <a
                 href={`tel:${member.phone.replace(/[^\d]/g, "")}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2.5 md:px-3 md:py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
               >
                 <PhoneIcon className="w-3.5 h-3.5" />
                 Call
@@ -197,14 +207,19 @@ function MilestoneBlock({
   );
 }
 
-export function MilestonesTable({ members, onCopyPhone }: MilestonesTableProps) {
-  // Just hit: newest milestone first. Coming up: closest to their next milestone first.
+// Just hit: newest milestone first. Coming up: closest to their next milestone first.
+export function milestoneGroups(members: MilestoneRow[]) {
   const justHit = members
     .filter(m => latestRecentMilestone(m))
     .sort((a, b) => latestRecentMilestone(b)!.date.localeCompare(latestRecentMilestone(a)!.date) || a.name.localeCompare(b.name));
   const comingUp = members
     .filter(m => !latestRecentMilestone(m) && m.classes > 0 && m.toGo <= COMING_UP_WITHIN)
     .sort((a, b) => a.toGo - b.toGo || b.classes - a.classes);
+  return { justHit, comingUp };
+}
+
+export function MilestonesTable({ members, onCopyPhone }: MilestonesTableProps) {
+  const { justHit, comingUp } = milestoneGroups(members);
   const everyone = [...members].sort((a, b) => b.classes - a.classes || a.name.localeCompare(b.name));
 
   return (

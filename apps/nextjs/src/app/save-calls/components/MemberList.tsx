@@ -32,23 +32,14 @@ function MemberRow({
   const [expanded, setExpanded] = useState(false);
   const tierConfig = TIER_CONFIG[member.tier];
 
-  const formatTenure = (months: number) => {
-    if (months < 1) return "new";
-    return `${months} mo member`;
-  };
-
-  const formatRate = (rate: number) => {
-    if (rate === 0) return "prepaid";
-    return `$${rate}/mo`;
-  };
-
   const hasWeeklyData = member.weeklyVisits !== undefined;
 
   return (
-    <div className={`border-l-4 ${tierConfig.borderColor}`}>
-      {/* Main row */}
+    // Row dividers set per side: divide-y's border-color would override the tier color on the left edge
+    <div className={`border-l-4 ${tierConfig.borderColor} border-t border-t-gray-100 first:border-t-0`}>
+      {/* Main row: wraps into name / stats / phone lines on phones */}
       <div
-        className={`flex items-center hover:bg-gray-50 py-3 px-4 ${hasWeeklyData ? "cursor-pointer" : ""}`}
+        className={`flex flex-wrap md:flex-nowrap items-center gap-y-2 hover:bg-gray-50 py-3 px-4 ${hasWeeklyData ? "cursor-pointer" : ""}`}
         onClick={() => hasWeeklyData && setExpanded(!expanded)}
       >
         {/* Expand button */}
@@ -59,57 +50,43 @@ function MemberRow({
         )}
 
         {/* Member info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 basis-[calc(100%-2rem)] md:basis-0 min-w-0">
           <div className="font-medium text-gray-900">{member.name}</div>
-          <div className="text-sm text-gray-500 truncate">
-            {member.onboarding ? (
-              member.membershipType
-            ) : (
-              <>
-                {member.membershipType} · {member.paidBy ? `paid by ${member.paidBy}` : formatRate(member.monthlyRate)} ·{" "}
-                {formatTenure(member.tenureMonths)}
-              </>
-            )}
-          </div>
         </div>
 
         {/* Days gone OR frequency info */}
-        <div className="w-32 text-center flex-shrink-0">
+        <div className={`${hasWeeklyData ? "ml-8" : ""} md:ml-0 md:w-32 md:text-center flex-shrink-0`}>
           {member.onboarding ? (
-            <>
+            <div className="flex items-baseline gap-1 md:block">
               <div className="text-lg font-semibold text-gray-900">{member.onboarding.daysUncontacted}d</div>
               <div className="text-xs text-gray-400">not contacted</div>
-            </>
+            </div>
           ) : member.frequencyInfo ? (
             <div className="text-sm text-gray-600">{member.frequencyInfo}</div>
           ) : (
-            <>
+            <div className="flex items-baseline gap-1 md:block">
               <div className="text-lg font-semibold text-gray-900">{member.daysGone}d</div>
               <div className="text-xs text-gray-400">gone</div>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Plan price - new members, in place of the tier badge */}
-        {member.onboarding && (
-          <div className="w-32 flex-shrink-0 px-2">
-            <span className="inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-700">
-              {member.onboarding.planPrice || "No plan price"}
-            </span>
-          </div>
-        )}
-
         {/* Tier badge - only show for at-risk */}
         {!member.frequencyInfo && !member.onboarding && (
-          <div className="w-24 flex-shrink-0 px-2">
+          <div className="md:w-24 flex-shrink-0 px-2">
             <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${tierConfig.bgColor} ${tierConfig.textColor}`}>
               {tierConfig.label}
             </span>
           </div>
         )}
 
+        {/* Plan price per month */}
+        <div className="md:w-28 flex-shrink-0 px-2 md:px-0">
+          <span className="inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-700">{member.planPrice || "No plan price"}</span>
+        </div>
+
         {/* Touch history */}
-        <div className="w-44 flex-shrink-0 text-xs text-right pr-4">
+        <div className="hidden md:block w-44 flex-shrink-0 text-xs text-right pr-4">
           {member.touchCount > 0 ? (
             <>
               <div className="text-gray-600">
@@ -128,20 +105,23 @@ function MemberRow({
         </div>
 
         {/* Phone & Actions */}
-        <div className="w-48 flex-shrink-0 flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          className={`w-full md:w-48 ${hasWeeklyData ? "ml-8" : ""} md:ml-0 flex-shrink-0 flex items-center justify-start md:justify-end gap-2`}
+          onClick={(e) => e.stopPropagation()}
+        >
           {member.phone ? (
             <>
               <span className="text-sm text-gray-600">{member.phone}</span>
               <button
                 onClick={onCopyPhone}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-3 md:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                 title="Copy phone number"
               >
                 <CopyIcon className="w-4 h-4" />
               </button>
               <a
                 href={`tel:${member.phone.replace(/[^\d]/g, "")}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2.5 md:px-3 md:py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
               >
                 <PhoneIcon className="w-3.5 h-3.5" />
                 Call
@@ -225,7 +205,7 @@ export function MemberList({ block, onCopyPhone }: MemberListProps) {
       </div>
 
       {/* Member rows */}
-      <div className="divide-y divide-gray-100">
+      <div>
         {members.map((member) => (
           <MemberRow
             key={member.memberId}

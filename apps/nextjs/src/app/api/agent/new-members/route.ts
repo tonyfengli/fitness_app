@@ -19,6 +19,7 @@ import { db } from "@acme/db/client";
 import { KpiMemberOverride } from "@acme/db/schema";
 import { validateApiAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
+import { getPlanPrices } from "~/lib/plan-price";
 
 export const dynamic = "force-dynamic";
 
@@ -80,35 +81,6 @@ async function fetchMemberPhone(memberId: string): Promise<string | null> {
   const record = await response.json();
   const m = (Array.isArray(record) ? record[0] : record) as { phonecell?: string; phonehome?: string; phonework?: string } | undefined;
   return m?.phonecell || m?.phonehome || m?.phonework || null;
-}
-
-interface Membership {
-  startdate?: string;
-  paymentfreq?: string;
-  paymentdue?: string;
-  history?: boolean;
-  completed?: boolean;
-}
-
-// Billings counted per month: 28-day plans are treated as monthly
-const BILLINGS_PER_MONTH: Record<string, number> = { "1 mon": 1, "28 days": 1, "14 days": 2, "7 days": 4 };
-
-// GymMaster plan price of the member's newest live membership, as one monthly number
-async function fetchPlanPrice(memberId: string): Promise<string | null> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_STAFF_API_KEY;
-  if (!baseUrl || !apiKey) return null;
-  const response = await fetch(`${baseUrl}/api/v3/member/${memberId}/membership`, {
-    headers: { Accept: "application/json", "X-GM-API-KEY": apiKey },
-  });
-  if (!response.ok) return null;
-  const memberships = ((await response.json()) || []) as Membership[];
-  const plan = memberships
-    .filter(m => !m.history && m.completed !== false && money(m.paymentdue) > 0)
-    .sort((a, b) => String(b.startdate).localeCompare(String(a.startdate)))[0];
-  if (!plan) return null;
-  const monthly = Math.round(money(plan.paymentdue) * (BILLINGS_PER_MONTH[plan.paymentfreq ?? ""] ?? 1) * 100) / 100;
-  return `$${Number.isInteger(monthly) ? monthly : monthly.toFixed(2)}/mo`;
 }
 
 // Net payments per member per KPI category (refunds net out), as on the KPI page
@@ -199,6 +171,7 @@ export async function GET(request: NextRequest) {
 
     // 5. Build rows for members the roster doesn't cover yet
     const ids = [...newIds].filter(id => !onRoster.has(id) && !excluded.has(id));
+    const planPrices = await getPlanPrices(ids);
     const newMembers: NewMember[] = await Promise.all(
       ids.map(async (memberId) => {
         const row = currentById.get(memberId);
@@ -207,11 +180,8 @@ export async function GET(request: NextRequest) {
         const daysSince = (date: string) => Math.max(0, Math.round((Date.parse(today) - Date.parse(date)) / 864e5));
         const signedUp = firstPayment.get(memberId)?.date || (startDate && startDate <= today ? startDate : today);
         let phone = row?.["Member Cell"] || null;
-        const [planPrice, fallbackPhone] = await Promise.all([
-          fetchPlanPrice(memberId).catch(() => null),
-          phone ? Promise.resolve(null) : fetchMemberPhone(memberId).catch(() => null),
-        ]);
-        phone = phone || fallbackPhone;
+        if (!phone) phone = await fetchMemberPhone(memberId).catch(() => null);
+        const planPrice = planPrices.get(memberId) ?? null;
         return {
           memberId,
           name: String(row?.["Member Name"] || row?.["Name"] || firstPayment.get(memberId)?.name || `Member ${memberId}`),

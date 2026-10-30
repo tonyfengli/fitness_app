@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateApiAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
+import { monthlyPlanPrice } from "~/lib/plan-price";
 import type { BillingGap, PaymentFailure, PaymentRow } from "~/app/save-calls/types";
 
 export const dynamic = "force-dynamic";
@@ -418,6 +419,7 @@ export async function GET(request: NextRequest) {
         phone: phone ? String(phone) : null,
         plan: active.map(m => m.membershiptypename || typeNames.get(m.membershiptypeid!) || `Type ${m.membershiptypeid}`).join(" + "),
         price: active.map(m => m.pricedesc).filter(Boolean).join(" + "),
+        planPrice: monthlyPlanPrice(memberships),
         feeCharged: fee ? String(fee["Membership Fee"] ?? "") : "",
         frequency,
         startDate,

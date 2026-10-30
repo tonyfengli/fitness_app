@@ -1,11 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { OutputTemplate, PnLTab, ReportingTab, AdministrativeTab } from "./components";
+import { RetentionDashboard, RETENTION_VIEWS, type RetentionView } from "../save-calls/RetentionDashboard";
+
+const TABS = ["overview", "retention", "pnl", "elev8", "administrative"] as const;
+type TabId = (typeof TABS)[number];
 
 export default function KPIPage() {
-  const [activeTab, setActiveTab] = useState<"overview" | "elev8" | "pnl" | "administrative">("overview");
+  // useSearchParams needs a Suspense boundary in the app router
+  return (
+    <Suspense>
+      <KPIDashboard />
+    </Suspense>
+  );
+}
+
+function KPIDashboard() {
+  // Tab and Retention view live in the URL (?tab=retention&view=payments) so links and /save-calls land on them
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const viewParam = searchParams.get("view");
+  const activeTab: TabId = TABS.includes(tabParam as TabId) ? (tabParam as TabId) : "overview";
+  const retentionView: RetentionView = RETENTION_VIEWS.includes(viewParam as RetentionView)
+    ? (viewParam as RetentionView)
+    : "at-risk";
+
+  const navigate = (tab: TabId, view?: RetentionView) => {
+    const params = new URLSearchParams();
+    if (tab !== "overview") params.set("tab", tab);
+    if (tab === "retention" && view && view !== "at-risk") params.set("view", view);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+  const setActiveTab = (tab: TabId) => navigate(tab);
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-12">
@@ -15,7 +47,7 @@ export default function KPIPage() {
 
         {/* Tab Navigation */}
         <div className="mt-6 border-b border-gray-200">
-          <nav className="flex gap-4">
+          <nav className="flex gap-4 overflow-x-auto whitespace-nowrap">
             <button
               onClick={() => setActiveTab("overview")}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
@@ -25,6 +57,16 @@ export default function KPIPage() {
               }`}
             >
               Overview
+            </button>
+            <button
+              onClick={() => setActiveTab("retention")}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "retention"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Retention
             </button>
             <button
               onClick={() => setActiveTab("pnl")}
@@ -63,6 +105,9 @@ export default function KPIPage() {
         {activeTab === "elev8" && <OutputTemplate />}
         {activeTab === "pnl" && <PnLTab />}
         {activeTab === "overview" && <ReportingTab />}
+        {activeTab === "retention" && (
+          <RetentionDashboard view={retentionView} onViewChange={(view) => navigate("retention", view)} />
+        )}
         {activeTab === "administrative" && <AdministrativeTab />}
       </div>
     </div>

@@ -13,6 +13,7 @@ import { KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
+import { getPlanPrices } from "~/lib/plan-price";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ interface AtRiskMember {
   returnRate: number;
   monthlyRevenue: number;
   paidBy: string | null; // payer's name when another member pays for them
+  planPrice?: string | null; // GymMaster plan price per month, e.g. "$148/mo"
   lastClass: string | null;
   memberSince: string | null;
   membershipType: string | null;
@@ -377,6 +379,9 @@ export async function GET(request: NextRequest) {
 
     // 5. Sort by days gone (most urgent first)
     atRiskMembers.sort((a, b) => b.daysGone - a.daysGone);
+
+    const planPrices = await getPlanPrices(atRiskMembers.map(m => m.memberId));
+    for (const m of atRiskMembers) m.planPrice = planPrices.get(m.memberId) ?? null;
 
     // 6. Build summary stats
     const summary = {

@@ -42,7 +42,8 @@ export interface MemberCallItem {
   callDueDate: string | null; // "1d ago", "today"
   lastAttemptResult: string | null; // "No answer, 2d ago"
   frequencyInfo?: string; // For slowing/below-healthy: "50% drop (2.5 → 1.2/wk)"
-  onboarding?: { planPrice: string | null; daysUncontacted: number }; // New members tab: replaces days gone + tier
+  planPrice?: string | null; // GymMaster plan price per month, e.g. "$148/mo"
+  onboarding?: { daysUncontacted: number }; // New members tab: replaces days gone + tier
   weeklyVisits?: WeeklyVisits; // For expandable detail view
   totalVisits?: number; // Total visits in weeks 0-3
 }
@@ -176,6 +177,7 @@ export interface PaymentRow {
   owed: number;
   ledger: { month: string; charges: PaymentCharge[]; failed: PaymentFailure[] }[]; // "YYYY-MM", oldest first
   billingGaps: BillingGap[];
+  planPrice: string | null; // GymMaster plan price per month, e.g. "$148/mo"
   paidBy: { memberId: string; name: string } | null; // another member's card pays for this membership
   card: string;
   cardStatus: "ok" | "expired" | "none" | "wallet" | "unknown"; // unknown: Stripe lookup failed
@@ -187,6 +189,7 @@ export interface MilestoneRow {
   memberId: string;
   name: string;
   plan: string;
+  planPrice: string | null; // GymMaster plan price per month
   phone: string | null;
   classes: number; // attended since counting started (Aug 1, 2026)
   reached: { milestone: number; date: string }[]; // oldest first; date = day of that class

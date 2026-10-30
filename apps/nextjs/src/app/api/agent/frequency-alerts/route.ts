@@ -16,6 +16,7 @@ import { KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
+import { getPlanPrices } from "~/lib/plan-price";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ interface FrequencyMember {
   name: string;
   alertType: "slowing" | "below_healthy" | "new_member_risk";
   membershipType: string | null;
+  planPrice?: string | null; // GymMaster plan price per month, e.g. "$148/mo"
   phone: string | null;
   tenureWeeks: number;
   // Frequency data
@@ -394,6 +396,10 @@ export async function GET(request: NextRequest) {
     slowing.sort((a, b) => (b.dropPercent || 0) - (a.dropPercent || 0));
     belowHealthy.sort((a, b) => a.recentVisitsPerWeek - b.recentVisitsPerWeek);
     newMemberRisk.sort((a, b) => a.recentVisits - b.recentVisits);
+
+    const listed = [...slowing, ...belowHealthy, ...newMemberRisk];
+    const planPrices = await getPlanPrices(listed.map(m => m.memberId));
+    for (const m of listed) m.planPrice = planPrices.get(m.memberId) ?? null;
 
     return NextResponse.json({
       status: "ok",

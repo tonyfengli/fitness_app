@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
+import { getPlanPrices } from "~/lib/plan-price";
 import type { MilestoneRow } from "~/app/save-calls/types";
 
 export const dynamic = "force-dynamic";
@@ -92,9 +93,10 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const today = iso(now);
-    const [bookings, currentMembers] = await Promise.all([
+    const [bookings, currentMembers, planPrices] = await Promise.all([
       fetchReport(9, COUNT_START_DATE, today),
       fetchReport(1, `${today.slice(0, 7)}-01`, today),
+      getPlanPrices(roster.members.map(m => m.memberId)),
     ]);
 
     // Attended class dates per member, oldest first
@@ -125,6 +127,7 @@ export async function GET(request: NextRequest) {
           memberId: m.memberId,
           name: m.name,
           plan: row?.["Membership Type Name"] ? String(row["Membership Type Name"]) : "",
+          planPrice: planPrices.get(m.memberId) ?? null,
           phone,
           classes: count,
           // The Nth attended class is the day milestone N was reached
