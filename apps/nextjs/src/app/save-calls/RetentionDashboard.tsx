@@ -502,7 +502,6 @@ export function RetentionDashboard({
             <MemberList
               block={callBlock("new-to-onboard", "To onboard", "", toOnboard)}
               onCopyPhone={handleCopyPhone}
-              action={{ label: "Mark onboarded", onClick: (m) => setOnboarded(m, true) }}
             />
           ) : (
             <div className="text-center py-12 text-gray-500">Everyone new has been onboarded.</div>

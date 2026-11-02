@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { UsersIcon, PhoneIcon, CopyIcon } from "./icons";
+import { UsersIcon, CopyIcon } from "./icons";
 import { MilestoneRow } from "../types";
 
 interface MilestonesTableProps {
@@ -124,13 +124,6 @@ function MilestoneMemberRow({ member, onCopyPhone }: { member: MilestoneRow; onC
               >
                 <CopyIcon className="w-4 h-4" />
               </button>
-              <a
-                href={`tel:${member.phone.replace(/[^\d]/g, "")}`}
-                className="flex items-center gap-1.5 px-4 py-2.5 md:px-3 md:py-1.5 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
-              >
-                <PhoneIcon className="w-3.5 h-3.5" />
-                Call
-              </a>
             </>
           ) : (
             <span className="text-sm text-gray-400 italic">No phone</span>

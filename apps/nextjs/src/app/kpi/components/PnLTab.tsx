@@ -17,6 +17,7 @@ import {
 import { ExpenseBreakdown } from "../types";
 import { MONTH_NAMES } from "../constants";
 import { ReconciliationView } from "./ReconciliationView";
+import { MobilePnlTrendChart } from "./MobilePnlTrendChart";
 
 // Revenue reconciliation data structure (from API)
 interface RevenueMonth {
@@ -383,8 +384,9 @@ export function PnLTab() {
       </div>
 
       {/* Month status: finalized months are locked from refreshes, like the KPI snapshots */}
+      {/* Hidden on phones */}
       {snapshotsInRange.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="hidden md:flex flex-wrap items-center gap-2 text-xs">
           <span className="text-gray-500">Months:</span>
           {snapshotsInRange.map((snap) => (
             <button
@@ -412,9 +414,6 @@ export function PnLTab() {
           <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="font-bold text-gray-900">Monthly P&L</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Revenue from Stripe (source of truth) + QB other revenue | Expenses from QuickBooks + Stripe fees
-              </p>
             </div>
             <div className="p-4 overflow-x-auto">
               <table className="w-full text-sm">
@@ -584,10 +583,23 @@ export function PnLTab() {
 
           {/* Net Income Chart */}
           <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">Revenue vs Expenses Trend</h3>
+            <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-bold text-gray-900">Net Income</h3>
+              {/* Desktop summary for the selected range (phones show it in the chart headline) */}
+              <div className="hidden md:block text-sm text-gray-600 tabular-nums">
+                <span className={`font-semibold ${totalNetIncome < 0 ? "text-red-600" : "text-gray-900"}`}>
+                  {formatCurrency(totalNetIncome)}
+                </span>{" "}
+                total · {formatCurrency(avgMonthlyProfit)} avg / month
+              </div>
             </div>
-            <div className="p-4">
+            {/* Phones: net-income-first chart, revenue up / expenses down */}
+            <div className="md:hidden">
+              <MobilePnlTrendChart data={chartData} year={reportYear} />
+            </div>
+
+            {/* Desktop chart */}
+            <div className="hidden md:block p-4">
               <ResponsiveContainer width="100%" height={280}>
                 <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -597,14 +609,6 @@ export function PnLTab() {
                     tick={{ fontSize: 12, fill: "#666" }}
                     axisLine={{ stroke: "#e0e0e0" }}
                     tickFormatter={(value) => `$${(Math.abs(value) / 1000).toFixed(0)}k`}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    tick={{ fontSize: 12, fill: "#666" }}
-                    axisLine={{ stroke: "#e0e0e0" }}
-                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                    domain={["auto", "auto"]}
                   />
                   <Tooltip
                     formatter={(value: number, name: string) => {
@@ -620,44 +624,27 @@ export function PnLTab() {
                     contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
                   />
                   <ReferenceLine yAxisId="left" y={0} stroke="#e0e0e0" />
-                  {/* Revenue stacked by source (color only); the label is the month's total */}
-                  <Bar yAxisId="left" dataKey="stripeRevenue" stackId="revenue" fill="#22c55e" name="stripeRevenue" />
-                  <Bar yAxisId="left" dataKey="otherRevenue" stackId="revenue" fill="#a855f7" name="otherRevenue" radius={[4, 4, 0, 0]}>
-                    <LabelList
-                      dataKey="revenue"
-                      position="top"
-                      fill="#16a34a"
-                      fontWeight="bold"
-                      fontSize={11}
-                      formatter={(value: number) => `$${(value / 1000).toFixed(1)}k`}
-                    />
-                  </Bar>
-                  <Bar yAxisId="left" dataKey="expenses" fill="#ef4444" name="expenses" radius={[0, 0, 4, 4]}>
-                    <LabelList
-                      dataKey="expenses"
-                      position="bottom"
-                      fill="#dc2626"
-                      fontWeight="bold"
-                      fontSize={11}
-                      formatter={(value: number) => (value < 0 ? `$${(Math.abs(value) / 1000).toFixed(1)}k` : "")}
-                    />
-                  </Bar>
+                  {/* Context: revenue by source (up) and expenses (down), faded, on the same scale */}
+                  <Bar yAxisId="left" dataKey="stripeRevenue" stackId="revenue" fill="#22c55e" fillOpacity={0.35} name="stripeRevenue" />
+                  <Bar yAxisId="left" dataKey="otherRevenue" stackId="revenue" fill="#a855f7" fillOpacity={0.35} name="otherRevenue" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="expenses" fill="#ef4444" fillOpacity={0.35} name="expenses" radius={[0, 0, 4, 4]} />
+                  {/* The story: net income, the only labeled series */}
                   <Line
-                    yAxisId="right"
+                    yAxisId="left"
                     type="monotone"
                     dataKey="netIncome"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: "#3b82f6", strokeWidth: 2, r: 6 }}
+                    stroke="#1d4ed8"
+                    strokeWidth={3.5}
+                    dot={{ fill: "#1d4ed8", stroke: "#fff", strokeWidth: 2, r: 5 }}
                     name="netIncome"
                   >
                     <LabelList
                       dataKey="netIncome"
                       position="top"
-                      fill="#2563eb"
+                      fill="#1e3a8a"
                       fontWeight="bold"
                       fontSize={12}
-                      offset={10}
+                      offset={12}
                       formatter={(value: number) => `$${(value / 1000).toFixed(1)}k`}
                     />
                   </Line>
@@ -665,20 +652,20 @@ export function PnLTab() {
               </ResponsiveContainer>
               <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-green-500 rounded-sm" />
-                  <span className="text-gray-600">Stripe Revenue</span>
+                  <span className="w-5 bg-blue-700 rounded-full" style={{ height: "3px" }} />
+                  <span className="font-medium text-gray-900">Net Income</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-purple-500 rounded-sm" />
-                  <span className="text-gray-600">Other Revenue</span>
+                  <span className="w-4 h-4 bg-green-500/35 rounded-sm" />
+                  <span className="text-gray-500">Stripe Revenue</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-red-500 rounded-sm" />
-                  <span className="text-gray-600">Operating Expenses (incl. Stripe fees)</span>
+                  <span className="w-4 h-4 bg-purple-500/35 rounded-sm" />
+                  <span className="text-gray-500">Other Revenue</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-4 h-0.5 bg-blue-500" style={{ height: "3px" }} />
-                  <span className="text-gray-600">Net Income</span>
+                  <span className="w-4 h-4 bg-red-500/35 rounded-sm" />
+                  <span className="text-gray-500">Operating Expenses (incl. Stripe fees)</span>
                 </div>
               </div>
             </div>
