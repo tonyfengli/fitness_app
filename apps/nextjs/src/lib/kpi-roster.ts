@@ -4,7 +4,8 @@
  * The overview's count is a running tally, not a single month's paying list:
  * the first month's paying members, then each later month adds new members and
  * removes lost members (cancellations + holds), skipping the KPI page's
- * exclude_from_new / exclude_from_lost overrides. This rolls the same tally as a
+ * exclude_from_new / exclude_from_lost overrides, plus anyone marked lost by hand
+ * (mark_lost) in that month. This rolls the same tally as a
  * member list over finalized snapshots, so Save Calls works off exactly the
  * members the KPI overview counts.
  *
@@ -70,6 +71,7 @@ export async function getKpiRoster(): Promise<KpiRoster | null> {
       for (const m of data.payingMembers || []) {
         roster.set(m.memberId, { memberId: m.memberId, name: m.name, revenue: m.revenue });
       }
+      for (const id of excluded(snapshot.month, snapshot.year, "mark_lost")) roster.delete(id);
       applyLinks(snapshot.month, snapshot.year);
       return;
     }
@@ -81,6 +83,7 @@ export async function getKpiRoster(): Promise<KpiRoster | null> {
     for (const m of data.lostMembers || []) {
       if (!excludeFromLost.has(m.memberId)) roster.delete(m.memberId);
     }
+    for (const id of excluded(snapshot.month, snapshot.year, "mark_lost")) roster.delete(id);
     applyLinks(snapshot.month, snapshot.year);
   });
 

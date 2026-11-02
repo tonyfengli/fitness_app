@@ -102,12 +102,6 @@ function apiMemberToCallItem(member: AtRiskApiMember): MemberCallItem {
   };
 }
 
-// New members not onboarded this many days after sign-up are overdue (red edge)
-const ONBOARDING_OVERDUE_DAYS = 7;
-
-const onboardingTier = (daysSinceSignup: number, onboardedOn: string | null): AtRiskTier =>
-  !onboardedOn && daysSinceSignup >= ONBOARDING_OVERDUE_DAYS ? "Critical" : "Best odds";
-
 function newMemberToCallItem(member: NewMemberApiMember): MemberCallItem {
   return {
     memberId: member.memberId,
@@ -116,7 +110,7 @@ function newMemberToCallItem(member: NewMemberApiMember): MemberCallItem {
     monthlyRate: member.membershipFee,
     tenureMonths: 0,
     daysGone: 0,
-    tier: onboardingTier(member.daysSinceSignup, member.onboardedOn),
+    tier: "Best odds",
     phone: member.phone,
     touchCount: 0,
     lastTouchType: null,
@@ -347,16 +341,15 @@ export function RetentionDashboard({
 
   const atRiskCount = callLists?.atRisk.members?.length ?? 0;
   const lowFrequencyCount = callLists?.lowFrequency.members?.length ?? 0;
-  // Onboarding queue: overdue first (longest waiting), then due, then recently onboarded
+  // Onboarding queue: everyone waiting (longest waiting first), then recently onboarded
   const queue = callLists?.newMembers ?? [];
   const waiting = (m: MemberCallItem) => !m.onboarding?.onboardedOn;
   const daysWaiting = (m: MemberCallItem) => m.onboarding?.daysUncontacted ?? 0;
-  const overdueNew = queue.filter((m) => waiting(m) && daysWaiting(m) >= ONBOARDING_OVERDUE_DAYS).sort((a, b) => daysWaiting(b) - daysWaiting(a));
-  const dueNew = queue.filter((m) => waiting(m) && daysWaiting(m) < ONBOARDING_OVERDUE_DAYS).sort((a, b) => daysWaiting(b) - daysWaiting(a));
+  const toOnboard = queue.filter(waiting).sort((a, b) => daysWaiting(b) - daysWaiting(a));
   const onboardedNew = queue
     .filter((m) => !waiting(m))
     .sort((a, b) => (b.onboarding?.onboardedOn ?? "").localeCompare(a.onboarding?.onboardedOn ?? ""));
-  const newCount = overdueNew.length + dueNew.length;
+  const newCount = toOnboard.length;
 
   // Mark onboarded / undo, then move the row between blocks
   const setOnboarded = async (member: MemberCallItem, onboarded: boolean) => {
@@ -378,7 +371,7 @@ export function RetentionDashboard({
         ...prev,
         newMembers: prev.newMembers.map((m) =>
           m.memberId === member.memberId
-            ? { ...m, tier: onboardingTier(daysWaiting(m), onboardedOn), onboarding: { daysUncontacted: daysWaiting(m), onboardedOn } }
+            ? { ...m, onboarding: { daysUncontacted: daysWaiting(m), onboardedOn } }
             : m
         ),
       }
@@ -389,7 +382,7 @@ export function RetentionDashboard({
 
   const descriptions: Record<RetentionView, string> = {
     "at-risk": "No visit in 14+ days, or weekly visits trending down. Today's save-call list.",
-    "new-members": `Everyone new since Oct 1. They stay here until marked onboarded; ${ONBOARDING_OVERDUE_DAYS}+ days without it is overdue.`,
+    "new-members": "",
     payments: "Billing status for every member. Owes, failed or short charges first.",
     milestones: `Class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1. Celebrate, or get ready for the next one.`,
   };
@@ -425,8 +418,7 @@ export function RetentionDashboard({
           onClick={() => onViewChange("new-members")}
           value={callLists ? newCount : null}
           unit="to onboard"
-          detail={`${overdueNew.length} overdue · welcome calls`}
-          tone={overdueNew.length ? "bad" : "neutral"}
+          detail="Welcome calls"
           loading={!callLists}
           error={callListsError}
         />
@@ -454,7 +446,11 @@ export function RetentionDashboard({
         />
       </div>
 
-      <p className="mt-5 mb-4 text-sm text-gray-500">{descriptions[view]}</p>
+      {descriptions[view] ? (
+        <p className="mt-5 mb-4 text-sm text-gray-500">{descriptions[view]}</p>
+      ) : (
+        <div className="mt-5" />
+      )}
 
       {/* Selected view */}
       {view === "at-risk" && <ViewState error={callListsError} loading={!callLists && !callListsError} label="call lists" />}
@@ -473,21 +469,13 @@ export function RetentionDashboard({
       {view === "new-members" && <ViewState error={callListsError} loading={!callLists && !callListsError} label="new members" />}
       {view === "new-members" && callLists && (
         <div className="space-y-6">
-          {!!overdueNew.length && (
+          {toOnboard.length ? (
             <MemberList
-              block={callBlock("new-overdue", "Overdue", `${ONBOARDING_OVERDUE_DAYS}+ days since sign-up`, overdueNew)}
+              block={callBlock("new-to-onboard", "To onboard", "", toOnboard)}
               onCopyPhone={handleCopyPhone}
               action={{ label: "Mark onboarded", onClick: (m) => setOnboarded(m, true) }}
             />
-          )}
-          {!!dueNew.length && (
-            <MemberList
-              block={callBlock("new-due", "Due", `signed up in the last ${ONBOARDING_OVERDUE_DAYS} days`, dueNew)}
-              onCopyPhone={handleCopyPhone}
-              action={{ label: "Mark onboarded", onClick: (m) => setOnboarded(m, true) }}
-            />
-          )}
-          {!overdueNew.length && !dueNew.length && (
+          ) : (
             <div className="text-center py-12 text-gray-500">Everyone new has been onboarded.</div>
           )}
           {!!onboardedNew.length && (

@@ -727,6 +727,7 @@ export const kpiOverrideTypeEnum = pgEnum("kpi_override_type", [
   "exclude_from_new",
   "exclude_from_lost",
   "exclude_from_at_risk",
+  "mark_lost", // manually counted as lost in this month (reason = member name)
 ]);
 
 export const KpiMemberOverride = pgTable(
@@ -750,7 +751,7 @@ export const CreateKpiMemberOverrideSchema = createInsertSchema(KpiMemberOverrid
   month: z.number().int().min(1).max(12),
   year: z.number().int().min(2020).max(2100),
   memberId: z.string().min(1).max(50),
-  overrideType: z.enum(["exclude_from_new", "exclude_from_lost", "exclude_from_at_risk"]),
+  overrideType: z.enum(["exclude_from_new", "exclude_from_lost", "exclude_from_at_risk", "mark_lost"]),
   reason: z.string().optional(),
 }).omit({
   id: true,

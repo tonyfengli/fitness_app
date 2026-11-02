@@ -5,7 +5,7 @@
  * PATCH /api/kpi/snapshot - Update status (finalize/reopen)
  */
 
-import { eq, and, sql } from "@acme/db";
+import { eq, and, inArray, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
@@ -147,13 +147,15 @@ export async function POST(request: NextRequest) {
 
     // Update overrides if provided
     if (overrides && typeof overrides === "object") {
-      // Delete existing overrides for this month
+      // Replace this month's new/lost excludes (the only types the page sends);
+      // manual losses and at-risk excludes are managed elsewhere and must survive a save
       await db
         .delete(KpiMemberOverride)
         .where(
           and(
             eq(KpiMemberOverride.month, month),
-            eq(KpiMemberOverride.year, year)
+            eq(KpiMemberOverride.year, year),
+            inArray(KpiMemberOverride.overrideType, ["exclude_from_new", "exclude_from_lost"])
           )
         );
 

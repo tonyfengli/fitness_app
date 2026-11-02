@@ -55,6 +55,15 @@ interface DerivedMonthData extends MonthData {
   linkedAdded: BillingLink[]; // included (paid-for) members counted as new this month
   linkedLost: BillingLink[]; // included members counted as lost because their payer was lost
   rosterMembers: RosterMember[]; // the people behind derivedTotalMembers
+  manualLost: ManualLost[]; // marked lost by hand this month
+}
+
+// A member marked lost by hand in a month (kpi_member_override "mark_lost")
+interface ManualLost {
+  memberId: string;
+  name: string;
+  month: number;
+  year: number;
 }
 
 // A member in the running total for a month
@@ -95,6 +104,7 @@ export function ReportingTab() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snapshotStatuses, setSnapshotStatuses] = useState<Map<string, SnapshotStatus>>(new Map());
   const [billingLinks, setBillingLinks] = useState<BillingLink[]>([]);
+  const [manualLost, setManualLost] = useState<ManualLost[]>([]);
   const [linkForm, setLinkForm] = useState({ memberId: "", paidByMemberId: "" });
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -395,6 +405,44 @@ export function ReportingTab() {
     loadBillingLinks();
   }, []);
 
+  // Manual losses are saved straight to the database (not with the month's save)
+  const loadManualLost = async () => {
+    try {
+      const response = await fetch("/api/kpi/manual-lost");
+      if (response.ok) setManualLost((await response.json()).manualLost || []);
+    } catch (err) {
+      console.error("Failed to load manual losses:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadManualLost();
+  }, []);
+
+  const setMemberLost = async (member: { memberId: string; name: string }, m: MonthData, lost: boolean) => {
+    const month = MONTH_NAMES.indexOf(m.month) + 1;
+    if (lost && !confirm(`Mark ${member.name} as lost in ${m.month}? They leave Total Members from ${m.month} on.`)) return;
+    setIsSaving(true);
+    try {
+      const response = lost
+        ? await fetch("/api/kpi/manual-lost", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ memberId: member.memberId, memberName: member.name, month, year: m.year }),
+          })
+        : await fetch(`/api/kpi/manual-lost?memberId=${encodeURIComponent(member.memberId)}&month=${month}&year=${m.year}`, {
+            method: "DELETE",
+          });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error);
+      await loadManualLost();
+    } catch (err) {
+      console.error("Failed to update manual loss:", err);
+      setSaveMessage(err instanceof Error && err.message ? err.message : "Failed to update member");
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+    setIsSaving(false);
+  };
+
   const addBillingLink = async (m: MonthData) => {
     const payer = m.payingMembers.find((p) => p.memberId === linkForm.paidByMemberId);
     if (!linkForm.memberId.trim() || !payer) return;
@@ -474,6 +522,8 @@ export function ReportingTab() {
     const result: DerivedMonthData[] = [];
     // The running total as a member list: first month's paying members, then + new − lost each month
     let roster = new Map<string, Omit<RosterMember, "amount" | "isNew">>();
+    // Marked lost by hand and not back since: an automatic loss for them later would count them twice
+    const manuallyGone = new Set<string>();
 
     for (let i = 0; i < monthsData.length; i++) {
       const m = monthsData[i]!;
@@ -489,8 +539,15 @@ export function ReportingTab() {
         ...m.lostMembers,
         ...m.onHoldMembers.map((oh) => ({ ...oh, type: "hold" as const })),
       ];
+      // Manual losses this month; a returning member (new this month) is back in
+      for (const n of filteredNew) manuallyGone.delete(n.memberId);
+      const manualHere = manualLost.filter((x) => `${x.year}-${String(x.month).padStart(2, "0")}` === m.monthKey);
+      const manualIds = new Set(manualHere.map((x) => x.memberId));
       const filteredLost = allLostWithHold.filter(
-        (member) => !monthOverrides.excludeFromLost.includes(member.memberId)
+        (member) =>
+          !monthOverrides.excludeFromLost.includes(member.memberId) &&
+          !manuallyGone.has(member.memberId) && // already lost by hand
+          !manualIds.has(member.memberId) // lost by hand this month: counted once, as manual
       );
 
       // Includes (members paid for by someone else) count as new in their start month if the
@@ -511,6 +568,12 @@ export function ReportingTab() {
       }
       for (const l of linkedAdded) roster.set(l.memberId, { memberId: l.memberId, name: l.memberName, paidBy: l.paidByName });
       for (const l of linkedLost) roster.delete(l.memberId);
+      // Only someone in the total can be lost by hand
+      const manualLostHere = manualHere.filter((x) => roster.has(x.memberId));
+      for (const x of manualLostHere) {
+        roster.delete(x.memberId);
+        manuallyGone.add(x.memberId);
+      }
       const paidThisMonth = new Map(m.payingMembers.map((p) => [p.memberId, p.amount]));
       const newIds = new Set([...filteredNew.map((n) => n.memberId), ...linkedAdded.map((l) => l.memberId)]);
       const rosterMembers: RosterMember[] = [...roster.values()]
@@ -518,14 +581,18 @@ export function ReportingTab() {
         .sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1) || a.name.localeCompare(b.name));
 
       const filteredNewCount = filteredNew.length + linkedAdded.length;
-      const filteredLostCount = filteredLost.length + linkedLost.length;
+      const filteredLostCount = filteredLost.length + linkedLost.length + manualLostHere.length;
       const filteredNewRevenue = filteredNew.reduce((sum, x) => sum + x.amount, 0);
-      const filteredLostRevenue = filteredLost.reduce((sum, x) => sum + x.amount, 0);
+      // A manual loss takes what they paid the month before
+      const prevPaid = new Map((monthsData[i - 1]?.payingMembers ?? []).map((p) => [p.memberId, p.amount]));
+      const filteredLostRevenue =
+        filteredLost.reduce((sum, x) => sum + x.amount, 0) +
+        manualLostHere.reduce((sum, x) => sum + (prevPaid.get(x.memberId) ?? 0), 0);
 
       // Calculate derived total
       let derivedTotal: number;
       if (i === 0) {
-        derivedTotal = m.totalMembers + linkedAdded.length;
+        derivedTotal = m.totalMembers + linkedAdded.length - manualLostHere.length;
       } else {
         const prevDerived = result[i - 1]!.derivedTotalMembers;
         derivedTotal = prevDerived + filteredNewCount - filteredLostCount;
@@ -543,11 +610,12 @@ export function ReportingTab() {
         linkedAdded,
         linkedLost,
         rosterMembers,
+        manualLost: manualLostHere,
       });
     }
 
     return result;
-  }, [monthsData, overrides, billingLinks]);
+  }, [monthsData, overrides, billingLinks, manualLost]);
 
   // Simple CSV parser
   const parseCsvSimple = (csv: string): Record<string, string>[] => {
@@ -1259,10 +1327,11 @@ export function ReportingTab() {
                   {/* Expanded Details */}
                   {derivedData.map((m) => {
                     if (expandedMonth !== m.month) return null;
+                    const manualIds = new Set(m.manualLost.map((x) => x.memberId));
                     const allLostWithHold = [
                       ...m.lostMembers,
                       ...m.onHoldMembers.map((oh) => ({ ...oh, type: "hold" as const })),
-                    ];
+                    ].filter((member) => !manualIds.has(member.memberId));
                     // Ring around the section a clicked number pointed to
                     const focusClass = (section: "new" | "lost" | "members") =>
                       focusSection === section ? "rounded-lg ring-2 ring-blue-300 ring-offset-4 ring-offset-gray-50" : "";
@@ -1442,8 +1511,26 @@ export function ReportingTab() {
                                   -{formatCurrency(m.filteredLostRevenue)}/mo
                                 </span>
                               </div>
-                              {allLostWithHold.length + m.linkedLost.length > 0 ? (
+                              {allLostWithHold.length + m.linkedLost.length + m.manualLost.length > 0 ? (
                                 <div className="grid gap-2">
+                                  {m.manualLost.map((x) => (
+                                    <div
+                                      key={`manual-lost-${x.memberId}`}
+                                      className="flex items-center justify-between rounded-lg px-3 py-2 shadow-sm border-l-4 bg-white border-red-400"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="font-medium text-gray-700">{x.name}</span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">MANUAL</span>
+                                      </div>
+                                      <button
+                                        onClick={() => setMemberLost(x, m, false)}
+                                        disabled={isSaving}
+                                        className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-50"
+                                      >
+                                        Undo
+                                      </button>
+                                    </div>
+                                  ))}
                                   {m.linkedLost.map((l) => (
                                     <div
                                       key={`include-lost-${l.memberId}`}
@@ -1524,11 +1611,21 @@ export function ReportingTab() {
                                     )}
                                     {member.paidBy && <span className="text-xs text-gray-500 truncate">paid by {member.paidBy}</span>}
                                   </div>
-                                  {member.amount !== null ? (
-                                    <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
-                                  ) : (
-                                    <span className="text-xs text-gray-400">{member.paidBy ? "—" : "no payment"}</span>
-                                  )}
+                                  <div className="flex items-center gap-3 flex-shrink-0">
+                                    {member.amount !== null ? (
+                                      <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">{member.paidBy ? "—" : "no payment"}</span>
+                                    )}
+                                    <button
+                                      onClick={() => setMemberLost(member, m, true)}
+                                      disabled={isSaving}
+                                      title={`Count ${member.name} as lost from ${m.month}`}
+                                      className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
+                                    >
+                                      Mark lost
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                             </div>
