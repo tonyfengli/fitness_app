@@ -68,13 +68,14 @@ interface PnLDisplayMonth {
   year: number;
   stripeRevenue: number; // Stripe charged net of refunds
   otherIncome: number; // QB other income
-  grossRevenue: number;
-  stripeFees: number;
-  netRevenue: number;
-  expenses: number; // QB total expenses
-  expenseBreakdown: ExpenseBreakdown; // QB expenses by category
+  allRevenue: number; // Stripe + other
+  expenses: number; // QB expenses + Stripe fees
+  expenseBreakdown: PnlExpenses; // by category, Stripe fees included
   netIncome: number;
 }
+
+// QuickBooks expense categories plus Stripe processing fees
+type PnlExpenses = ExpenseBreakdown & { stripeFees: number };
 
 export function PnLTab() {
   const [revenueData, setRevenueData] = useState<RevenueReconciliationData | null>(null);
@@ -190,17 +191,17 @@ export function PnLTab() {
       if (monthNum < startMonth || monthNum > endMonth) continue;
       const monthName = MONTH_NAMES[monthNum - 1]!;
 
-      // Get expenses from the API response (now includes breakdown)
-      const expenseBreakdown = revMonth.quickbooks.expenses || emptyExpenses;
-      const expenses = expenseBreakdown.total;
-
       // Stripe revenue = charged net of refunds (gross of fees)
       const stripeRevenue = revMonth.stripe.gross - revMonth.stripe.refunds;
       const otherIncome = revMonth.quickbooks.otherIncome;
-      const grossRevenue = stripeRevenue + otherIncome;
+      const allRevenue = stripeRevenue + otherIncome;
+
+      // Operating expenses = QuickBooks expenses + Stripe processing fees
+      const qbExpenses = revMonth.quickbooks.expenses || emptyExpenses;
       const stripeFees = revMonth.stripe.fees;
-      const netRevenue = grossRevenue - stripeFees;
-      const netIncome = netRevenue - expenses;
+      const expenseBreakdown: PnlExpenses = { ...qbExpenses, stripeFees, total: qbExpenses.total + stripeFees };
+      const expenses = expenseBreakdown.total;
+      const netIncome = allRevenue - expenses;
 
       pnlData.push({
         month: monthName,
@@ -208,9 +209,7 @@ export function PnLTab() {
         year: reportYear,
         stripeRevenue,
         otherIncome,
-        grossRevenue,
-        stripeFees,
-        netRevenue,
+        allRevenue,
         expenses,
         expenseBreakdown,
         netIncome,
@@ -225,14 +224,12 @@ export function PnLTab() {
   // Calculate totals
   const totalStripeRevenue = pnlData.reduce((sum, m) => sum + m.stripeRevenue, 0);
   const totalOtherIncome = pnlData.reduce((sum, m) => sum + m.otherIncome, 0);
-  const totalGrossRevenue = pnlData.reduce((sum, m) => sum + m.grossRevenue, 0);
-  const totalStripeFees = pnlData.reduce((sum, m) => sum + m.stripeFees, 0);
-  const totalNetRevenue = pnlData.reduce((sum, m) => sum + m.netRevenue, 0);
+  const totalAllRevenue = pnlData.reduce((sum, m) => sum + m.allRevenue, 0);
   const totalExpenses = pnlData.reduce((sum, m) => sum + m.expenses, 0);
   const totalNetIncome = pnlData.reduce((sum, m) => sum + m.netIncome, 0);
 
   // Calculate expense breakdown totals
-  const totalExpenseBreakdown: ExpenseBreakdown = pnlData.reduce(
+  const totalExpenseBreakdown: PnlExpenses = pnlData.reduce(
     (acc, m) => ({
       advertisingMarketing: acc.advertisingMarketing + m.expenseBreakdown.advertisingMarketing,
       contractLabor: acc.contractLabor + m.expenseBreakdown.contractLabor,
@@ -244,17 +241,18 @@ export function PnLTab() {
       businessLicenses: acc.businessLicenses + m.expenseBreakdown.businessLicenses,
       clientCompensation: acc.clientCompensation + m.expenseBreakdown.clientCompensation,
       other: acc.other + m.expenseBreakdown.other,
+      stripeFees: acc.stripeFees + m.expenseBreakdown.stripeFees,
       total: acc.total + m.expenseBreakdown.total,
     }),
-    { ...emptyExpenses }
+    { ...emptyExpenses, stripeFees: 0 }
   );
 
   const avgMonthlyProfit = pnlData.length > 0 ? totalNetIncome / pnlData.length : 0;
-  const profitMargin = totalGrossRevenue > 0 ? (totalNetIncome / totalGrossRevenue) * 100 : 0;
-  const feePercent = totalStripeRevenue > 0 ? (totalStripeFees / totalStripeRevenue) * 100 : 0;
+  const profitMargin = totalAllRevenue > 0 ? (totalNetIncome / totalAllRevenue) * 100 : 0;
 
   // Expense category labels for display
-  const expenseCategories: { key: keyof Omit<ExpenseBreakdown, "total">; label: string; color: string }[] = [
+  const expenseCategories: { key: keyof Omit<PnlExpenses, "total">; label: string; color: string }[] = [
+    { key: "stripeFees", label: "Stripe Fees", color: "bg-slate-500" },
     { key: "advertisingMarketing", label: "Advertising & Marketing", color: "bg-purple-500" },
     { key: "contractLabor", label: "Contract Labor", color: "bg-blue-500" },
     { key: "appsSoftware", label: "Apps & Software", color: "bg-cyan-500" },
@@ -270,7 +268,7 @@ export function PnLTab() {
   // Chart data
   const chartData = pnlData.map((m) => ({
     name: m.month,
-    revenue: m.grossRevenue,
+    revenue: m.allRevenue,
     expenses: -m.expenses,
     netIncome: m.netIncome,
   }));
@@ -413,7 +411,7 @@ export function PnLTab() {
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="font-bold text-gray-900">Monthly P&L</h3>
               <p className="text-xs text-gray-500 mt-1">
-                Revenue from Stripe (source of truth) + QB Other Income | Expenses from QuickBooks
+                Revenue from Stripe (source of truth) + QB other revenue | Expenses from QuickBooks + Stripe fees
               </p>
             </div>
             <div className="p-4 overflow-x-auto">
@@ -442,9 +440,9 @@ export function PnLTab() {
                       {formatCurrency(totalStripeRevenue)}
                     </td>
                   </tr>
-                  {/* Other Income */}
+                  {/* Other Revenue */}
                   <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">Other Income</td>
+                    <td className="py-2 text-gray-600">Other Revenue</td>
                     {pnlData.map((m) => (
                       <td key={m.month} className="text-right py-2 px-3 text-gray-600 font-mono">
                         {m.otherIncome > 0 ? formatCurrency(m.otherIncome) : "—"}
@@ -454,40 +452,16 @@ export function PnLTab() {
                       {formatCurrency(totalOtherIncome)}
                     </td>
                   </tr>
-                  {/* Gross Revenue */}
+                  {/* All Revenue */}
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <td className="py-2 font-semibold text-gray-900">Gross Revenue</td>
+                    <td className="py-2 font-semibold text-gray-900">All Revenue</td>
                     {pnlData.map((m) => (
                       <td key={m.month} className="text-right py-2 px-3 text-gray-900 font-bold font-mono">
-                        {formatCurrency(m.grossRevenue)}
+                        {formatCurrency(m.allRevenue)}
                       </td>
                     ))}
                     <td className="text-right py-2 px-3 text-gray-900 font-bold bg-gray-100 font-mono">
-                      {formatCurrency(totalGrossRevenue)}
-                    </td>
-                  </tr>
-                  {/* Stripe Fees */}
-                  <tr className="border-b border-gray-100">
-                    <td className="py-2 text-gray-600">Stripe Fees</td>
-                    {pnlData.map((m) => (
-                      <td key={m.month} className="text-right py-2 px-3 text-red-600 font-mono">
-                        ({formatCurrency(m.stripeFees)})
-                      </td>
-                    ))}
-                    <td className="text-right py-2 px-3 text-red-600 font-bold bg-gray-50 font-mono">
-                      ({formatCurrency(totalStripeFees)})
-                    </td>
-                  </tr>
-                  {/* Net Revenue */}
-                  <tr className="border-b border-gray-200 bg-blue-50">
-                    <td className="py-2 font-semibold text-gray-900">Net Revenue</td>
-                    {pnlData.map((m) => (
-                      <td key={m.month} className="text-right py-2 px-3 text-blue-700 font-bold font-mono">
-                        {formatCurrency(m.netRevenue)}
-                      </td>
-                    ))}
-                    <td className="text-right py-2 px-3 text-blue-700 font-bold bg-blue-100 font-mono">
-                      {formatCurrency(totalNetRevenue)}
+                      {formatCurrency(totalAllRevenue)}
                     </td>
                   </tr>
                   {/* Expenses */}
@@ -633,7 +607,7 @@ export function PnLTab() {
                   <Tooltip
                     formatter={(value: number, name: string) => {
                       const labels: Record<string, string> = {
-                        revenue: "Gross Revenue",
+                        revenue: "All Revenue",
                         expenses: "Expenses",
                         netIncome: "Net Income",
                       };
@@ -687,11 +661,11 @@ export function PnLTab() {
               <div className="flex justify-center gap-6 mt-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-green-500 rounded-sm" />
-                  <span className="text-gray-600">Gross Revenue (Stripe + Other)</span>
+                  <span className="text-gray-600">All Revenue (Stripe + Other)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-red-500 rounded-sm" />
-                  <span className="text-gray-600">Expenses (QuickBooks)</span>
+                  <span className="text-gray-600">Operating Expenses (incl. Stripe fees)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-0.5 bg-blue-500" style={{ height: "3px" }} />
