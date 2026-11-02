@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
 import type { MilestoneRow } from "~/app/save-calls/types";
@@ -78,7 +78,7 @@ async function fetchMemberPhone(memberId: string): Promise<string | null> {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   try {

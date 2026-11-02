@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient } from '~/auth/client';
+import { isFounder } from '~/lib/founders';
 
 export default function TrainerHomePage() {
   const router = useRouter();
@@ -149,8 +150,9 @@ export default function TrainerHomePage() {
             </div>
           </Link>
 
-          {/* Clients Button */}
-          <Link href="/clients" className="block">
+          {/* KPI Dashboard Button (replaces the deprecated Clients page); founders only */}
+          {isFounder(user?.email) && (
+          <Link href="/kpi" className="block">
             <div className="group relative overflow-hidden rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-8 hover:bg-white/20 hover:border-white/30 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]">
               {/* Background decoration */}
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -160,14 +162,14 @@ export default function TrainerHomePage() {
               <div className="relative z-10">
                 <div className="w-16 h-16 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 backdrop-blur-xl rounded-2xl flex items-center justify-center mb-4 border border-white/20 group-hover:border-white/30 transition-all duration-300">
                   <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">
-                  Clients
+                  KPI Dashboard
                 </h2>
                 <p className="text-white/70 text-sm">
-                  Track client progress and insights
+                  Membership, retention and P&amp;L
                 </p>
                 <div className="mt-6 flex items-center justify-end">
                   <svg className="w-5 h-5 text-white/60 group-hover:text-white/80 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,6 +179,7 @@ export default function TrainerHomePage() {
               </div>
             </div>
           </Link>
+          )}
         </div>
 
       </div>

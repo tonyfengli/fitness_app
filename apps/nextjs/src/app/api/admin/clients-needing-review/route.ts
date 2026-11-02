@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 
 // Types
 type ReviewStatusFlag = "Refund" | "On Hold" | "Not Paid" | "Billing Failed";
@@ -127,7 +127,7 @@ function getPreviousMonthKey(monthKey: string, monthsBack: number): string {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   try {
@@ -374,7 +374,7 @@ export async function POST(request: NextRequest) {
 
 // Keep GET for backwards compatibility (without filtering)
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const searchParams = request.nextUrl.searchParams;

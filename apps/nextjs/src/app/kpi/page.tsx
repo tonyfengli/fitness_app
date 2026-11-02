@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { OutputTemplate, PnLTab, ReportingTab } from "./components";
@@ -42,6 +43,16 @@ function KPIDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-12">
       <div className="mx-auto max-w-6xl">
+        {/* Back to the app home (not "/", which sends KPI-landing founders straight back here) */}
+        <Link
+          href="/trainer-home"
+          className="inline-flex items-center gap-1 mb-3 py-1 text-sm text-gray-500 hover:text-gray-900"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Home
+        </Link>
         <h1 className="text-3xl font-bold text-gray-900">KPI Dashboard</h1>
         <p className="mt-2 text-gray-600">Track performance metrics and generate reports for Elev8 HQ.</p>
 

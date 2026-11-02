@@ -5,11 +5,16 @@
  */
 
 import { randomBytes } from "crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import OAuthClient from "intuit-oauth";
+import { validateFounderAccess } from "~/lib/api-auth";
 import { getOAuthClient, QB_STATE_COOKIE } from "~/lib/quickbooks";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Only founders can connect the company's QuickBooks
+  const authError = await validateFounderAccess(request);
+  if (authError) return authError;
+
   const oauthClient = getOAuthClient();
 
   // CSRF protection: random state, checked against this cookie in the callback

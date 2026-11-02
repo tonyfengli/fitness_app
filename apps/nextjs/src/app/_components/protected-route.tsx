@@ -32,7 +32,7 @@ export function ProtectedRoute({
     ) {
       // If user has wrong role, redirect to their appropriate dashboard
       if (user?.role === "trainer") {
-        router.push("/trainer-dashboard");
+        router.push("/trainer-home");
       } else if (user?.role === "client") {
         router.push("/client-dashboard");
       } else {

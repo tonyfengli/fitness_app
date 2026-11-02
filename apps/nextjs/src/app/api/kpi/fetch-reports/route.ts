@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchKpiReportsAsCsv } from "~/app/kpi/lib/gymmaster-api";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * plus previous month data for ghost churn detection.
  */
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   try {

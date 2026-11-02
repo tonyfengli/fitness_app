@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchKpiReports } from "~/app/kpi/lib/gymmaster-api";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,7 @@ function categorizeMembership(membershipName: string): keyof typeof MEMBERSHIP_C
 
 export async function GET(request: NextRequest) {
   // Validate API key or session
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const searchParams = request.nextUrl.searchParams;

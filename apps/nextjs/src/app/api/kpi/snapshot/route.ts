@@ -9,11 +9,15 @@ import { eq, and, inArray, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
+import { validateFounderAccess } from "~/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
 // GET - Load snapshot for a month
 export async function GET(request: NextRequest) {
+  const authError = await validateFounderAccess(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const monthStr = searchParams.get("month");
   const yearStr = searchParams.get("year");
@@ -94,6 +98,9 @@ export async function GET(request: NextRequest) {
 
 // POST - Save snapshot (create or update)
 export async function POST(request: NextRequest) {
+  const authError = await validateFounderAccess(request);
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { month, year, data, overrides } = body;
@@ -212,6 +219,9 @@ export async function POST(request: NextRequest) {
 
 // PATCH - Update snapshot status (finalize/reopen)
 export async function PATCH(request: NextRequest) {
+  const authError = await validateFounderAccess(request);
+  if (authError) return authError;
+
   console.log("[PATCH] Starting...");
 
   try {

@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { monthlyPlanPrice } from "~/lib/plan-price";
 import type { BillingGap, PaymentFailure, PaymentRow } from "~/app/save-calls/types";
@@ -323,7 +323,7 @@ function findBillingGaps(
 }
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   try {

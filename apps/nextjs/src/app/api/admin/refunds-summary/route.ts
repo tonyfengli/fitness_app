@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 
 // Lazy init to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -197,7 +197,7 @@ function findGymMasterNameKey(
 }
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const searchParams = request.nextUrl.searchParams;

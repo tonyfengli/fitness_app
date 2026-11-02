@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@acme/ui-shared";
 
 import { authClient } from "~/auth/client";
+import { founderHome } from "~/lib/founders";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -88,9 +89,13 @@ export default function LoginPage() {
         });
 
         const userRole = sessionData?.user?.role;
+        const home = founderHome(sessionData?.user?.email);
 
         console.log("[Login] Routing based on role:", userRole);
-        if (userRole === "trainer") {
+        if (home) {
+          // Founders have their own landing page
+          router.push(home);
+        } else if (userRole === "trainer") {
           console.log("[Login] Redirecting to trainer-home");
           router.push("/trainer-home");
         } else if (userRole === "client") {

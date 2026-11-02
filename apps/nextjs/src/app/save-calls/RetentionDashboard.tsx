@@ -15,11 +15,13 @@ import {
   needsAttention,
   milestoneGroups,
   COMING_UP_WITHIN,
+  ClassesView,
+  type ClassAttendanceData,
 } from "./components";
 import { CallBlock, MemberCallItem, AtRiskTier, PaymentRow, MilestoneRow } from "./types";
 
-export type RetentionView = "at-risk" | "new-members" | "payments" | "milestones";
-export const RETENTION_VIEWS: RetentionView[] = ["at-risk", "new-members", "payments", "milestones"];
+export type RetentionView = "at-risk" | "new-members" | "payments" | "milestones" | "classes";
+export const RETENTION_VIEWS: RetentionView[] = ["at-risk", "new-members", "payments", "milestones", "classes"];
 
 // API response types
 interface WeeklyVisitsApi {
@@ -298,6 +300,8 @@ export function RetentionDashboard({
   const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<MilestoneRow[] | null>(null);
   const [milestonesError, setMilestonesError] = useState<string | null>(null);
+  const [classes, setClasses] = useState<ClassAttendanceData | null>(null);
+  const [classesError, setClassesError] = useState<string | null>(null);
 
   // Each source loads on its own; a refresh clears and reloads all of them
   const load = useCallback(<T,>(
@@ -333,6 +337,8 @@ export function RetentionDashboard({
       setMilestonesError,
       "milestones"
     );
+    // Last 4 weeks for the card; the Classes view fetches other ranges itself
+    load(() => fetchJson<ClassAttendanceData>("/api/agent/classes", "Classes"), setClasses, setClassesError, "classes");
   }, [load, refreshKey]);
 
   const handleCopyPhone = (phone: string) => {
@@ -380,11 +386,24 @@ export function RetentionDashboard({
   const attention = payments?.filter(needsAttention).length ?? null;
   const groups = milestones ? milestoneGroups(milestones) : null;
 
+  // Classes card: overall average and the busiest slot, last 4 weeks
+  const classSummary = (() => {
+    if (!classes) return null;
+    const visits = classes.slots.reduce((t, s) => t + s.current.visits, 0);
+    const sessions = classes.slots.reduce((t, s) => t + s.current.sessions, 0);
+    const best = [...classes.slots].sort((a, b) => b.current.avg - a.current.avg)[0];
+    return {
+      avg: sessions ? Math.round((visits / sessions) * 10) / 10 : 0,
+      best: best ? `Best: ${best.weekdayLabel} ${best.time} · ${best.current.avg.toFixed(1)}` : "No classes yet",
+    };
+  })();
+
   const descriptions: Record<RetentionView, string> = {
     "at-risk": "No visit in 14+ days, or weekly visits trending down. Today's save-call list.",
     "new-members": "",
     payments: "Billing status for every member. Owes, failed or short charges first.",
     milestones: `Class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1. Celebrate, or get ready for the next one.`,
+    classes: "",
   };
 
   return (
@@ -401,7 +420,7 @@ export function RetentionDashboard({
       </div>
 
       {/* Summary cards = view navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           title="At-risk & low frequency"
           active={view === "at-risk"}
@@ -443,6 +462,16 @@ export function RetentionDashboard({
           tone={groups?.justHit.length ? "good" : "neutral"}
           loading={!groups}
           error={milestonesError}
+        />
+        <SummaryCard
+          title="Classes"
+          active={view === "classes"}
+          onClick={() => onViewChange("classes")}
+          value={classSummary ? classSummary.avg : null}
+          unit="avg / class"
+          detail={classSummary?.best ?? ""}
+          loading={!classSummary}
+          error={classesError}
         />
       </div>
 
@@ -501,6 +530,12 @@ export function RetentionDashboard({
 
       {view === "milestones" && <ViewState error={milestonesError} loading={!milestones && !milestonesError} label="milestones" />}
       {view === "milestones" && milestones && <MilestonesTable members={milestones} onCopyPhone={handleCopyPhone} />}
+
+      {view === "classes" && (classesError ? (
+        <ViewState error={classesError} loading={false} label="class attendance" />
+      ) : (
+        <ClassesView initial={classes} />
+      ))}
     </div>
   );
 }

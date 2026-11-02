@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMemberOverride, KpiMonthlySnapshot, RetentionEvent } from "@acme/db/schema";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
 
@@ -105,7 +105,7 @@ function netByCategory(payments: ReportRow[]) {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   try {

@@ -8,14 +8,14 @@ import { and, asc, eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { PnlMonthlySnapshot } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 import { isQuickBooksConnected } from "~/lib/quickbooks";
 import { summarizeMonths, type MonthlyReconciliation } from "~/lib/revenue-reconciliation";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const year = parseInt(request.nextUrl.searchParams.get("year") || String(new Date().getFullYear()));
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

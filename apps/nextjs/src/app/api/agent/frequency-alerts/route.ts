@@ -14,7 +14,7 @@ import { eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
 
@@ -165,7 +165,7 @@ async function fetchGymMasterCurrentMembers(): Promise<CurrentMemberRow[]> {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const now = new Date();

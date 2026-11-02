@@ -6,10 +6,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { loadTokens, isQuickBooksConnected } from "~/lib/quickbooks";
-import { validateApiAccess } from "~/lib/api-auth";
+import { validateFounderAccess } from "~/lib/api-auth";
 
 export async function GET(request: NextRequest) {
-  const authError = await validateApiAccess(request);
+  const authError = await validateFounderAccess(request);
   if (authError) return authError;
 
   const connected = await isQuickBooksConnected();

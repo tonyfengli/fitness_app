@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "~/auth/server";
 import { headers } from "next/headers";
+import { isFounder } from "~/lib/founders";
 
 /**
  * Validate API access via either API key or session
@@ -44,6 +45,31 @@ export async function validateApiAccess(request: NextRequest): Promise<NextRespo
   return NextResponse.json(
     { error: "Unauthorized. Provide X-OPENCLAW-API-KEY header or valid session." },
     { status: 401 }
+  );
+}
+
+/**
+ * Founder-only data (KPI, P&L, reconciliation, Retention): the OpenClaw API key,
+ * or a logged-in founder. No dev-mode bypass, so this data is never open when
+ * OPENCLAW_API_KEY isn't configured.
+ */
+export async function validateFounderAccess(request: NextRequest): Promise<NextResponse | null> {
+  const apiKey = request.headers.get("X-OPENCLAW-API-KEY");
+  const expectedKey = process.env.OPENCLAW_API_KEY;
+  if (apiKey && expectedKey && apiKey === expectedKey) return null;
+
+  let email: string | null = null;
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    email = session?.user?.email ?? null;
+  } catch {
+    // Session check failed: treated as signed out
+  }
+
+  if (isFounder(email)) return null;
+  return NextResponse.json(
+    { error: email ? "Founders only." : "Unauthorized. Sign in as a founder or provide X-OPENCLAW-API-KEY." },
+    { status: email ? 403 : 401 }
   );
 }
 
