@@ -269,6 +269,8 @@ export function PnLTab() {
   const chartData = pnlData.map((m) => ({
     name: m.month,
     revenue: m.allRevenue,
+    stripeRevenue: m.stripeRevenue,
+    otherRevenue: m.otherIncome,
     expenses: -m.expenses,
     netIncome: m.netIncome,
   }));
@@ -607,7 +609,8 @@ export function PnLTab() {
                   <Tooltip
                     formatter={(value: number, name: string) => {
                       const labels: Record<string, string> = {
-                        revenue: "All Revenue",
+                        stripeRevenue: "Stripe Revenue",
+                        otherRevenue: "Other Revenue",
                         expenses: "Expenses",
                         netIncome: "Net Income",
                       };
@@ -617,7 +620,9 @@ export function PnLTab() {
                     contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
                   />
                   <ReferenceLine yAxisId="left" y={0} stroke="#e0e0e0" />
-                  <Bar yAxisId="left" dataKey="revenue" fill="#22c55e" name="revenue" radius={[4, 4, 0, 0]}>
+                  {/* Revenue stacked by source (color only); the label is the month's total */}
+                  <Bar yAxisId="left" dataKey="stripeRevenue" stackId="revenue" fill="#22c55e" name="stripeRevenue" />
+                  <Bar yAxisId="left" dataKey="otherRevenue" stackId="revenue" fill="#a855f7" name="otherRevenue" radius={[4, 4, 0, 0]}>
                     <LabelList
                       dataKey="revenue"
                       position="top"
@@ -658,10 +663,14 @@ export function PnLTab() {
                   </Line>
                 </ComposedChart>
               </ResponsiveContainer>
-              <div className="flex justify-center gap-6 mt-2 text-sm">
+              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-green-500 rounded-sm" />
-                  <span className="text-gray-600">All Revenue (Stripe + Other)</span>
+                  <span className="text-gray-600">Stripe Revenue</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 bg-purple-500 rounded-sm" />
+                  <span className="text-gray-600">Other Revenue</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 bg-red-500 rounded-sm" />
