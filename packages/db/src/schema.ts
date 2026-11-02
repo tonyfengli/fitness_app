@@ -834,6 +834,8 @@ export const retentionEventTypeEnum = pgEnum("retention_event_type", [
   "outreach_sent",      // Outreach message sent to member
   "returned",           // Member returned after being at-risk
   "churned",            // Member churned (cancelled or went on hold)
+  "onboarded",          // New member welcomed / onboarding done (New members tab)
+  "milestone_celebrated", // Class milestone shout-out done (Milestones tab; see milestone column)
 ]);
 
 export const RetentionEvent = pgTable(
@@ -854,6 +856,12 @@ export const RetentionEvent = pgTable(
     outreachMethod: t.varchar({ length: 50 }), // "sms", "email", "phone", "in_person"
     outreachMessage: t.text(), // Message sent or notes
 
+    // Save Calls logging (UI still being designed; any combination can be used)
+    outcome: t.varchar({ length: 30 }), // "reached", "no_answer", "voicemail", "texted", "emailed"
+    context: t.varchar({ length: 30 }), // list it came from: "at_risk", "low_frequency", "new_members", "milestones"
+    milestone: t.integer(), // milestone_celebrated: which class count (25, 50, 60, ...)
+    followUpOn: t.date(), // when the member should come back to the list, if snoozed
+
     // Notes and metadata
     notes: t.text(),
     createdBy: t.varchar({ length: 100 }), // Who created this event (agent, staff name)
@@ -870,7 +878,7 @@ export const RetentionEvent = pgTable(
 export const CreateRetentionEventSchema = createInsertSchema(RetentionEvent, {
   memberId: z.string().min(1).max(50),
   memberName: z.string().min(1).max(255),
-  eventType: z.enum(["flagged_at_risk", "outreach_sent", "returned", "churned"]),
+  eventType: z.enum(["flagged_at_risk", "outreach_sent", "returned", "churned", "onboarded", "milestone_celebrated"]),
   eventDate: z.string(), // YYYY-MM-DD format
   atRiskTier: z.string().optional(),
   daysGone: z.number().int().optional(),

@@ -60,6 +60,7 @@ interface NewMemberApiMember {
   daysSinceSignup: number;
   planPrice: string | null;
   phone: string | null;
+  onboardedOn: string | null;
 }
 
 interface FrequencyAlertMember {
@@ -101,6 +102,12 @@ function apiMemberToCallItem(member: AtRiskApiMember): MemberCallItem {
   };
 }
 
+// New members not onboarded this many days after sign-up are overdue (red edge)
+const ONBOARDING_OVERDUE_DAYS = 7;
+
+const onboardingTier = (daysSinceSignup: number, onboardedOn: string | null): AtRiskTier =>
+  !onboardedOn && daysSinceSignup >= ONBOARDING_OVERDUE_DAYS ? "Critical" : "Best odds";
+
 function newMemberToCallItem(member: NewMemberApiMember): MemberCallItem {
   return {
     memberId: member.memberId,
@@ -109,7 +116,7 @@ function newMemberToCallItem(member: NewMemberApiMember): MemberCallItem {
     monthlyRate: member.membershipFee,
     tenureMonths: 0,
     daysGone: 0,
-    tier: "Best odds",
+    tier: onboardingTier(member.daysSinceSignup, member.onboardedOn),
     phone: member.phone,
     touchCount: 0,
     lastTouchType: null,
@@ -118,7 +125,7 @@ function newMemberToCallItem(member: NewMemberApiMember): MemberCallItem {
     lastAttemptResult: null,
     // No call logging yet, so days without contact = days since sign-up
     planPrice: member.planPrice,
-    onboarding: { daysUncontacted: member.daysSinceSignup },
+    onboarding: { daysUncontacted: member.daysSinceSignup, onboardedOn: member.onboardedOn },
   };
 }
 
@@ -169,11 +176,8 @@ function frequencyAlertToCallItem(member: FrequencyAlertMember): MemberCallItem 
 interface CallLists {
   atRisk: CallBlock;
   lowFrequency: CallBlock;
-  newMembers: CallBlock;
-  newSinceMonth: string | null; // e.g. "Sep": the finalized KPI month new members are counted after
+  newMembers: MemberCallItem[]; // onboarding queue; split into Overdue / Due / Recently onboarded
 }
-
-const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function callBlock(id: string, title: string, description: string, members: MemberCallItem[]): CallBlock {
   return {
@@ -199,8 +203,8 @@ async function fetchJson<T>(url: string, label: string): Promise<T> {
 async function fetchCallLists(): Promise<CallLists> {
   const [atRiskData, newMembersData, frequencyData] = await Promise.all([
     fetchJson<{ atRiskMembers?: AtRiskApiMember[] }>("/api/agent/at-risk", "At-risk"),
-    fetchJson<{ newMembers?: NewMemberApiMember[]; _meta?: { snapshotMonth?: number } }>("/api/agent/new-members", "New members").catch(
-      () => ({ newMembers: [] as NewMemberApiMember[], _meta: undefined })
+    fetchJson<{ newMembers?: NewMemberApiMember[] }>("/api/agent/new-members", "New members").catch(
+      () => ({ newMembers: [] as NewMemberApiMember[] })
     ),
     fetchJson<{ slowing?: FrequencyAlertMember[]; belowHealthy?: FrequencyAlertMember[] }>("/api/agent/frequency-alerts", "Frequency").catch(
       () => ({ slowing: [] as FrequencyAlertMember[], belowHealthy: [] as FrequencyAlertMember[] })
@@ -214,18 +218,11 @@ async function fetchCallLists(): Promise<CallLists> {
   const frequencyItems = [...(frequencyData.slowing || []), ...(frequencyData.belowHealthy || [])]
     .map(frequencyAlertToCallItem)
     .filter(m => !atRiskIds.has(m.memberId));
-  const snapshotMonth = newMembersData._meta?.snapshotMonth;
 
   return {
     atRisk: callBlock("at-risk-members", "At-risk", "14+ days since last visit", atRiskMembers.map(apiMemberToCallItem)),
     lowFrequency: callBlock("low-frequency-members", "Low frequency", "Less than 6 visits in 4 weeks", frequencyItems),
-    newMembers: callBlock(
-      "new-member-checks",
-      "New members",
-      "Joined since the last finalized KPI month",
-      (newMembersData.newMembers || []).map(newMemberToCallItem)
-    ),
-    newSinceMonth: snapshotMonth ? MONTH_SHORT[snapshotMonth - 1]! : null,
+    newMembers: (newMembersData.newMembers || []).map(newMemberToCallItem),
   };
 }
 
@@ -350,13 +347,49 @@ export function RetentionDashboard({
 
   const atRiskCount = callLists?.atRisk.members?.length ?? 0;
   const lowFrequencyCount = callLists?.lowFrequency.members?.length ?? 0;
-  const newCount = callLists?.newMembers.members?.length ?? 0;
+  // Onboarding queue: overdue first (longest waiting), then due, then recently onboarded
+  const queue = callLists?.newMembers ?? [];
+  const waiting = (m: MemberCallItem) => !m.onboarding?.onboardedOn;
+  const daysWaiting = (m: MemberCallItem) => m.onboarding?.daysUncontacted ?? 0;
+  const overdueNew = queue.filter((m) => waiting(m) && daysWaiting(m) >= ONBOARDING_OVERDUE_DAYS).sort((a, b) => daysWaiting(b) - daysWaiting(a));
+  const dueNew = queue.filter((m) => waiting(m) && daysWaiting(m) < ONBOARDING_OVERDUE_DAYS).sort((a, b) => daysWaiting(b) - daysWaiting(a));
+  const onboardedNew = queue
+    .filter((m) => !waiting(m))
+    .sort((a, b) => (b.onboarding?.onboardedOn ?? "").localeCompare(a.onboarding?.onboardedOn ?? ""));
+  const newCount = overdueNew.length + dueNew.length;
+
+  // Mark onboarded / undo, then move the row between blocks
+  const setOnboarded = async (member: MemberCallItem, onboarded: boolean) => {
+    const res = onboarded
+      ? await fetch("/api/agent/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId: member.memberId, memberName: member.name }),
+        })
+      : await fetch(`/api/agent/onboarding?memberId=${encodeURIComponent(member.memberId)}`, { method: "DELETE" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(body.error || "Couldn't update onboarding. Please try again.");
+      return;
+    }
+    const onboardedOn: string | null = onboarded ? body.onboardedOn : null;
+    setCallLists((prev) =>
+      prev && {
+        ...prev,
+        newMembers: prev.newMembers.map((m) =>
+          m.memberId === member.memberId
+            ? { ...m, tier: onboardingTier(daysWaiting(m), onboardedOn), onboarding: { daysUncontacted: daysWaiting(m), onboardedOn } }
+            : m
+        ),
+      }
+    );
+  };
   const attention = payments?.filter(needsAttention).length ?? null;
   const groups = milestones ? milestoneGroups(milestones) : null;
 
   const descriptions: Record<RetentionView, string> = {
     "at-risk": "No visit in 14+ days, or weekly visits trending down. Today's save-call list.",
-    "new-members": `Joined since the ${callLists?.newSinceMonth ?? "last"} KPI close. Welcome and onboarding calls.`,
+    "new-members": `Everyone new since Oct 1. They stay here until marked onboarded; ${ONBOARDING_OVERDUE_DAYS}+ days without it is overdue.`,
     payments: "Billing status for every member. Owes, failed or short charges first.",
     milestones: `Class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1. Celebrate, or get ready for the next one.`,
   };
@@ -391,8 +424,9 @@ export function RetentionDashboard({
           active={view === "new-members"}
           onClick={() => onViewChange("new-members")}
           value={callLists ? newCount : null}
-          unit={callLists?.newSinceMonth ? `since ${callLists.newSinceMonth} close` : "new"}
-          detail="Welcome calls"
+          unit="to onboard"
+          detail={`${overdueNew.length} overdue · welcome calls`}
+          tone={overdueNew.length ? "bad" : "neutral"}
           loading={!callLists}
           error={callListsError}
         />
@@ -438,11 +472,34 @@ export function RetentionDashboard({
 
       {view === "new-members" && <ViewState error={callListsError} loading={!callLists && !callListsError} label="new members" />}
       {view === "new-members" && callLists && (
-        callLists.newMembers.members?.length ? (
-          <MemberList block={callLists.newMembers} onCopyPhone={handleCopyPhone} />
-        ) : (
-          <div className="text-center py-12 text-gray-500">No new members to call.</div>
-        )
+        <div className="space-y-6">
+          {!!overdueNew.length && (
+            <MemberList
+              block={callBlock("new-overdue", "Overdue", `${ONBOARDING_OVERDUE_DAYS}+ days since sign-up`, overdueNew)}
+              onCopyPhone={handleCopyPhone}
+              action={{ label: "Mark onboarded", onClick: (m) => setOnboarded(m, true) }}
+            />
+          )}
+          {!!dueNew.length && (
+            <MemberList
+              block={callBlock("new-due", "Due", `signed up in the last ${ONBOARDING_OVERDUE_DAYS} days`, dueNew)}
+              onCopyPhone={handleCopyPhone}
+              action={{ label: "Mark onboarded", onClick: (m) => setOnboarded(m, true) }}
+            />
+          )}
+          {!overdueNew.length && !dueNew.length && (
+            <div className="text-center py-12 text-gray-500">Everyone new has been onboarded.</div>
+          )}
+          {!!onboardedNew.length && (
+            <MemberList
+              block={callBlock("new-onboarded", "Recently onboarded", "last 14 days", onboardedNew)}
+              onCopyPhone={handleCopyPhone}
+              action={{ label: "Undo", onClick: (m) => setOnboarded(m, false) }}
+              collapsible
+              defaultOpen={false}
+            />
+          )}
+        </div>
       )}
 
       {view === "payments" && <ViewState error={paymentsError} loading={!payments && !paymentsError} label="payments" />}

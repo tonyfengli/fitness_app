@@ -2,21 +2,26 @@
  * New Members API for OpenClaw Retention Specialist
  * GET /api/agent/new-members
  *
- * Returns members who joined since the last finalized KPI month: everyone the KPI
- * roster doesn't cover yet. Once that month is finalized they join the roster and
- * move to Retention / Payments.
+ * The onboarding queue: everyone who became a new member on or after
+ * ONBOARDING_START, until someone marks them onboarded. Finalizing a KPI month
+ * doesn't remove anyone; it only moves them from the "not finalized yet" rule to
+ * the finalized KPI new-member lists.
  *
- * New = not on the KPI roster, and either
- * - paid since the cutoff with no payment in the finalized month (the KPI page's
- *   new-member rule: net payments per category, Gym Memberships or Personal Training), or
- * - has a membership that hasn't started yet (signed up ahead of their start date).
- * KPI "exclude from new" overrides for the cutoff month apply once that month is saved.
+ * New since ONBOARDING_START =
+ * - in a finalized KPI month's new members (minus "exclude from new"), or
+ * - not finalized yet: not on the KPI roster, and either paid since the cutoff with
+ *   no payment in the finalized month (the KPI page's new-member rule: net payments
+ *   per category, Gym Memberships or Personal Training), or has a membership that
+ *   hasn't started yet. "Exclude from new" for the cutoff month applies once saved.
+ *
+ * Members marked onboarded (retention_event "onboarded") drop off after 14 days;
+ * until then they come back with onboardedOn set, so the tab can offer Undo.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "@acme/db";
 import { db } from "@acme/db/client";
-import { KpiMemberOverride } from "@acme/db/schema";
+import { KpiMemberOverride, KpiMonthlySnapshot, RetentionEvent } from "@acme/db/schema";
 import { validateApiAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
@@ -24,6 +29,8 @@ import { getPlanPrices } from "~/lib/plan-price";
 export const dynamic = "force-dynamic";
 
 const FUTURE_START_DAYS = 90; // how far ahead to look for memberships that haven't started
+const ONBOARDING_START = "2026-10-01"; // the queue starts here; nobody new before this date shows
+const RECENTLY_ONBOARDED_DAYS = 14; // marked-onboarded members stay visible (with Undo) this long
 
 type ReportRow = Record<string, string | number | null>;
 
@@ -38,6 +45,7 @@ interface NewMember {
   daysSinceSignup: number;
   planPrice: string | null; // GymMaster plan price as one monthly number, e.g. "$120/mo" for $60 every 14 days
   phone: string | null;
+  onboardedOn: string | null; // date marked onboarded, within the last 14 days
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -123,11 +131,14 @@ export async function GET(request: NextRequest) {
     const lookahead = new Date(now);
     lookahead.setDate(lookahead.getDate() + FUTURE_START_DAYS);
 
-    // 2. Payments since the cutoff and in the finalized month; current members incl. future starts
-    const [paymentsSince, paymentsSnapshotMonth, currentMembers, overrides] = await Promise.all([
-      fetchReport(103, cutoff, today),
+    // 2. Payments since the queue start and in the finalized month; current members incl. future starts
+    const paymentsFrom = cutoff < ONBOARDING_START ? cutoff : ONBOARDING_START;
+    const startYear = Number(ONBOARDING_START.slice(0, 4));
+    const startMonth = Number(ONBOARDING_START.slice(5, 7));
+    const [paymentsSinceStart, paymentsSnapshotMonth, currentMembers, overrides, finalizedSnapshots, newOverrides, onboardedEvents] = await Promise.all([
+      fetchReport(103, paymentsFrom, today),
       fetchReport(103, snapshotStart, snapshotEnd),
-      fetchReport(1, cutoff, iso(lookahead)),
+      fetchReport(1, paymentsFrom, iso(lookahead)),
       db
         .select({ memberId: KpiMemberOverride.memberId })
         .from(KpiMemberOverride)
@@ -138,8 +149,38 @@ export async function GET(request: NextRequest) {
             eq(KpiMemberOverride.overrideType, "exclude_from_new")
           )
         ),
+      db.select().from(KpiMonthlySnapshot).where(eq(KpiMonthlySnapshot.status, "finalized")),
+      db.select().from(KpiMemberOverride).where(eq(KpiMemberOverride.overrideType, "exclude_from_new")),
+      // Fails (and is treated as none) until the "onboarded" event type exists in the database
+      db
+        .select({ memberId: RetentionEvent.memberId, eventDate: RetentionEvent.eventDate })
+        .from(RetentionEvent)
+        .where(eq(RetentionEvent.eventType, "onboarded"))
+        .catch((err) => {
+          console.error("[API /agent/new-members] Could not read onboarded events:", err);
+          return [];
+        }),
     ]);
     const excluded = new Set(overrides.map(o => o.memberId));
+    const paymentsSince = paymentsSinceStart.filter(p => parseGymMasterDate(p["Payment Date"]) >= cutoff);
+
+    // Finalized months since the queue start: their KPI new members (minus excludes) stay in the queue
+    const finalizedNewIds = new Set<string>();
+    for (const snap of finalizedSnapshots) {
+      if (snap.year < startYear || (snap.year === startYear && snap.month < startMonth)) continue;
+      const exclude = new Set(
+        newOverrides.filter(o => o.month === snap.month && o.year === snap.year).map(o => o.memberId)
+      );
+      for (const m of snap.data.newMembers || []) if (!exclude.has(m.memberId)) finalizedNewIds.add(m.memberId);
+    }
+
+    // Latest onboarded date per member
+    const onboardedOn = new Map<string, string>();
+    for (const e of onboardedEvents) {
+      const date = String(e.eventDate);
+      if (!onboardedOn.has(e.memberId) || date > onboardedOn.get(e.memberId)!) onboardedOn.set(e.memberId, date);
+    }
+    const recentCutoff = iso(new Date(now.getTime() - RECENTLY_ONBOARDED_DAYS * 864e5));
 
     // 3. KPI-style new: net positive in a category since the cutoff, nothing in that category the month before
     const since = netByCategory(paymentsSince);
@@ -161,7 +202,7 @@ export async function GET(request: NextRequest) {
     }
 
     const firstPayment = new Map<string, { date: string; name: string }>();
-    for (const p of paymentsSince) {
+    for (const p of paymentsSinceStart) {
       const memberId = String(p["Member ID"] ?? "");
       const date = parseGymMasterDate(p["Payment Date"]);
       if (!memberId || !date || money(p["Payment Amount"]) <= 0) continue;
@@ -169,8 +210,10 @@ export async function GET(request: NextRequest) {
       if (!seen || date < seen.date) firstPayment.set(memberId, { date, name: String(p["Name"] ?? p["Member Name"] ?? "") });
     }
 
-    // 5. Build rows for members the roster doesn't cover yet
-    const ids = [...newIds].filter(id => !onRoster.has(id) && !excluded.has(id));
+    // 5. Not finalized yet (off the roster) plus finalized since the queue start; onboarded long ago drop off
+    const ids = [
+      ...new Set([...[...newIds].filter(id => !onRoster.has(id) && !excluded.has(id)), ...finalizedNewIds]),
+    ].filter(id => !onboardedOn.has(id) || onboardedOn.get(id)! >= recentCutoff);
     const planPrices = await getPlanPrices(ids);
     const newMembers: NewMember[] = await Promise.all(
       ids.map(async (memberId) => {
@@ -193,6 +236,7 @@ export async function GET(request: NextRequest) {
           daysSinceSignup: daysSince(signedUp),
           planPrice,
           phone: phone ? String(phone) : null,
+          onboardedOn: onboardedOn.get(memberId) ?? null,
         };
       })
     );
@@ -202,7 +246,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       status: "live",
-      since: cutoff,
+      since: ONBOARDING_START,
       totalNewMembers: newMembers.length,
       newMembers,
       _meta: {

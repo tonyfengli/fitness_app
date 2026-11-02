@@ -3,10 +3,10 @@
 import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { OutputTemplate, PnLTab, ReportingTab, AdministrativeTab } from "./components";
+import { OutputTemplate, PnLTab, ReportingTab } from "./components";
 import { RetentionDashboard, RETENTION_VIEWS, type RetentionView } from "../save-calls/RetentionDashboard";
 
-const TABS = ["overview", "retention", "pnl", "elev8", "administrative"] as const;
+const TABS = ["overview", "retention", "pnl", "elev8"] as const;
 type TabId = (typeof TABS)[number];
 
 export default function KPIPage() {
@@ -88,16 +88,6 @@ function KPIDashboard() {
             >
               For Elev8 HQ
             </button>
-            <button
-              onClick={() => setActiveTab("administrative")}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "administrative"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Administrative
-            </button>
           </nav>
         </div>
 
@@ -108,7 +98,6 @@ function KPIDashboard() {
         {activeTab === "retention" && (
           <RetentionDashboard view={retentionView} onViewChange={(view) => navigate("retention", view)} />
         )}
-        {activeTab === "administrative" && <AdministrativeTab />}
       </div>
     </div>
   );

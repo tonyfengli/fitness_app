@@ -7,7 +7,15 @@ import { CallBlock, MemberCallItem, TIER_CONFIG, STATUS_CONFIG } from "../types"
 interface MemberListProps {
   block: CallBlock;
   onCopyPhone?: (phone: string) => void;
+  // Per-row button (e.g. "Mark onboarded"), shown in place of the touch history
+  action?: { label: string; onClick: (member: MemberCallItem) => void };
+  // Collapsible header, e.g. for "Recently onboarded"
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }
+
+const formatShortDate = (date: string) =>
+  new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 function ChevronIcon({ className, expanded }: { className?: string; expanded?: boolean }) {
   return (
@@ -25,18 +33,22 @@ function ChevronIcon({ className, expanded }: { className?: string; expanded?: b
 function MemberRow({
   member,
   onCopyPhone,
+  action,
 }: {
   member: MemberCallItem;
   onCopyPhone?: () => void;
+  action?: MemberListProps["action"];
 }) {
   const [expanded, setExpanded] = useState(false);
   const tierConfig = TIER_CONFIG[member.tier];
+  const onboardedOn = member.onboarding?.onboardedOn ?? null;
+  const borderColor = onboardedOn ? "border-l-gray-300" : tierConfig.borderColor;
 
   const hasWeeklyData = member.weeklyVisits !== undefined;
 
   return (
     // Row dividers set per side: divide-y's border-color would override the tier color on the left edge
-    <div className={`border-l-4 ${tierConfig.borderColor} border-t border-t-gray-100 first:border-t-0`}>
+    <div className={`border-l-4 ${borderColor} border-t border-t-gray-100 first:border-t-0`}>
       {/* Main row: wraps into name / stats / phone lines on phones */}
       <div
         className={`flex flex-wrap md:flex-nowrap items-center gap-y-2 hover:bg-gray-50 py-3 px-4 ${hasWeeklyData ? "cursor-pointer" : ""}`}
@@ -56,7 +68,12 @@ function MemberRow({
 
         {/* Days gone OR frequency info */}
         <div className={`${hasWeeklyData ? "ml-8" : ""} md:ml-0 md:w-32 md:text-center flex-shrink-0`}>
-          {member.onboarding ? (
+          {onboardedOn ? (
+            <div className="flex items-baseline gap-1 md:block">
+              <div className="text-sm font-semibold text-gray-700">{formatShortDate(onboardedOn)}</div>
+              <div className="text-xs text-gray-400">onboarded</div>
+            </div>
+          ) : member.onboarding ? (
             <div className="flex items-baseline gap-1 md:block">
               <div className="text-lg font-semibold text-gray-900">{member.onboarding.daysUncontacted}d</div>
               <div className="text-xs text-gray-400">not contacted</div>
@@ -85,7 +102,20 @@ function MemberRow({
           <span className="inline-block px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-700">{member.planPrice || "No plan price"}</span>
         </div>
 
-        {/* Touch history */}
+        {/* Row action (e.g. Mark onboarded) replaces the touch history */}
+        {action ? (
+          <div
+            className={`w-full md:w-44 ${hasWeeklyData ? "ml-8" : ""} md:ml-0 flex-shrink-0 md:text-right md:pr-4`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => action.onClick(member)}
+              className="px-3 py-2.5 md:py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            >
+              {action.label}
+            </button>
+          </div>
+        ) : (
         <div className="hidden md:block w-44 flex-shrink-0 text-xs text-right pr-4">
           {member.touchCount > 0 ? (
             <>
@@ -103,6 +133,7 @@ function MemberRow({
             <div className="text-gray-400">No touches yet</div>
           )}
         </div>
+        )}
 
         {/* Phone & Actions */}
         <div
@@ -138,30 +169,25 @@ function MemberRow({
         <div className="bg-gray-50 px-4 py-3 border-t border-gray-100">
           <div className="ml-8">
             <div className="text-xs font-medium text-gray-500 uppercase mb-2">Weekly visits breakdown</div>
+            {/* Rolling 7-day windows ending today, most recent on the left */}
             <div className="grid grid-cols-5 gap-2 text-center">
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <div className="text-lg font-semibold text-gray-900">{member.weeklyVisits.week0}</div>
-                <div className="text-xs text-gray-500">This week</div>
-              </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <div className="text-lg font-semibold text-gray-900">{member.weeklyVisits.week1}</div>
-                <div className="text-xs text-gray-500">Week 1</div>
-              </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <div className="text-lg font-semibold text-gray-900">{member.weeklyVisits.week2}</div>
-                <div className="text-xs text-gray-500">Week 2</div>
-              </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <div className="text-lg font-semibold text-gray-900">{member.weeklyVisits.week3}</div>
-                <div className="text-xs text-gray-500">Week 3</div>
-              </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <div className="text-lg font-semibold text-gray-900">{member.weeklyVisits.week4}</div>
-                <div className="text-xs text-gray-500">Week 4</div>
-              </div>
+              {(
+                [
+                  ["week0", "Last 7 days"],
+                  ["week1", "Last week"],
+                  ["week2", "2 weeks ago"],
+                  ["week3", "3 weeks ago"],
+                  ["week4", "4 weeks ago"],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="bg-white rounded p-2 border border-gray-200">
+                  <div className="text-lg font-semibold text-gray-900">{member.weeklyVisits![key]}</div>
+                  <div className="text-xs text-gray-500">{label}</div>
+                </div>
+              ))}
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              Total visits (weeks 0-3): <span className="font-medium">{member.totalVisits ?? 0}</span>
+              <span className="font-medium">{member.totalVisits ?? 0}</span> visits in the last 4 weeks
               {(member.totalVisits ?? 0) < 6 && (
                 <span className="text-red-500 ml-2">Below healthy (6+ expected)</span>
               )}
@@ -173,9 +199,10 @@ function MemberRow({
   );
 }
 
-export function MemberList({ block, onCopyPhone }: MemberListProps) {
+export function MemberList({ block, onCopyPhone, action, collapsible = false, defaultOpen = true }: MemberListProps) {
   const config = STATUS_CONFIG[block.status];
   const members = block.members || [];
+  const [open, setOpen] = useState(defaultOpen);
 
 
   if (members.length === 0) {
@@ -196,24 +223,32 @@ export function MemberList({ block, onCopyPhone }: MemberListProps) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 mb-6">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100">
+      <div
+        className={`px-4 py-3 ${open ? "border-b border-gray-100" : ""} ${collapsible ? "cursor-pointer hover:bg-gray-50" : ""}`}
+        onClick={() => collapsible && setOpen(!open)}
+      >
         <div className="flex items-center gap-3">
           <UsersIcon className="w-4 h-4 text-gray-500" />
           <span className="font-medium text-gray-900">{block.title}</span>
           <span className="text-sm font-medium text-gray-700">{block.count}</span>
+          {block.description && collapsible && <span className="text-xs text-gray-400">{block.description}</span>}
+          {collapsible && <ChevronIcon className="w-4 h-4 text-gray-400 ml-auto" expanded={open} />}
         </div>
       </div>
 
       {/* Member rows */}
-      <div>
-        {members.map((member) => (
-          <MemberRow
-            key={member.memberId}
-            member={member}
-            onCopyPhone={() => member.phone && onCopyPhone?.(member.phone)}
-          />
-        ))}
-      </div>
+      {open && (
+        <div>
+          {members.map((member) => (
+            <MemberRow
+              key={member.memberId}
+              member={member}
+              onCopyPhone={() => member.phone && onCopyPhone?.(member.phone)}
+              action={action}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

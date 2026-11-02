@@ -86,6 +86,60 @@ export interface RevenueReconciliationResponse {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Date ranges as Unix seconds, independent of the server's timezone (Vercel runs
+// in UTC, local dev in Pacific; parsing "YYYY-MM-DDT23:59:59" used to follow the
+// server and stretched each month 7 hours locally).
+// ---------------------------------------------------------------------------
+
+// Gym-local days, matching GymMaster's payment dates
+const GYM_TIMEZONE = "America/Los_Angeles";
+
+// Milliseconds the gym's clock is ahead of UTC at an instant (negative in Pacific)
+function gymOffsetMs(instant: number): number {
+  const parts: Record<string, number> = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: GYM_TIMEZONE,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(instant)
+      .map((p) => [p.type, Number(p.value)])
+  );
+  const part = (type: string) => parts[type] ?? 0;
+  return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second")) - instant;
+}
+
+const utcMidnight = (date: string) => {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return Date.UTC(y, m - 1, d);
+};
+
+// Instant of gym-local midnight starting `date` (second pass settles DST changeovers)
+function gymMidnight(date: string): number {
+  const wall = utcMidnight(date);
+  const first = wall - gymOffsetMs(wall);
+  return wall - gymOffsetMs(first);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// From gym-local midnight on startDate through the last second of endDate, gym time
+function gymDayRange(startDate: string, endDate: string) {
+  const dayAfterEnd = new Date(utcMidnight(endDate) + DAY_MS).toISOString().slice(0, 10);
+  return { startTs: Math.floor(gymMidnight(startDate) / 1000), endTs: Math.floor(gymMidnight(dayAfterEnd) / 1000) - 1 };
+}
+
+// From UTC midnight on startDate through the last second of endDate, UTC
+function utcDayRange(startDate: string, endDate: string) {
+  return { startTs: utcMidnight(startDate) / 1000, endTs: (utcMidnight(endDate) + DAY_MS) / 1000 - 1 };
+}
+
 // Fetch GymMaster payments from Report 103
 async function fetchGymMasterPayments(
   startDate: string,
@@ -143,8 +197,7 @@ async function fetchStripeCharges(
   startDate: string,
   endDate: string
 ): Promise<{ gross: number; count: number }> {
-  const startTs = Math.floor(new Date(startDate).getTime() / 1000);
-  const endTs = Math.floor(new Date(endDate + "T23:59:59").getTime() / 1000);
+  const { startTs, endTs } = gymDayRange(startDate, endDate);
 
   let gross = 0;
   let count = 0;
@@ -176,8 +229,7 @@ async function fetchStripeCharges(
 
 // Fetch Stripe fees from Balance Transactions
 async function fetchStripeFees(startDate: string, endDate: string): Promise<number> {
-  const startTs = Math.floor(new Date(startDate).getTime() / 1000);
-  const endTs = Math.floor(new Date(endDate + "T23:59:59").getTime() / 1000);
+  const { startTs, endTs } = gymDayRange(startDate, endDate);
 
   let fees = 0;
   let hasMore = true;
@@ -206,8 +258,7 @@ async function fetchStripeFees(startDate: string, endDate: string): Promise<numb
 
 // Fetch Stripe refunds using Refunds API
 async function fetchStripeRefunds(startDate: string, endDate: string): Promise<number> {
-  const startTs = Math.floor(new Date(startDate).getTime() / 1000);
-  const endTs = Math.floor(new Date(endDate + "T23:59:59").getTime() / 1000);
+  const { startTs, endTs } = gymDayRange(startDate, endDate);
 
   let refunds = 0;
   let hasMore = true;
@@ -235,8 +286,8 @@ async function fetchStripeRefunds(startDate: string, endDate: string): Promise<n
 
 // Fetch Stripe payouts (bank deposits)
 async function fetchStripePayouts(startDate: string, endDate: string): Promise<number> {
-  const startTs = Math.floor(new Date(startDate).getTime() / 1000);
-  const endTs = Math.floor(new Date(endDate + "T23:59:59").getTime() / 1000);
+  // Stripe stamps arrival_date at midnight UTC of the arrival day, so payouts use UTC days
+  const { startTs, endTs } = utcDayRange(startDate, endDate);
 
   let payouts = 0;
   let hasMore = true;

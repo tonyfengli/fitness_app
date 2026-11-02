@@ -54,6 +54,16 @@ interface DerivedMonthData extends MonthData {
   filteredLostRevenue: number;
   linkedAdded: BillingLink[]; // included (paid-for) members counted as new this month
   linkedLost: BillingLink[]; // included members counted as lost because their payer was lost
+  rosterMembers: RosterMember[]; // the people behind derivedTotalMembers
+}
+
+// A member in the running total for a month
+interface RosterMember {
+  memberId: string;
+  name: string;
+  amount: number | null; // paid this month, null if they didn't pay
+  paidBy: string | null; // payer's name for included (paid-for) members
+  isNew: boolean;
 }
 
 // A member whose membership another member pays for (GymMaster records the payment under the payer)
@@ -462,6 +472,8 @@ export function ReportingTab() {
     if (monthsData.length === 0) return [];
 
     const result: DerivedMonthData[] = [];
+    // The running total as a member list: first month's paying members, then + new − lost each month
+    let roster = new Map<string, Omit<RosterMember, "amount" | "isNew">>();
 
     for (let i = 0; i < monthsData.length; i++) {
       const m = monthsData[i]!;
@@ -490,6 +502,21 @@ export function ReportingTab() {
         (l) => linkMonthKey(l) < m.monthKey && filteredLost.some((x) => x.memberId === l.paidByMemberId)
       );
 
+      roster = new Map(i === 0 ? [] : roster);
+      if (i === 0) {
+        for (const p of m.payingMembers) roster.set(p.memberId, { memberId: p.memberId, name: p.name, paidBy: null });
+      } else {
+        for (const n of filteredNew) roster.set(n.memberId, { memberId: n.memberId, name: n.name, paidBy: null });
+        for (const l of filteredLost) roster.delete(l.memberId);
+      }
+      for (const l of linkedAdded) roster.set(l.memberId, { memberId: l.memberId, name: l.memberName, paidBy: l.paidByName });
+      for (const l of linkedLost) roster.delete(l.memberId);
+      const paidThisMonth = new Map(m.payingMembers.map((p) => [p.memberId, p.amount]));
+      const newIds = new Set([...filteredNew.map((n) => n.memberId), ...linkedAdded.map((l) => l.memberId)]);
+      const rosterMembers: RosterMember[] = [...roster.values()]
+        .map((r) => ({ ...r, amount: paidThisMonth.get(r.memberId) ?? null, isNew: i > 0 && newIds.has(r.memberId) }))
+        .sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1) || a.name.localeCompare(b.name));
+
       const filteredNewCount = filteredNew.length + linkedAdded.length;
       const filteredLostCount = filteredLost.length + linkedLost.length;
       const filteredNewRevenue = filteredNew.reduce((sum, x) => sum + x.amount, 0);
@@ -515,6 +542,7 @@ export function ReportingTab() {
         filteredLostRevenue,
         linkedAdded,
         linkedLost,
+        rosterMembers,
       });
     }
 
@@ -1473,7 +1501,7 @@ export function ReportingTab() {
                             </div>
                           </div>
 
-                          {/* Members: running total, with the paying list behind it */}
+                          {/* Members: the running total and exactly who's in it */}
                           <div id={`month-${m.month}-members`} className={`mt-6 ${focusClass("members")}`}>
                             <div className="flex items-center gap-2 mb-3">
                               <div className="w-2 h-2 rounded-full bg-gray-500" />
@@ -1482,24 +1510,27 @@ export function ReportingTab() {
                                 {m.derivedTotalMembers}
                               </span>
                               <span className="text-xs text-gray-500 ml-auto">
-                                {m.payingMembers.length} paid in {m.month}
+                                {m.rosterMembers.filter((r) => r.amount !== null).length} paid in {m.month}
+                                {m.rosterMembers.length !== m.derivedTotalMembers && ` · ${m.rosterMembers.length} listed`}
                               </span>
                             </div>
                             <div className="bg-white rounded-lg shadow-sm max-h-64 overflow-y-auto divide-y divide-gray-100">
-                              {m.payingMembers.map((member) => {
-                                const isNew = m.filteredNewMembers.some((n) => n.memberId === member.memberId);
-                                return (
-                                  <div key={member.memberId} className="flex items-center justify-between px-3 py-2 text-sm">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-gray-700">{member.name}</span>
-                                      {isNew && (
-                                        <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">NEW</span>
-                                      )}
-                                    </div>
-                                    <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
+                              {m.rosterMembers.map((member) => (
+                                <div key={member.memberId} className="flex items-center justify-between px-3 py-2 text-sm">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-gray-700">{member.name}</span>
+                                    {member.isNew && (
+                                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">NEW</span>
+                                    )}
+                                    {member.paidBy && <span className="text-xs text-gray-500 truncate">paid by {member.paidBy}</span>}
                                   </div>
-                                );
-                              })}
+                                  {member.amount !== null ? (
+                                    <span className="text-gray-900 font-medium">{formatCurrency(member.amount)}</span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">{member.paidBy ? "—" : "no payment"}</span>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
 

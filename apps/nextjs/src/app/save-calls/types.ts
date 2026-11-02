@@ -43,7 +43,7 @@ export interface MemberCallItem {
   lastAttemptResult: string | null; // "No answer, 2d ago"
   frequencyInfo?: string; // For slowing/below-healthy: "50% drop (2.5 → 1.2/wk)"
   planPrice?: string | null; // GymMaster plan price per month, e.g. "$148/mo"
-  onboarding?: { daysUncontacted: number }; // New members tab: replaces days gone + tier
+  onboarding?: { daysUncontacted: number; onboardedOn: string | null }; // New members tab: replaces days gone + tier
   weeklyVisits?: WeeklyVisits; // For expandable detail view
   totalVisits?: number; // Total visits in weeks 0-3
 }

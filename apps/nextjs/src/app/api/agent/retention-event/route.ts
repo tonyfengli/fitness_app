@@ -3,22 +3,28 @@
  *
  * POST /api/agent/retention-event - Log a retention event
  * GET /api/agent/retention-event?memberId=123 - Get events for a member
+ *   (optional filters, combinable: memberId, eventType, context; limit)
  *
  * Used to track retention activities: flagging at-risk, sending outreach,
- * recording returns and churns.
+ * recording returns and churns, onboarding new members and celebrating milestones.
+ * Save Calls fields (outcome, context, milestone, followUpOn) are optional.
  */
 
-import { sql } from "@acme/db";
+import { sql, type SQL } from "@acme/db";
 import { db } from "@acme/db/client";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiAccess } from "~/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
+const EVENT_TYPES = ["flagged_at_risk", "outreach_sent", "returned", "churned", "onboarded", "milestone_celebrated"] as const;
+const OUTCOMES = ["reached", "no_answer", "voicemail", "texted", "emailed"] as const;
+const CONTEXTS = ["at_risk", "low_frequency", "new_members", "milestones"] as const;
+
 interface RetentionEventInput {
   memberId: string;
   memberName: string;
-  eventType: "flagged_at_risk" | "outreach_sent" | "returned" | "churned";
+  eventType: (typeof EVENT_TYPES)[number];
   eventDate?: string; // YYYY-MM-DD, defaults to today
   atRiskTier?: string;
   daysGone?: number;
@@ -27,6 +33,11 @@ interface RetentionEventInput {
   outreachMessage?: string;
   notes?: string;
   createdBy?: string;
+  // Save Calls logging
+  outcome?: (typeof OUTCOMES)[number];
+  context?: (typeof CONTEXTS)[number];
+  milestone?: number; // milestone_celebrated: class count (25, 50, 60, ...)
+  followUpOn?: string; // YYYY-MM-DD: when the member should come back to the list
 }
 
 export async function POST(request: NextRequest) {
@@ -44,12 +55,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validEventTypes = ["flagged_at_risk", "outreach_sent", "returned", "churned"];
-    if (!validEventTypes.includes(body.eventType)) {
+    if (!EVENT_TYPES.includes(body.eventType)) {
       return NextResponse.json(
-        { error: `eventType must be one of: ${validEventTypes.join(", ")}` },
+        { error: `eventType must be one of: ${EVENT_TYPES.join(", ")}` },
         { status: 400 }
       );
+    }
+    if (body.outcome && !OUTCOMES.includes(body.outcome)) {
+      return NextResponse.json({ error: `outcome must be one of: ${OUTCOMES.join(", ")}` }, { status: 400 });
+    }
+    if (body.context && !CONTEXTS.includes(body.context)) {
+      return NextResponse.json({ error: `context must be one of: ${CONTEXTS.join(", ")}` }, { status: 400 });
+    }
+    if (body.eventType === "milestone_celebrated" && !Number.isInteger(body.milestone)) {
+      return NextResponse.json({ error: "milestone (class count) is required for milestone_celebrated" }, { status: 400 });
+    }
+    if (body.followUpOn && !/^\d{4}-\d{2}-\d{2}$/.test(body.followUpOn)) {
+      return NextResponse.json({ error: "followUpOn must be YYYY-MM-DD" }, { status: 400 });
     }
 
     const eventDate = body.eventDate || new Date().toISOString().split("T")[0];
@@ -66,6 +88,10 @@ export async function POST(request: NextRequest) {
         monthly_revenue,
         outreach_method,
         outreach_message,
+        outcome,
+        context,
+        milestone,
+        follow_up_on,
         notes,
         created_by
       ) VALUES (
@@ -78,6 +104,10 @@ export async function POST(request: NextRequest) {
         ${body.monthlyRevenue || null},
         ${body.outreachMethod || null},
         ${body.outreachMessage || null},
+        ${body.outcome || null},
+        ${body.context || null},
+        ${body.milestone ?? null},
+        ${body.followUpOn || null}::date,
         ${body.notes || null},
         ${body.createdBy || "agent"}
       )
@@ -114,77 +144,40 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const memberId = searchParams.get("memberId");
   const eventType = searchParams.get("eventType");
+  const context = searchParams.get("context");
   const limit = parseInt(searchParams.get("limit") || "50");
 
   try {
-    let query;
+    const conditions: SQL[] = [];
+    if (memberId) conditions.push(sql`member_id = ${memberId}`);
+    if (eventType) conditions.push(sql`event_type = ${eventType}::retention_event_type`);
+    if (context) conditions.push(sql`context = ${context}`);
+    const where = conditions.length ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
 
-    if (memberId) {
-      // Get events for a specific member
-      query = sql`
-        SELECT
-          id,
-          member_id,
-          member_name,
-          event_type,
-          event_date,
-          at_risk_tier,
-          days_gone,
-          monthly_revenue,
-          outreach_method,
-          outreach_message,
-          notes,
-          created_by,
-          created_at
-        FROM retention_event
-        WHERE member_id = ${memberId}
-        ORDER BY event_date DESC, created_at DESC
-        LIMIT ${limit}
-      `;
-    } else if (eventType) {
-      // Get events of a specific type
-      query = sql`
-        SELECT
-          id,
-          member_id,
-          member_name,
-          event_type,
-          event_date,
-          at_risk_tier,
-          days_gone,
-          monthly_revenue,
-          outreach_method,
-          outreach_message,
-          notes,
-          created_by,
-          created_at
-        FROM retention_event
-        WHERE event_type = ${eventType}::retention_event_type
-        ORDER BY event_date DESC, created_at DESC
-        LIMIT ${limit}
-      `;
-    } else {
-      // Get recent events
-      query = sql`
-        SELECT
-          id,
-          member_id,
-          member_name,
-          event_type,
-          event_date,
-          at_risk_tier,
-          days_gone,
-          monthly_revenue,
-          outreach_method,
-          outreach_message,
-          notes,
-          created_by,
-          created_at
-        FROM retention_event
-        ORDER BY event_date DESC, created_at DESC
-        LIMIT ${limit}
-      `;
-    }
+    const query = sql`
+      SELECT
+        id,
+        member_id,
+        member_name,
+        event_type,
+        event_date,
+        at_risk_tier,
+        days_gone,
+        monthly_revenue,
+        outreach_method,
+        outreach_message,
+        outcome,
+        context,
+        milestone,
+        follow_up_on,
+        notes,
+        created_by,
+        created_at
+      FROM retention_event
+      ${where}
+      ORDER BY event_date DESC, created_at DESC
+      LIMIT ${limit}
+    `;
 
     const result = await db.execute(query);
 
@@ -199,6 +192,10 @@ export async function GET(request: NextRequest) {
       monthlyRevenue: row.monthly_revenue ? Number(row.monthly_revenue) : null,
       outreachMethod: row.outreach_method,
       outreachMessage: row.outreach_message,
+      outcome: row.outcome,
+      context: row.context,
+      milestone: row.milestone,
+      followUpOn: row.follow_up_on,
       notes: row.notes,
       createdBy: row.created_by,
       createdAt: row.created_at,
@@ -210,7 +207,7 @@ export async function GET(request: NextRequest) {
       events,
       _meta: {
         generatedAt: new Date().toISOString(),
-        filters: { memberId, eventType, limit },
+        filters: { memberId, eventType, context, limit },
       },
     });
   } catch (error) {

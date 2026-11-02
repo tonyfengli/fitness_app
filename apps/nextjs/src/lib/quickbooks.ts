@@ -162,12 +162,16 @@ async function refreshTokens(row: ConnectionRow): Promise<QuickBooksTokens | nul
   const current = rowToTokens(row);
   try {
     const oauthClient = getOAuthClient();
+    // intuit-oauth refuses to refresh unless createdAt + x_refresh_token_expires_in is in the
+    // future, so pass the real remaining lifetimes (0 made every refresh fail an hour after connecting)
+    const secondsLeft = (iso: string) => Math.max(0, Math.floor((Date.parse(iso) - Date.now()) / 1000));
     oauthClient.setToken({
       access_token: current.accessToken,
       refresh_token: current.refreshToken,
       token_type: "Bearer",
-      expires_in: 0,
-      x_refresh_token_expires_in: 0,
+      expires_in: secondsLeft(current.accessTokenExpiresAt),
+      x_refresh_token_expires_in: secondsLeft(current.refreshTokenExpiresAt),
+      createdAt: Date.now(),
       realmId: current.realmId,
     });
     const fresh = tokensFromResponse(current.realmId, (await oauthClient.refresh()).getJson());
@@ -223,6 +227,24 @@ export async function getValidTokens(): Promise<QuickBooksTokens | null> {
   return refreshInFlight;
 }
 
+// QuickBooks throttles parallel requests per company, so reconciliation's month-by-month
+// pulls go through a small queue and retry when throttled
+const QB_MAX_CONCURRENT = 3;
+const QB_RETRIES = 3;
+let qbActive = 0;
+const qbWaiting: (() => void)[] = [];
+
+async function withQuickBooksSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (qbActive >= QB_MAX_CONCURRENT) await new Promise<void>((resolve) => qbWaiting.push(resolve));
+  qbActive++;
+  try {
+    return await run();
+  } finally {
+    qbActive--;
+    qbWaiting.shift()?.();
+  }
+}
+
 /**
  * Fetch Profit and Loss report from QuickBooks
  */
@@ -230,39 +252,53 @@ export async function fetchProfitAndLoss(
   startDate: string,
   endDate: string
 ): Promise<ProfitAndLossReport | null> {
-  const tokens = await getValidTokens();
-  if (!tokens) {
-    console.error("No valid QuickBooks tokens available");
-    return null;
-  }
-
   const baseUrl =
     process.env.QUICKBOOKS_ENVIRONMENT === "sandbox"
       ? "https://sandbox-quickbooks.api.intuit.com"
       : "https://quickbooks.api.intuit.com";
 
-  const url = `${baseUrl}/v3/company/${tokens.realmId}/reports/ProfitAndLoss?start_date=${startDate}&end_date=${endDate}&minorversion=65`;
+  return withQuickBooksSlot(async () => {
+    for (let attempt = 0; attempt <= QB_RETRIES; attempt++) {
+      // Re-read tokens each attempt: another request may have refreshed them meanwhile
+      const tokens = await getValidTokens();
+      if (!tokens) {
+        console.error("No valid QuickBooks tokens available");
+        return null;
+      }
+      const url = `${baseUrl}/v3/company/${tokens.realmId}/reports/ProfitAndLoss?start_date=${startDate}&end_date=${endDate}&minorversion=65`;
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${tokens.accessToken}`,
-      },
-    });
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${tokens.accessToken}`,
+          },
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("QuickBooks API error:", response.status, errorText);
-      return null;
+        if (response.ok) {
+          const data = await response.json();
+          return parseProfitAndLossReport(data, startDate, endDate);
+        }
+
+        const errorText = await response.text();
+        // Throttled (429) or a QuickBooks hiccup (5xx): wait and try again
+        if ((response.status === 429 || response.status >= 500) && attempt < QB_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+          continue;
+        }
+        console.error("QuickBooks API error:", response.status, errorText);
+        return null;
+      } catch (err) {
+        if (attempt < QB_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+          continue;
+        }
+        console.error("Failed to fetch P&L:", err);
+        return null;
+      }
     }
-
-    const data = await response.json();
-    return parseProfitAndLossReport(data, startDate, endDate);
-  } catch (err) {
-    console.error("Failed to fetch P&L:", err);
     return null;
-  }
+  });
 }
 
 /**

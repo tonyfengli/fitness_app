@@ -16,6 +16,7 @@ import {
 
 import { ExpenseBreakdown } from "../types";
 import { MONTH_NAMES } from "../constants";
+import { ReconciliationView } from "./ReconciliationView";
 
 // Revenue reconciliation data structure (from API)
 interface RevenueMonth {
@@ -87,6 +88,8 @@ export function PnLTab() {
   const [endMonth, setEndMonth] = useState(10);
   const [reportYear, setReportYear] = useState(2026);
   const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
+  // Results vs the bookkeeping checks behind them
+  const [view, setView] = useState<"pnl" | "reconciliation">("pnl");
 
   // Default load: the saved P&L from the database (no QuickBooks needed)
   const loadSaved = async (year: number) => {
@@ -280,8 +283,51 @@ export function PnLTab() {
     return value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : formatCurrency(value);
   };
 
+  const yearSelect = (
+    <div className="flex items-center gap-2">
+      <label className="text-sm font-medium text-gray-700">Year:</label>
+      <select
+        value={reportYear}
+        onChange={(e) => setReportYear(Number(e.target.value))}
+        className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+      >
+        <option value={2026}>2026</option>
+        <option value={2025}>2025</option>
+      </select>
+    </div>
+  );
+
   return (
     <div className="mt-8 space-y-6">
+      {/* Sub-view switch: Profit & loss | Reconciliation */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-sm font-medium" role="tablist">
+          {(
+            [
+              ["pnl", "Profit & loss"],
+              ["reconciliation", "Reconciliation"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={view === id}
+              onClick={() => setView(id)}
+              className={`px-3 py-1.5 rounded-md transition-colors ${
+                view === id ? "bg-gray-900 text-white" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {view === "reconciliation" && yearSelect}
+      </div>
+
+      {view === "reconciliation" ? (
+        <ReconciliationView year={reportYear} />
+      ) : (
+      <>
       {/* Date Range Controls */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
@@ -312,17 +358,7 @@ export function PnLTab() {
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Year:</label>
-          <select
-            value={reportYear}
-            onChange={(e) => setReportYear(Number(e.target.value))}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          >
-            <option value={2026}>2026</option>
-            <option value={2025}>2025</option>
-          </select>
-        </div>
+        {yearSelect}
         {quickbooksConnected ? (
           <button
             onClick={refreshFromQuickBooks}
@@ -676,6 +712,8 @@ export function PnLTab() {
             ? 'Click "Refresh from QuickBooks" to pull it in.'
             : "Someone with QuickBooks access needs to connect it and refresh once."}
         </div>
+      )}
+      </>
       )}
     </div>
   );
