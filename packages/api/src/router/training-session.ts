@@ -258,6 +258,24 @@ async function preprocessPhase2Data(
   };
 }
 
+// Newest session per workout "month": same name (ignoring "(Copy)"), split when 45+ days apart.
+// Expects sessions newest first; returns them newest first.
+function collapseCopies<T extends { name: string; createdAt: Date }>(sessions: T[]): T[] {
+  const GAP_MS = 45 * 24 * 60 * 60 * 1000;
+  const key = (name: string) => name.replace(/\s*\(copy\)/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const lastSeen = new Map<string, number>(); // key -> createdAt of the most recent kept/seen session
+  const kept: T[] = [];
+  for (const session of sessions) {
+    const k = key(session.name);
+    const time = new Date(session.createdAt).getTime();
+    const newer = lastSeen.get(k);
+    // Newest first: keep the first of each name, and again whenever the name reappears after a gap
+    if (newer === undefined || newer - time > GAP_MS) kept.push(session);
+    lastSeen.set(k, time);
+  }
+  return kept;
+}
+
 export const trainingSessionRouter = {
   // Get deterministic exercise selections for a session
   getDeterministicSelections: protectedProcedure
@@ -4679,7 +4697,7 @@ Set your goals and preferences for today's session.`;
       sessionDetails: z.object({
         name: z.string().optional(),
         scheduledAt: z.date().optional(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "unassigned"]).optional(),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "metcon", "metcon_advanced", "strength_upper", "strength_lower", "strength_full", "unassigned"]).optional(),
       }).optional()
     }))
     .mutation(async ({ ctx, input }) => {
@@ -4707,7 +4725,7 @@ Set your goals and preferences for today's session.`;
         const updateData: Partial<{
           name: string;
           scheduledAt: Date;
-          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned";
+          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "metcon" | "metcon_advanced" | "strength_upper" | "strength_lower" | "strength_full" | "unassigned";
           updatedAt: Date;
         }> = {
           updatedAt: new Date(),
@@ -5319,7 +5337,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         sessionId: z.string().uuid(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "unassigned"]),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "metcon", "metcon_advanced", "strength_upper", "strength_lower", "strength_full", "unassigned"]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -5373,16 +5391,19 @@ Set your goals and preferences for today's session.`;
     )
     .query(({ input }) => {
 
-      // Return all possible program values except 'unassigned'
+      // Categories offered in the template picker. Classes (MetCon / Strength) are the
+      // current structure; a few coach programs stay available. Retired programs (Coach
+      // Tony, Saturday CG, Monday CG, Coach Frank, Coach Steph) are hidden here only:
+      // their sessions are untouched in the database.
       const programs = [
-        { id: 'h4h_5am', label: 'Coach Will' },
-        { id: 'h4h_5pm', label: 'Coach Tony' },
-        { id: 'saturday_cg', label: 'Saturday CG' },
-        { id: 'monday_cg', label: 'Monday CG' },
-        { id: 'coach_frank', label: 'Coach Frank' },
-        { id: 'coach_steph', label: 'Coach Steph' },
-        { id: 'coach_kyle', label: 'Coach Kyle' },
-        { id: 'strength', label: 'Strength' },
+        { id: 'metcon', label: 'MetCon', group: 'classes' as const },
+        { id: 'metcon_advanced', label: 'MetCon Advanced', group: 'classes' as const },
+        { id: 'strength_upper', label: 'Strength Upper', group: 'classes' as const },
+        { id: 'strength_lower', label: 'Strength Lower', group: 'classes' as const },
+        { id: 'strength_full', label: 'Strength Full', group: 'classes' as const },
+        { id: 'h4h_5am', label: 'Coach Will', group: 'programs' as const },
+        { id: 'coach_kyle', label: 'Coach Kyle', group: 'programs' as const },
+        { id: 'strength', label: 'Strength', group: 'programs' as const },
       ];
 
       return programs;
@@ -5393,7 +5414,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         businessId: z.string().uuid(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength"]),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "strength", "metcon", "metcon_advanced", "strength_upper", "strength_lower", "strength_full"]),
         includeTemplateConfig: z.boolean().optional().default(false),
       }),
     )
@@ -5429,8 +5450,14 @@ Set your goals and preferences for today's session.`;
 
       console.log(`[getSessionsByProgram] Found ${trainingSessions.length} training sessions for program: ${input.program}`);
 
+      // Class categories show one session per "month": copies of the same workout (same
+      // name, ignoring "(Copy)") collapse to the newest, starting a new group after a 45+ day
+      // gap. Coach programs keep listing every session, as before.
+      const CLASS_PROGRAMS = ["metcon", "metcon_advanced", "strength_upper", "strength_lower", "strength_full"];
+      const listed = CLASS_PROGRAMS.includes(input.program) ? collapseCopies(trainingSessions) : trainingSessions;
+
       // Transform to match the expected format from getFavoritesByCategory
-      return trainingSessions.map((session) => ({
+      return listed.map((session) => ({
         id: `program-${session.id}`, // Unique ID for the "favorite" concept
         category: input.program, // Map program to category for compatibility
         trainingSession: session,

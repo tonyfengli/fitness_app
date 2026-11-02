@@ -56,6 +56,11 @@ const PROGRAM_LABELS: Record<string, string> = {
   'coach_steph': 'Coach Steph',
   'coach_kyle': 'Coach Kyle',
   'strength': 'Strength',
+  'metcon': 'MetCon',
+  'metcon_advanced': 'MetCon Advanced',
+  'strength_upper': 'Strength Upper',
+  'strength_lower': 'Strength Lower',
+  'strength_full': 'Strength Full',
   'unassigned': 'Unassigned'
 };
 
@@ -98,7 +103,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [editingSessionName, setEditingSessionName] = useState("");
-  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned">("unassigned");
+  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "metcon" | "metcon_advanced" | "strength_upper" | "strength_lower" | "strength_full" | "unassigned">("unassigned");
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
@@ -1183,20 +1188,21 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                 Program Assignment
               </label>
               <div className="space-y-2">
+                {/* Retired programs (Coach Tony, Saturday CG, Monday CG, Coach Frank, Coach Steph) aren't offered */}
                 {[
+                  { value: "metcon", label: "MetCon" },
+                  { value: "metcon_advanced", label: "MetCon Advanced" },
+                  { value: "strength_upper", label: "Strength Upper" },
+                  { value: "strength_lower", label: "Strength Lower" },
+                  { value: "strength_full", label: "Strength Full" },
                   { value: "h4h_5am", label: "Coach Will" },
-                  { value: "h4h_5pm", label: "Coach Tony" },
-                  { value: "saturday_cg", label: "Saturday CG" },
-                  { value: "monday_cg", label: "Monday CG" },
-                  { value: "coach_frank", label: "Coach Frank" },
-                  { value: "coach_steph", label: "Coach Steph" },
                   { value: "coach_kyle", label: "Coach Kyle" },
                   { value: "strength", label: "Strength" },
                   { value: "unassigned", label: "Unassigned" }
                 ].map((program) => (
                   <button
                     key={program.value}
-                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "unassigned")}
+                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "strength" | "metcon" | "metcon_advanced" | "strength_upper" | "strength_lower" | "strength_full" | "unassigned")}
                     className={`w-full px-4 py-2.5 rounded-lg border transition-all text-left ${
                       program.value === selectedProgram
                         ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"

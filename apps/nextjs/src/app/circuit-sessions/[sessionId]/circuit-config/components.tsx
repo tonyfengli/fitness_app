@@ -230,33 +230,38 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Favorites Section - Higher Hierarchy */}
-          <div>
-            <button
-              onClick={() => onSelectCategory('favorites')}
-              className="w-full p-8 text-left border-2 border-gray-900 dark:border-gray-100 transition-colors group"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                  <span className="text-lg font-medium text-gray-900 dark:text-white">
-                    Favorites
-                  </span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-900 dark:text-gray-100 group-hover:translate-x-0.5 transition-transform" />
+          {/* Classes (replaces Favorites): MetCon / Strength Upper / Strength Lower */}
+          {programs && programs.some((p) => p.group === "classes") && (
+            <div className="space-y-1">
+              <div className="px-8 py-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Classes</p>
               </div>
-            </button>
-          </div>
-          
+              {programs
+                .filter((p) => p.group === "classes")
+                .map((program) => (
+                  <button
+                    key={program.id}
+                    onClick={() => onSelectCategory(program.id)}
+                    className="w-full p-8 text-left border-2 border-gray-900 dark:border-gray-100 transition-colors group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-medium text-gray-900 dark:text-white">{program.label}</span>
+                      <ChevronRight className="w-5 h-5 text-gray-900 dark:text-gray-100 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+
           {/* Regular Programs */}
-          {programs && programs.length > 0 && (
+          {programs && programs.some((p) => p.group === "programs") && (
             <div className="space-y-1">
               <div className="px-8 py-2">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">
                   Programs
                 </p>
               </div>
-              {programs.map((program) => (
+              {programs.filter((p) => p.group === "programs").map((program) => (
                 <button
                   key={program.id}
                   onClick={() => onSelectCategory(program.id)}
@@ -537,7 +542,12 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
     'coach_frank': 'Coach Frank',
     'coach_steph': 'Coach Steph',
     'coach_kyle': 'Coach Kyle',
-    'strength': 'Strength'
+    'strength': 'Strength',
+    'metcon': 'MetCon',
+    'metcon_advanced': 'MetCon Advanced',
+    'strength_upper': 'Strength Upper',
+    'strength_lower': 'Strength Lower',
+    'strength_full': 'Strength Full'
   };
   
   const programLabel = PROGRAM_LABELS[program as keyof typeof PROGRAM_LABELS] || '';
@@ -2266,13 +2276,14 @@ export function SessionSetupStep({
     });
   };
 
+  // Retired programs (Coach Tony, Saturday CG, Monday CG, Coach Frank, Coach Steph) aren't offered
   const programOptions = [
+    { value: 'metcon', label: 'MetCon' },
+    { value: 'metcon_advanced', label: 'MetCon Advanced' },
+    { value: 'strength_upper', label: 'Strength Upper' },
+    { value: 'strength_lower', label: 'Strength Lower' },
+    { value: 'strength_full', label: 'Strength Full' },
     { value: 'h4h_5am', label: 'Coach Will' },
-    { value: 'h4h_5pm', label: 'Coach Tony' },
-    { value: 'saturday_cg', label: 'Saturday CG' },
-    { value: 'monday_cg', label: 'Monday CG' },
-    { value: 'coach_frank', label: 'Coach Frank' },
-    { value: 'coach_steph', label: 'Coach Steph' },
     { value: 'coach_kyle', label: 'Coach Kyle' },
     { value: 'strength', label: 'Strength' },
     { value: 'unassigned', label: 'Unassigned' }
