@@ -31,6 +31,11 @@ const PROGRAM_LABELS: Record<string, string> = {
   'coach_steph': 'Coach Steph',
   'coach_kyle': 'Coach Kyle',
   'strength': 'Strength',
+  'metcon': 'MetCon',
+  'metcon_advanced': 'MetCon Advanced',
+  'strength_upper': 'Strength Upper',
+  'strength_lower': 'Strength Lower',
+  'strength_full': 'Strength Full',
   'unassigned': 'Unassigned'
 };
 
