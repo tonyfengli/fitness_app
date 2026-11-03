@@ -13,17 +13,17 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type Mouse
 interface MonthPoint {
   name: string; // "Oct 2026"
   arm: number;
-  armGroups: number;
+  armClasses: number | null; // null for months cached before ARM (Classes) existed
 }
 
 const MOBILE_RANGE = 6;
 const ALL_COLOR = "#3b82f6";
-const GROUPS_COLOR = "#22c55e";
+const CLASSES_COLOR = "#22c55e";
 
 const shortMonth = (name: string) => name.split(" ")[0] ?? name;
 
-function Change({ now, before }: { now: number; before: number | undefined }) {
-  if (before === undefined) return null;
+function Change({ now, before }: { now: number | null; before: number | null | undefined }) {
+  if (now == null || before == null) return null;
   const diff = now - before;
   return (
     <span className="text-xs text-gray-500 tabular-nums">
@@ -90,12 +90,14 @@ export function MobileArmChart({ data }: { data: MonthPoint[] }) {
         </div>
         <div>
           <div className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: GROUPS_COLOR }} />
-            Groups only
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: CLASSES_COLOR }} />
+            Classes only
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-semibold tabular-nums text-gray-900">${point.armGroups}</span>
-            <Change now={point.armGroups} before={previous?.armGroups} />
+            <span className="text-2xl font-semibold tabular-nums text-gray-900">
+              {point.armClasses != null ? `$${point.armClasses}` : "—"}
+            </span>
+            <Change now={point.armClasses} before={previous?.armClasses} />
           </div>
         </div>
       </div>
@@ -125,11 +127,11 @@ export function MobileArmChart({ data }: { data: MonthPoint[] }) {
             />
             <Line
               type="monotone"
-              dataKey="armGroups"
-              stroke={GROUPS_COLOR}
+              dataKey="armClasses"
+              stroke={CLASSES_COLOR}
               strokeWidth={2.5}
               isAnimationActive={false}
-              dot={dotFor(GROUPS_COLOR)}
+              dot={dotFor(CLASSES_COLOR)}
               activeDot={false}
             />
           </LineChart>

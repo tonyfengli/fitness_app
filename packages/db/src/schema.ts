@@ -654,6 +654,11 @@ export const KpiMonthlySnapshot = pgTable(
       openGymRevenue: number;
       arm: number;
       armGroups: number;
+      // Added 2026-11-03; missing on snapshots saved before then
+      otherRevenue?: number;
+      refunds?: number;
+      classMembers?: number;
+      armClasses?: number;
 
       // Membership totals
       totalMembers: number;

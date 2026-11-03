@@ -14,6 +14,9 @@ interface RevenuePoint {
   openGymRevenue: number;
   classesRevenue: number;
   ptRevenue: number;
+  otherNet: number; // everything else, net of uncategorized refunds (can be negative)
+  otherNetPositive: number; // otherNet when positive, for the stacked bar
+  totalRevenue: number; // GymMaster revenue
 }
 
 const MOBILE_RANGE = 6;
@@ -21,6 +24,7 @@ const SOURCES = [
   { key: "classesRevenue", label: "Classes", color: "#3b82f6" },
   { key: "openGymRevenue", label: "Open Gym", color: "#22c55e" },
   { key: "ptRevenue", label: "PT", color: "#a855f7" },
+  { key: "otherNetPositive", label: "Other", color: "#9ca3af" },
 ] as const;
 
 const shortMonth = (name: string) => name.split(" ")[0] ?? name;
@@ -35,15 +39,15 @@ export function MobileRevenueChart({ data }: { data: RevenuePoint[] }) {
   if (!point) return null;
 
   const isLatest = index === points.length - 1;
-  const total = point.openGymRevenue + point.classesRevenue + point.ptRevenue;
+  const total = point.totalRevenue;
 
   const pick = (state: MouseHandlerDataParam) => {
     const i = Number(state.activeTooltipIndex);
     if (state.activeTooltipIndex != null && !Number.isNaN(i)) setSelected(i);
   };
 
-  // Stack bottom to top as Open Gym, Classes, PT (same as desktop); round only the top segment
-  const stack = [SOURCES[1], SOURCES[0], SOURCES[2]];
+  // Stack bottom to top as Open Gym, Classes, PT, Other (same as desktop); round only the top segment
+  const stack = [SOURCES[1], SOURCES[0], SOURCES[2], SOURCES[3]];
 
   return (
     <div className="px-4 pt-3 pb-4">
@@ -52,7 +56,7 @@ export function MobileRevenueChart({ data }: { data: RevenuePoint[] }) {
           <div className="text-xs font-medium text-gray-500">{isLatest ? `${point.name} · latest` : point.name}</div>
           <div className="mt-0.5 flex items-baseline gap-1.5">
             <span className="text-3xl font-semibold tabular-nums text-gray-900">{dollars(total)}</span>
-            <span className="text-sm text-gray-600">revenue</span>
+            <span className="text-sm text-gray-600">GymMaster revenue</span>
           </div>
         </div>
         <div className="flex rounded-md border border-gray-200 p-0.5 text-xs font-medium">
@@ -71,7 +75,7 @@ export function MobileRevenueChart({ data }: { data: RevenuePoint[] }) {
         </div>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2">
-        {SOURCES.map((s) => (
+        {SOURCES.slice(0, 3).map((s) => (
           <div key={s.key}>
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
@@ -81,6 +85,16 @@ export function MobileRevenueChart({ data }: { data: RevenuePoint[] }) {
           </div>
         ))}
       </div>
+      {Math.round(point.otherNet) !== 0 && (
+        <div className="mt-1 text-xs text-gray-500">
+          Other (net of refunds){" "}
+          <span className={`tabular-nums ${point.otherNet < 0 ? "text-red-600" : "text-gray-900"}`}>
+            {point.otherNet < 0 ? "−" : ""}
+            {dollars(Math.abs(point.otherNet))}
+          </span>{" "}
+          (included in the total)
+        </div>
+      )}
 
       <div className="mt-3 -mx-2">
         <ResponsiveContainer width="100%" height={170}>

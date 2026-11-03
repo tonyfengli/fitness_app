@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
   LabelList,
   ReferenceLine,
+  Cell,
 } from "recharts";
 
 import { formatCurrency } from "../lib/parse-all-payments";
@@ -23,6 +24,7 @@ import { MobileChurnChart } from "./MobileChurnChart";
 import { MobileRevenueChart } from "./MobileRevenueChart";
 import { calculateNewMembers } from "../lib/calculate-new-members";
 import { calculateLostMembers } from "../lib/calculate-lost-members";
+import { CHURN_BAND_COLOR, churnBand, THRESHOLDS } from "../lib/metric-definitions";
 import {
   deriveMonths,
   KPI_START_MONTH,
@@ -189,6 +191,13 @@ export function ReportingTab() {
       openGymRevenue: Math.round(monthData.openGymRevenue * 100) / 100,
       arm: Math.round(monthData.arm * 100) / 100,
       armGroups: Math.round(monthData.armGroups * 100) / 100,
+      // Only when this load computed them (cached months from before Nov 3, 2026 don't have them)
+      ...(monthData.armClasses != null && {
+        otherRevenue: Math.round((monthData.otherRevenue ?? 0) * 100) / 100,
+        refunds: Math.round((monthData.refunds ?? 0) * 100) / 100,
+        classMembers: monthData.classMembers ?? 0,
+        armClasses: Math.round(monthData.armClasses * 100) / 100,
+      }),
       totalMembers: monthData.totalMembers,
       groupMembers: monthData.groupMembers,
       payingMembers: monthData.payingMembers.map(m => ({
@@ -591,10 +600,12 @@ export function ReportingTab() {
         let ptRevenue = 0,
           smallGroupRevenue = 0,
           openGymRevenue = 0,
+          otherRevenue = 0,
+          refunds = 0,
           totalRevenue = 0,
           groupRevenue = 0;
 
-        const memberTotals = new Map<string, { name: string; total: number; group: number }>();
+        const memberTotals = new Map<string, { name: string; total: number; group: number; classes: number }>();
 
         for (const row of paymentRows) {
           const memberId = row["Member ID"] || "";
@@ -605,7 +616,7 @@ export function ReportingTab() {
           totalRevenue += amount;
 
           if (!memberTotals.has(memberId)) {
-            memberTotals.set(memberId, { name: memberName, total: 0, group: 0 });
+            memberTotals.set(memberId, { name: memberName, total: 0, group: 0, classes: 0 });
           }
           const memberData = memberTotals.get(memberId)!;
           memberData.total += amount;
@@ -621,14 +632,22 @@ export function ReportingTab() {
             } else {
               // All other Gym Memberships = Classes (including "unclear" types)
               smallGroupRevenue += amount;
+              memberData.classes += amount;
             }
             memberData.group += amount;
             groupRevenue += amount;
+          } else if (amount >= 0) {
+            // Day passes, fees, retail, ...
+            otherRevenue += amount;
+          } else {
+            // Refunds carry no category
+            refunds += amount;
           }
         }
 
         let totalMembers = 0;
         let groupMembers = 0;
+        let classMembers = 0;
         const payingMembersList: MemberRecord[] = [];
         for (const [memberId, mData] of memberTotals) {
           if (memberId && mData.total > 0) {
@@ -636,6 +655,7 @@ export function ReportingTab() {
             payingMembersList.push({ memberId, name: mData.name || `Member ${memberId}`, amount: mData.total });
           }
           if (memberId && mData.group > 0) groupMembers++;
+          if (memberId && mData.classes > 0) classMembers++;
         }
         payingMembersList.sort((a, b) => b.amount - a.amount);
 
@@ -659,6 +679,7 @@ export function ReportingTab() {
 
         const arm = totalMembers > 0 ? totalRevenue / totalMembers : 0;
         const armGroups = groupMembers > 0 ? groupRevenue / groupMembers : 0;
+        const armClasses = classMembers > 0 ? smallGroupRevenue / classMembers : 0;
 
         const allNewMembers: MemberRecord[] = [
           ...newMembersResult.newGroupMembers.map((m) => ({ memberId: m.memberId, name: m.name, amount: m.amount })),
@@ -704,6 +725,10 @@ export function ReportingTab() {
           groupRevenue,
           groupMembers,
           armGroups,
+          otherRevenue,
+          refunds,
+          classMembers,
+          armClasses,
           newMembers: allNewMembers,
           newMembersCount: newMembersResult.groupMemberCount + newMembersResult.ptClientCount,
           newMembersRevenue: newMembersResult.groupMemberRevenue + newMembersResult.ptClientRevenue,
@@ -892,11 +917,13 @@ export function ReportingTab() {
     classesRevenue: m.smallGroupRevenue, // Classes revenue
     groupRevenue: m.groupRevenue,
     totalRevenue: m.totalRevenue,
-    // Top of the Revenue Breakdown stack: the three sources it draws
-    sourceTotal: m.openGymRevenue + m.smallGroupRevenue + m.ptRevenue,
+    // Everything that isn't PT, Classes or Open Gym (day passes, fees, retail), net of uncategorized refunds
+    otherNet: m.totalRevenue - (m.openGymRevenue + m.smallGroupRevenue + m.ptRevenue),
+    otherNetPositive: Math.max(0, m.totalRevenue - (m.openGymRevenue + m.smallGroupRevenue + m.ptRevenue)),
     arm: m.derivedTotalMembers > 0 ? Math.round(m.totalRevenue / m.derivedTotalMembers) : 0,
-    armGroups: Math.round(m.armGroups),
+    armClasses: m.armClasses != null ? Math.round(m.armClasses) : null,
   }));
+  const needsReloadForArmClasses = derivedData.some((m) => m.armClasses == null);
 
   // Churn per month for the phone chart (the desktop churn section computes the same inline)
   const churnPoints = derivedData.map((m, i) => {
@@ -1314,16 +1341,19 @@ export function ReportingTab() {
                           {/* Month stats, kept small */}
                           <div className="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs text-gray-500">
                             <span>
-                              Revenue <span className="font-medium text-gray-700">{formatCurrency(m.totalRevenue)}</span>
+                              GymMaster revenue <span className="font-medium text-gray-700">{formatCurrency(m.totalRevenue)}</span>
                             </span>
                             <span>
                               ARM <span className="font-medium text-gray-700">${derivedArm}</span>
                             </span>
                             <span>
-                              ARM groups <span className="font-medium text-gray-700">${Math.round(m.armGroups)}</span>
+                              ARM (Classes){" "}
+                              <span className="font-medium text-gray-700">
+                                {m.armClasses != null ? `$${Math.round(m.armClasses)}` : "reload data"}
+                              </span>
                             </span>
                             <span>
-                              Group members <span className="font-medium text-gray-700">{m.groupMembers}</span>
+                              Class members <span className="font-medium text-gray-700">{m.classMembers ?? "—"}</span>
                             </span>
                           </div>
                           <div className="text-xs text-gray-500 mb-3 flex items-center gap-1">
@@ -1637,11 +1667,17 @@ export function ReportingTab() {
                       }}
                       contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
                     />
-                    <Bar dataKey="churn" fill="#f97316" radius={[4, 4, 0, 0]} name="churn">
+                    {/* The founders' bands: under 7% fine, 7-10% watch, 10%+ act */}
+                    <ReferenceLine y={THRESHOLDS.churnWatch} stroke="#f97316" strokeDasharray="4 4" strokeOpacity={0.5} />
+                    <ReferenceLine y={THRESHOLDS.churnAct} stroke="#dc2626" strokeDasharray="4 4" strokeOpacity={0.5} />
+                    <Bar dataKey="churn" radius={[4, 4, 0, 0]} name="churn">
+                      {churnData.map((d, i) => (
+                        <Cell key={i} fill={d.churn === null ? "#e5e7eb" : CHURN_BAND_COLOR[churnBand(d.churn)]} />
+                      ))}
                       <LabelList
                         dataKey="churn"
                         position="top"
-                        fill="#ea580c"
+                        fill="#374151"
                         fontWeight="bold"
                         fontSize={12}
                         formatter={(value: number | null) => (value !== null ? `${value}%` : "")}
@@ -1694,8 +1730,9 @@ export function ReportingTab() {
                       }
                       const prevTotal = derivedData[i - 1]?.derivedTotalMembers || 0;
                       const churnRate = prevTotal > 0 ? (m.filteredLostCount / prevTotal) * 100 : 0;
+                      const band = churnBand(churnRate);
                       const churnColor =
-                        churnRate > 20 ? "text-red-600" : churnRate > 10 ? "text-orange-600" : "text-green-600";
+                        band === "act" ? "text-red-600" : band === "watch" ? "text-orange-600" : "text-green-600";
                       return (
                         <td key={m.month} className={`text-center py-2 font-semibold ${churnColor}`}>
                           {churnRate.toFixed(1)}%
@@ -1761,6 +1798,9 @@ export function ReportingTab() {
                   const row = payload[0]!.payload as (typeof chartData)[number];
                   // Top of the stack first, then the month's total
                   const sources = [
+                    ...(Math.round(row.otherNet) !== 0
+                      ? [{ name: "Other (net of refunds)", value: row.otherNet, color: "#9ca3af" }]
+                      : []),
                     { name: "PT", value: row.ptRevenue, color: "#a855f7" },
                     { name: "Classes", value: row.classesRevenue, color: "#3b82f6" },
                     { name: "Open Gym", value: row.openGymRevenue, color: "#22c55e" },
@@ -1774,12 +1814,14 @@ export function ReportingTab() {
                             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: src.color }} />
                             {src.name}
                           </span>
-                          <span className="tabular-nums text-gray-900">${Math.round(src.value).toLocaleString()}</span>
+                          <span className="tabular-nums text-gray-900">
+                            {src.value < 0 ? "−" : ""}${Math.abs(Math.round(src.value)).toLocaleString()}
+                          </span>
                         </div>
                       ))}
                       <div className="mt-1 flex justify-between gap-6 border-t border-gray-100 pt-1 font-semibold text-gray-900">
-                        <span>Total</span>
-                        <span className="tabular-nums">${Math.round(row.sourceTotal).toLocaleString()}</span>
+                        <span>GymMaster revenue</span>
+                        <span className="tabular-nums">${Math.round(row.totalRevenue).toLocaleString()}</span>
                       </div>
                     </div>
                   );
@@ -1787,10 +1829,11 @@ export function ReportingTab() {
               />
               <Bar dataKey="openGymRevenue" stackId="a" fill="#22c55e" name="openGymRevenue" />
               <Bar dataKey="classesRevenue" stackId="a" fill="#3b82f6" name="classesRevenue" />
-              <Bar dataKey="ptRevenue" stackId="a" fill="#a855f7" name="ptRevenue" radius={[4, 4, 0, 0]}>
-                {/* Month total above each stack */}
+              <Bar dataKey="ptRevenue" stackId="a" fill="#a855f7" name="ptRevenue" />
+              <Bar dataKey="otherNetPositive" stackId="a" fill="#9ca3af" name="otherNetPositive" radius={[4, 4, 0, 0]}>
+                {/* GymMaster revenue (after refunds) above each stack */}
                 <LabelList
-                  dataKey="sourceTotal"
+                  dataKey="totalRevenue"
                   position="top"
                   fill="#374151"
                   fontSize={12}
@@ -1813,6 +1856,11 @@ export function ReportingTab() {
               <span className="w-4 h-4 bg-purple-500 rounded-sm" />
               <span className="text-gray-600">PT</span>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-4 bg-gray-400 rounded-sm" />
+              <span className="text-gray-600">Other (net of refunds)</span>
+            </div>
+            <span className="text-gray-500">Total above each bar = GymMaster revenue</span>
           </div>
         </div>
       </div>
@@ -1841,7 +1889,7 @@ export function ReportingTab() {
               />
               <Tooltip
                 formatter={(value: number, name: string) => {
-                  const labels: Record<string, string> = { arm: "ARM (All)", armGroups: "ARM (Groups)" };
+                  const labels: Record<string, string> = { arm: "ARM (All)", armClasses: "ARM (Classes)" };
                   return [`$${value}`, labels[name] || name];
                 }}
                 contentStyle={{ borderRadius: "8px", border: "1px solid #e0e0e0" }}
@@ -1865,19 +1913,19 @@ export function ReportingTab() {
               </Line>
               <Line
                 type="monotone"
-                dataKey="armGroups"
+                dataKey="armClasses"
                 stroke="#22c55e"
                 strokeWidth={3}
                 dot={{ fill: "#22c55e", strokeWidth: 2, r: 6 }}
-                name="armGroups"
+                name="armClasses"
               >
                 <LabelList
-                  dataKey="armGroups"
+                  dataKey="armClasses"
                   position="bottom"
                   fill="#16a34a"
                   fontWeight="bold"
                   fontSize={14}
-                  formatter={(value: number) => `$${value}`}
+                  formatter={(value: number | null) => (value != null ? `$${value}` : "")}
                 />
               </Line>
             </LineChart>
@@ -1889,8 +1937,11 @@ export function ReportingTab() {
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <span className="w-3 h-3 rounded-full bg-green-500" />
-              ARM (Groups Only)
+              ARM (Classes)
             </div>
+            {needsReloadForArmClasses && (
+              <span className="text-sm text-gray-500">Reload data to see ARM (Classes) for every month</span>
+            )}
           </div>
         </div>
       </div>

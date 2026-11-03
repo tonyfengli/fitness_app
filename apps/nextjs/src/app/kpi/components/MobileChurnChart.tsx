@@ -17,7 +17,7 @@ interface ChurnPoint {
 }
 
 const MOBILE_RANGE = 6;
-const CHURN_COLOR = "#f97316";
+import { CHURN_BAND_COLOR, churnBand, THRESHOLDS } from "../lib/metric-definitions";
 
 const shortMonth = (name: string) => name.split(" ")[0] ?? name;
 
@@ -85,9 +85,11 @@ export function MobileChurnChart({ data, avgChurn }: { data: ChurnPoint[]; avgCh
             />
             <Tooltip content={() => null} cursor={{ fill: "#f3f4f6" }} />
             <ReferenceLine y={avgChurn} stroke="#9ca3af" strokeDasharray="4 4" />
+            <ReferenceLine y={THRESHOLDS.churnWatch} stroke="#f97316" strokeDasharray="2 3" strokeOpacity={0.4} />
+            <ReferenceLine y={THRESHOLDS.churnAct} stroke="#dc2626" strokeDasharray="2 3" strokeOpacity={0.4} />
             <Bar dataKey="churn" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-              {points.map((_, i) => (
-                <Cell key={i} fill={CHURN_COLOR} fillOpacity={i === index ? 1 : 0.45} />
+              {points.map((p, i) => (
+                <Cell key={i} fill={CHURN_BAND_COLOR[churnBand(p.churn ?? 0)]} fillOpacity={i === index ? 1 : 0.45} />
               ))}
             </Bar>
           </BarChart>

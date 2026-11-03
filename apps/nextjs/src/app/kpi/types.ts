@@ -98,6 +98,11 @@ export interface MonthData {
   groupRevenue: number;
   groupMembers: number;
   armGroups: number;
+  // Added 2026-11-03 (walkthrough); optional because cached months from before don't have them
+  otherRevenue?: number; // positive payments that are neither PT nor memberships (day passes, fees, retail)
+  refunds?: number; // negative payments with no category (≤ 0)
+  classMembers?: number; // members who paid for a class plan (memberships that aren't Open Gym)
+  armClasses?: number; // Classes revenue ÷ classMembers
   newMembers: MemberRecord[];
   newMembersCount: number;
   newMembersRevenue: number;
