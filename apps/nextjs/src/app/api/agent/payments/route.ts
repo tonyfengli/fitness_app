@@ -15,6 +15,7 @@ import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { monthlyPlanPrice } from "~/lib/plan-price";
 import type { BillingGap, PaymentFailure, PaymentRow } from "~/app/save-calls/types";
+import { needsAttention } from "~/app/save-calls/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -440,7 +441,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       status: "ok",
-      members,
+      // Same red flag as the dashboard: owes, no card, unrecovered failure, or a short/missed billing
+      members: members.map(m => ({ ...m, needsAttention: needsAttention(m) })),
       _meta: {
         generatedAt: new Date().toISOString(),
         snapshotMonth: roster.month,

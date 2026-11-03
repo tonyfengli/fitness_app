@@ -13,6 +13,7 @@ import { db } from "@acme/db/client";
 import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
+import { monthStatusNote, SNAPSHOT_COUNT_CAVEAT } from "~/lib/agent-kpi";
 
 export const dynamic = "force-dynamic";
 
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
     // 3. Aggregate churned members across all months
     const allChurnedMembers: ChurnedMember[] = [];
     const allExcludedMembers: Array<{ memberId: string; name: string; revenue: number; reason: string; month: number; monthName: string }> = [];
-    const byMonth: Array<{ month: number; monthName: string; count: number; revenue: number }> = [];
+    const byMonth: Array<{ month: number; monthName: string; dataStatus: string; count: number; revenue: number }> = [];
     let hasAnyDraft = false;
 
     for (const snapshot of snapshots) {
@@ -174,6 +175,7 @@ export async function GET(request: NextRequest) {
       byMonth.push({
         month,
         monthName: MONTH_NAMES[month - 1],
+        dataStatus: monthStatusNote(snapshot.status, month, year),
         count: included.length,
         revenue: Math.round(included.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100,
       });
@@ -204,8 +206,8 @@ export async function GET(request: NextRequest) {
         monthsCovered: snapshots.length,
         monthsRequested: endMonth - startMonth + 1,
         note: hasAnyDraft
-          ? "Some months contain draft data that is not yet finalized."
-          : null,
+          ? `Some months are not finalized (see each month's dataStatus). ${SNAPSHOT_COUNT_CAVEAT}`
+          : SNAPSHOT_COUNT_CAVEAT,
       },
     };
 

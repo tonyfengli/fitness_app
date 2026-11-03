@@ -14,6 +14,7 @@ import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
 import type { MilestoneRow } from "~/app/save-calls/types";
+import { milestoneGroups } from "~/app/save-calls/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -142,9 +143,13 @@ export async function GET(request: NextRequest) {
 
     members.sort((a, b) => b.classes - a.classes || a.name.localeCompare(b.name));
 
+    // Same groups as the dashboard's "Just hit" and "Coming up" blocks
+    const { justHit, comingUp } = milestoneGroups(members);
     return NextResponse.json({
       status: "ok",
       members,
+      justHit: justHit.map(m => m.memberId),
+      comingUp: comingUp.map(m => m.memberId),
       _meta: {
         generatedAt: new Date().toISOString(),
         countingSince: COUNT_START_DATE,

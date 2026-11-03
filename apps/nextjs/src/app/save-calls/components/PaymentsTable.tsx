@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { UsersIcon, PhoneIcon, CopyIcon } from "./icons";
 import { BillingGap, PaymentRow } from "../types";
+import { hasNoCard, needsAttention } from "../rules";
 
 interface PaymentsTableProps {
   members: PaymentRow[];
@@ -40,12 +41,8 @@ const formatMoney = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(n).toFixed(
 const monthLabel = (month: string) =>
   new Date(month + "-01T12:00:00").toLocaleDateString("en-US", { month: "short" });
 
-// An expired card alone isn't a problem while the member is paid up; no card at all is
-const hasNoCard = (m: PaymentRow) => m.cardStatus === "none";
-const hasUnrecoveredFailure = (m: PaymentRow) => m.ledger.some(l => l.failed.some(f => !f.recovered));
 // Billed less than usual (or not at all) on a billing date, which GymMaster doesn't count as owed
 const gapTotal = (m: PaymentRow) => m.billingGaps.reduce((t, g) => t + g.expected - g.charged, 0);
-export const needsAttention = (m: PaymentRow) => m.owed > 0 || hasNoCard(m) || hasUnrecoveredFailure(m) || m.billingGaps.length > 0;
 const isDueSoon = (m: PaymentRow) => {
   const due = daysUntil(m.nextCharge);
   return due >= 0 && due <= 7;

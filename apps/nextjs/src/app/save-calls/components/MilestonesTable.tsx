@@ -3,15 +3,13 @@
 import { useState } from "react";
 import { UsersIcon, CopyIcon } from "./icons";
 import { MilestoneRow } from "../types";
+import { JUST_HIT_DAYS, COMING_UP_WITHIN, latestRecentMilestone, milestoneGroups } from "../rules";
 
 interface MilestonesTableProps {
   members: MilestoneRow[];
   onCopyPhone?: (phone: string) => void;
 }
 
-// Who to celebrate now, and who to get ready for
-export const JUST_HIT_DAYS = 14;
-export const COMING_UP_WITHIN = 3;
 
 function ChevronIcon({ className, expanded }: { className?: string; expanded?: boolean }) {
   return (
@@ -34,21 +32,12 @@ function formatDate(s: string) {
   return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
 }
 
-function daysAgo(s: string) {
-  return Math.round((Date.now() - new Date(s + "T12:00:00").getTime()) / 864e5);
-}
-
 const ordinal = (n: number) => {
   const tens = n % 100;
   if (tens >= 11 && tens <= 13) return `${n}th`;
   return `${n}${({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] || "th"}`;
 };
 
-// Most recent milestone, if it was reached within the celebration window
-export function latestRecentMilestone(m: MilestoneRow) {
-  const last = m.reached[m.reached.length - 1];
-  return last && daysAgo(last.date) <= JUST_HIT_DAYS ? last : null;
-}
 
 function MilestoneLadder({ member }: { member: MilestoneRow }) {
   return (
@@ -201,16 +190,6 @@ function MilestoneBlock({
 }
 
 // Just hit: newest milestone first. Coming up: closest to their next milestone first.
-export function milestoneGroups(members: MilestoneRow[]) {
-  const justHit = members
-    .filter(m => latestRecentMilestone(m))
-    .sort((a, b) => latestRecentMilestone(b)!.date.localeCompare(latestRecentMilestone(a)!.date) || a.name.localeCompare(b.name));
-  const comingUp = members
-    .filter(m => !latestRecentMilestone(m) && m.classes > 0 && m.toGo <= COMING_UP_WITHIN)
-    .sort((a, b) => a.toGo - b.toGo || b.classes - a.classes);
-  return { justHit, comingUp };
-}
-
 export function MilestonesTable({ members, onCopyPhone }: MilestonesTableProps) {
   const { justHit, comingUp } = milestoneGroups(members);
   const everyone = [...members].sort((a, b) => b.classes - a.classes || a.name.localeCompare(b.name));
