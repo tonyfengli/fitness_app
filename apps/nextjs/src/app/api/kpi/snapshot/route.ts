@@ -126,6 +126,14 @@ export async function POST(request: NextRequest) {
 
     let snapshotId: string;
 
+    // A finalized month is locked: reopen it first. Its saved data is what the founders approved.
+    if (existing[0]?.status === "finalized") {
+      return NextResponse.json(
+        { error: "This month is finalized. Reopen it for editing before saving changes." },
+        { status: 409 }
+      );
+    }
+
     if (existing.length) {
       // Update existing
       await db
@@ -217,6 +225,29 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const APPROVED_FIELDS = ["newMembers", "lostMembers", "totalMembers", "totalRevenue", "arm"] as const;
+
+// The Overview's numbers for the month being finalized: finite numbers, churn may be null (first month)
+function isApproved(v: unknown): v is Record<(typeof APPROVED_FIELDS)[number], number> & { churnRate: number | null } {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    APPROVED_FIELDS.every((f) => typeof o[f] === "number" && Number.isFinite(o[f])) &&
+    (o.churnRate === null || (typeof o.churnRate === "number" && Number.isFinite(o.churnRate)))
+  );
+}
+
+function pickApproved(v: Record<(typeof APPROVED_FIELDS)[number], number> & { churnRate: number | null }) {
+  return {
+    newMembers: v.newMembers,
+    lostMembers: v.lostMembers,
+    totalMembers: v.totalMembers,
+    totalRevenue: v.totalRevenue,
+    arm: v.arm,
+    churnRate: v.churnRate,
+  };
+}
+
 // PATCH - Update snapshot status (finalize/reopen)
 export async function PATCH(request: NextRequest) {
   const authError = await validateFounderAccess(request);
@@ -226,8 +257,8 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { month, year, status } = body;
-    console.log("[PATCH] Parsed body:", { month, year, status });
+    const { month, year, status, approved } = body;
+    console.log("[PATCH] Parsed body:", { month, year, status, approved: !!approved });
 
     if (!month || !year || !status) {
       return NextResponse.json(
@@ -269,10 +300,19 @@ export async function PATCH(request: NextRequest) {
     if (status === "finalized") {
       console.log("[PATCH] Executing finalize update with raw SQL...");
       try {
+        // Keep the numbers the founder saw when finalizing, for the parity check
+        const approvedJson = isApproved(approved)
+          ? JSON.stringify({ ...pickApproved(approved), approvedAt: new Date().toISOString() })
+          : null;
         await db.execute(
-          sql`UPDATE kpi_monthly_snapshot
-              SET status = 'finalized', finalized_at = NOW(), updated_at = NOW()
-              WHERE id = ${existing[0].id}`
+          approvedJson
+            ? sql`UPDATE kpi_monthly_snapshot
+                SET status = 'finalized', finalized_at = NOW(), updated_at = NOW(),
+                    data = data || jsonb_build_object('approved', ${approvedJson}::jsonb)
+                WHERE id = ${existing[0].id}`
+            : sql`UPDATE kpi_monthly_snapshot
+                SET status = 'finalized', finalized_at = NOW(), updated_at = NOW()
+                WHERE id = ${existing[0].id}`
         );
         console.log("[PATCH] Finalize update completed");
       } catch (updateError) {
@@ -284,7 +324,7 @@ export async function PATCH(request: NextRequest) {
       try {
         await db.execute(
           sql`UPDATE kpi_monthly_snapshot
-              SET status = 'draft', finalized_at = NULL, updated_at = NOW()
+              SET status = 'draft', finalized_at = NULL, updated_at = NOW(), data = data - 'approved'
               WHERE id = ${existing[0].id}`
         );
         console.log("[PATCH] Draft update completed");

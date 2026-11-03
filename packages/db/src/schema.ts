@@ -672,6 +672,18 @@ export const KpiMonthlySnapshot = pgTable(
       lostMembersRevenue: number;
       onHoldCount: number;
       onHoldRevenue: number;
+
+      // What the KPI Overview showed when a founder clicked "Mark as Final" (set by PATCH,
+      // cleared on reopen). The parity check holds the agent routes to these numbers.
+      approved?: {
+        newMembers: number;
+        lostMembers: number;
+        totalMembers: number;
+        totalRevenue: number;
+        arm: number;
+        churnRate: number | null;
+        approvedAt: string;
+      };
     }>(),
 
     createdAt: t.timestamp().defaultNow().notNull(),

@@ -29,6 +29,7 @@ export interface DerivedKpiMonth {
   finalizedAt: Date | null;
   derived: DerivedMonthData;
   prevDerivedTotal: number | null; // the month before's running total, null for the first month
+  approved: (typeof KpiMonthlySnapshot.$inferSelect)["data"]["approved"]; // what "Mark as Final" saved
 }
 
 export interface DerivedKpi {
@@ -134,6 +135,7 @@ export async function getDerivedKpi(): Promise<DerivedKpi> {
       finalizedAt: s.finalizedAt,
       derived: derived[i]!,
       prevDerivedTotal: i > 0 ? derived[i - 1]!.derivedTotalMembers : null,
+      approved: s.data.approved,
     })),
   };
 }

@@ -23,7 +23,14 @@ import { MobileChurnChart } from "./MobileChurnChart";
 import { MobileRevenueChart } from "./MobileRevenueChart";
 import { calculateNewMembers } from "../lib/calculate-new-members";
 import { calculateLostMembers } from "../lib/calculate-lost-members";
-import { deriveMonths, type BillingLink, type DerivedMonthData, type ManualLost } from "../lib/derive-months";
+import {
+  deriveMonths,
+  KPI_START_MONTH,
+  KPI_START_YEAR,
+  type BillingLink,
+  type DerivedMonthData,
+  type ManualLost,
+} from "../lib/derive-months";
 import {
   MonthData,
   MemberRecord,
@@ -286,6 +293,28 @@ export function ReportingTab() {
     setSaveMessage(newStatus === "finalized" ? "Finalizing month..." : "Reopening month...");
 
     try {
+      // Finalizing: save the month as shown (data + exclusions) first, then lock it with the
+      // numbers on screen, which the KPI parity check holds the Slack bot to
+      let approved: Record<string, number | null> | undefined;
+      if (newStatus === "finalized") {
+        const monthData = monthsData.find((x) => x.month === month && x.year === year);
+        if (monthData && !(await saveToSupabase(monthData))) throw new Error("Failed to save month");
+        const i = derivedData.findIndex((x) => x.month === month && x.year === year);
+        const d = derivedData[i];
+        // The running total only matches the dashboard's when the range starts at January 2026
+        if (d && derivedData[0]?.monthKey === `${KPI_START_YEAR}-${String(KPI_START_MONTH).padStart(2, "0")}`) {
+          const prevTotal = derivedData[i - 1]?.derivedTotalMembers;
+          approved = {
+            newMembers: d.filteredNewCount,
+            lostMembers: d.filteredLostCount,
+            totalMembers: d.derivedTotalMembers,
+            totalRevenue: Math.round(d.totalRevenue * 100) / 100,
+            arm: d.derivedTotalMembers > 0 ? Math.round((d.totalRevenue / d.derivedTotalMembers) * 100) / 100 : 0,
+            churnRate: prevTotal ? Math.round((d.filteredLostCount / prevTotal) * 10000) / 100 : null,
+          };
+        }
+      }
+
       const response = await fetch("/api/kpi/snapshot", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -293,6 +322,7 @@ export function ReportingTab() {
           month: monthNum,
           year,
           status: newStatus,
+          approved,
         }),
       });
 
@@ -378,6 +408,7 @@ export function ReportingTab() {
   }, []);
 
   const setMemberLost = async (member: { memberId: string; name: string }, m: MonthData, lost: boolean) => {
+    if (blockIfFinalized(m.monthKey)) return;
     const month = MONTH_NAMES.indexOf(m.month) + 1;
     if (lost && !confirm(`Mark ${member.name} as lost in ${m.month}? They leave Total Members from ${m.month} on.`)) return;
     setIsSaving(true);
@@ -447,7 +478,16 @@ export function ReportingTab() {
   }, [monthsData.length]);
 
   // Toggle a member's exclusion from new or lost
+  // A finalized month is locked (its saved numbers are what was approved); reopen to change it
+  const blockIfFinalized = (monthKey: string) => {
+    if (snapshotStatuses.get(monthKey)?.status !== "finalized") return false;
+    setSaveMessage("This month is finalized. Reopen it for editing to change it.");
+    setTimeout(() => setSaveMessage(null), 3000);
+    return true;
+  };
+
   const toggleExclusion = (monthKey: string, memberId: string, type: "new" | "lost") => {
+    if (blockIfFinalized(monthKey)) return;
     const current = overrides[monthKey] || { excludeFromNew: [], excludeFromLost: [] };
     const field = type === "new" ? "excludeFromNew" : "excludeFromLost";
     const currentList = current[field];
