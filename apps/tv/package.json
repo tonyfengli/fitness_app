@@ -13,6 +13,7 @@
     "dev": "APP_ENV=development pnpm run generate-env && react-native start",
     "dev:prod": "APP_ENV=production pnpm run generate-env && react-native start",
     "dev:local": "APP_ENV=local pnpm run generate-env && react-native start",
+    "dev:tv": "APP_ENV=tv pnpm run generate-env && react-native start",
     "clean": "rm -rf node_modules .turbo build android/app/build ios/build",
     "clean:android": "cd android && ./gradlew clean",
     "typecheck": "tsc --noEmit",
