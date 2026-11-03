@@ -23,8 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./tooling/github/setup
+      # Own setup instead of ./tooling/github/setup, which needs a .nvmrc the repo no longer has
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
       - name: Check agent numbers against the dashboard
         working-directory: apps/nextjs
