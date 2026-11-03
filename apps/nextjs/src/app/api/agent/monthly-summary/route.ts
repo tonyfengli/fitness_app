@@ -4,18 +4,16 @@
  * Single month: GET /api/agent/monthly-summary?month=10&year=2026
  * Range:        GET /api/agent/monthly-summary?startMonth=1&endMonth=9&year=2026
  *
- * Returns the KPI summary for the specified month(s) from KPI snapshots in Supabase
- * (finalized or draft; each month says which in dataStatus). Lost and new counts
- * apply the founders' exclude_from_lost / exclude_from_new overrides, matching
- * churned-members.
+ * Returns the KPI Overview's numbers for the specified month(s): the same running
+ * member total, new/lost counts (after exclusions, manual losses and billing links),
+ * ARM and churn the dashboard shows, computed by getDerivedKpi from saved snapshots.
+ * Each month says how final it is in dataStatus.
  */
 
-import { eq, and, gte, lte } from "@acme/db";
-import { db } from "@acme/db/client";
-import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { monthStatusNote, SNAPSHOT_COUNT_CAVEAT } from "~/lib/agent-kpi";
+import { getDerivedKpi } from "~/lib/kpi-derived";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +34,8 @@ interface MonthlyData {
     lostMembers: number;
     onHold: number;
     netChange: number;
-    excludedFromLost: number;
-    excludedFromNew: number;
+    payingMembers: number;
+    manualLosses: number;
   };
   revenue: {
     total: number;
@@ -50,7 +48,7 @@ interface MonthlyData {
   metrics: {
     arm: number;
     armGroups: number;
-    churnRate: number;
+    churnRate: number | null;
   };
 }
 
@@ -101,20 +99,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get snapshots for the requested month range
-    const snapshots = await db
-      .select()
-      .from(KpiMonthlySnapshot)
-      .where(
-        and(
-          gte(KpiMonthlySnapshot.month, startMonth),
-          lte(KpiMonthlySnapshot.month, endMonth),
-          eq(KpiMonthlySnapshot.year, year)
-        )
-      )
-      .orderBy(KpiMonthlySnapshot.month);
+    const { months, gaps } = await getDerivedKpi();
+    const selected = months.filter((m) => m.year === year && m.month >= startMonth && m.month <= endMonth);
 
-    if (!snapshots.length) {
+    if (!selected.length) {
       const monthRange = isRangeQuery
         ? `${MONTH_NAMES[startMonth - 1]} - ${MONTH_NAMES[endMonth - 1]} ${year}`
         : `${MONTH_NAMES[startMonth - 1]} ${year}`;
@@ -130,120 +118,81 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Founder exclusions for the range, keyed "type:month"
-    const overrides = await db
-      .select()
-      .from(KpiMemberOverride)
-      .where(
-        and(
-          gte(KpiMemberOverride.month, startMonth),
-          lte(KpiMemberOverride.month, endMonth),
-          eq(KpiMemberOverride.year, year)
-        )
-      );
-    const excludedIds = (type: string, month: number) =>
-      new Set(overrides.filter((o) => o.overrideType === type && o.month === month).map((o) => o.memberId));
-    const sumRevenue = (members: Array<{ revenue: number }>) =>
-      Math.round(members.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const hasAnyDraft = selected.some((m) => m.status === "draft");
+    const monthlyData: MonthlyData[] = selected.map(({ month, status, derived: d, prevDerivedTotal }) => ({
+      month,
+      monthName: MONTH_NAMES[month - 1] ?? String(month),
+      status,
+      dataStatus: monthStatusNote(status, month, year),
+      membership: {
+        totalMembers: d.derivedTotalMembers,
+        groupMembers: d.groupMembers,
+        newMembers: d.filteredNewCount,
+        lostMembers: d.filteredLostCount,
+        onHold: d.filteredLostMembers.filter((m) => m.type === "hold").length,
+        netChange: d.filteredNewCount - d.filteredLostCount,
+        payingMembers: d.totalMembers,
+        manualLosses: d.manualLost.length,
+      },
+      revenue: {
+        total: d.totalRevenue,
+        pt: d.ptRevenue,
+        smallGroup: d.smallGroupRevenue,
+        openGym: d.openGymRevenue,
+        newMemberRevenue: round2(d.filteredNewRevenue),
+        lostMemberRevenue: round2(d.filteredLostRevenue),
+      },
+      metrics: {
+        arm: d.derivedTotalMembers > 0 ? round2(d.totalRevenue / d.derivedTotalMembers) : 0,
+        armGroups: d.armGroups,
+        // Same as the dashboard: lost ÷ the previous month's total; none for the first month
+        churnRate: prevDerivedTotal ? round2((d.filteredLostCount / prevDerivedTotal) * 100) : null,
+      },
+    }));
 
-    // Build monthly data array
-    const monthlyData: MonthlyData[] = [];
-    let hasAnyDraft = false;
-
-    for (const snapshot of snapshots) {
-      const month = snapshot.month;
-      const kpiData = snapshot.data;
-
-      if (snapshot.status === "draft") {
-        hasAnyDraft = true;
-      }
-
-      // Apply exclusions to the saved member lists (fall back to saved counts for old snapshots without lists)
-      const lostExcluded = excludedIds("exclude_from_lost", month);
-      const newExcluded = excludedIds("exclude_from_new", month);
-      const lostList = kpiData.lostMembers?.filter((m) => !lostExcluded.has(m.memberId));
-      const newList = kpiData.newMembers?.filter((m) => !newExcluded.has(m.memberId));
-      const lostCount = lostList ? lostList.length : kpiData.lostMembersCount;
-      const lostRevenue = lostList ? sumRevenue(lostList) : kpiData.lostMembersRevenue;
-      const newCount = newList ? newList.length : kpiData.newMembersCount;
-      const newRevenue = newList ? sumRevenue(newList) : kpiData.newMembersRevenue;
-
-      // Calculate churn rate
-      const previousMonthTotal = kpiData.totalMembers + lostCount - newCount;
-      const churnRate = previousMonthTotal > 0
-        ? Math.round((lostCount / previousMonthTotal) * 10000) / 100
-        : 0;
-
-      monthlyData.push({
-        month,
-        monthName: MONTH_NAMES[month - 1],
-        status: snapshot.status,
-        dataStatus: monthStatusNote(snapshot.status, month, year),
-        membership: {
-          totalMembers: kpiData.totalMembers,
-          groupMembers: kpiData.groupMembers,
-          newMembers: newCount,
-          lostMembers: lostCount,
-          onHold: kpiData.onHoldCount,
-          netChange: newCount - lostCount,
-          excludedFromLost: lostList ? (kpiData.lostMembers?.length ?? 0) - lostList.length : 0,
-          excludedFromNew: newList ? (kpiData.newMembers?.length ?? 0) - newList.length : 0,
-        },
-        revenue: {
-          total: kpiData.totalRevenue,
-          pt: kpiData.ptRevenue,
-          smallGroup: kpiData.smallGroupRevenue,
-          openGym: kpiData.openGymRevenue,
-          newMemberRevenue: newRevenue,
-          lostMemberRevenue: lostRevenue,
-        },
-        metrics: {
-          arm: kpiData.arm,
-          armGroups: kpiData.armGroups,
-          churnRate,
-        },
-      });
-    }
+    const note = gaps.length
+      ? `${SNAPSHOT_COUNT_CAVEAT} Missing months (${gaps.join(", ")}) break the running total.`
+      : SNAPSHOT_COUNT_CAVEAT;
 
     // For single month queries, return flat response (backwards compatible)
-    if (!isRangeQuery && monthlyData.length === 1) {
-      const data = monthlyData[0];
+    const single = monthlyData[0];
+    if (!isRangeQuery && single && monthlyData.length === 1) {
       return NextResponse.json({
-        status: data.status,
-        dataStatus: data.dataStatus,
-        month: data.month,
+        status: single.status,
+        dataStatus: single.dataStatus,
+        month: single.month,
         year,
-        monthName: data.monthName,
-        membership: data.membership,
-        revenue: data.revenue,
-        metrics: data.metrics,
+        monthName: single.monthName,
+        membership: single.membership,
+        revenue: single.revenue,
+        metrics: single.metrics,
         _meta: {
           generatedAt: new Date().toISOString(),
           dataSource: "supabase",
-          snapshotStatus: data.status,
-          finalizedAt: snapshots[0].finalizedAt?.toISOString() || null,
-          note: SNAPSHOT_COUNT_CAVEAT,
+          snapshotStatus: single.status,
+          finalizedAt: selected[0]?.finalizedAt?.toISOString() ?? null,
+          note,
         },
       });
     }
 
     // For range queries, return aggregated response with trends
+    const churnRates = monthlyData.map((m) => m.metrics.churnRate).filter((r): r is number => r !== null);
+    const first = monthlyData[0]!;
+    const last = monthlyData[monthlyData.length - 1]!;
     const totals = {
-      totalRevenue: monthlyData.reduce((sum, m) => sum + m.revenue.total, 0),
+      totalRevenue: round2(monthlyData.reduce((sum, m) => sum + m.revenue.total, 0)),
       totalNewMembers: monthlyData.reduce((sum, m) => sum + m.membership.newMembers, 0),
       totalLostMembers: monthlyData.reduce((sum, m) => sum + m.membership.lostMembers, 0),
-      avgChurnRate: Math.round(
-        (monthlyData.reduce((sum, m) => sum + m.metrics.churnRate, 0) / monthlyData.length) * 100
-      ) / 100,
-      avgArm: Math.round(
-        (monthlyData.reduce((sum, m) => sum + m.metrics.arm, 0) / monthlyData.length) * 100
-      ) / 100,
+      avgChurnRate: churnRates.length ? round2(churnRates.reduce((sum, r) => sum + r, 0) / churnRates.length) : null,
+      avgArm: round2(monthlyData.reduce((sum, m) => sum + m.metrics.arm, 0) / monthlyData.length),
     };
 
     // Calculate month-over-month trends
     const trends = monthlyData.length >= 2 ? {
-      membershipChange: monthlyData[monthlyData.length - 1].membership.totalMembers - monthlyData[0].membership.totalMembers,
-      revenueChange: Math.round((monthlyData[monthlyData.length - 1].revenue.total - monthlyData[0].revenue.total) * 100) / 100,
+      membershipChange: last.membership.totalMembers - first.membership.totalMembers,
+      revenueChange: round2(last.revenue.total - first.revenue.total),
       churnTrend: monthlyData.map(m => ({ month: m.monthName, churnRate: m.metrics.churnRate })),
     } : null;
 
@@ -263,11 +212,9 @@ export async function GET(request: NextRequest) {
       _meta: {
         generatedAt: new Date().toISOString(),
         dataSource: "supabase",
-        monthsCovered: snapshots.length,
+        monthsCovered: monthlyData.length,
         monthsRequested: endMonth - startMonth + 1,
-        note: hasAnyDraft
-          ? `Some months are not finalized (see each month's dataStatus). ${SNAPSHOT_COUNT_CAVEAT}`
-          : SNAPSHOT_COUNT_CAVEAT,
+        note: hasAnyDraft ? `Some months are not finalized (see each month's dataStatus). ${note}` : note,
       },
     });
   } catch (error) {

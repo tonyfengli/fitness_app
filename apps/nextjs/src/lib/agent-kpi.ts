@@ -5,9 +5,9 @@
 
 const TIME_ZONE = "America/Los_Angeles";
 
-/** How lost/new counts are derived until the metric definitions are settled with the dashboard. */
+/** Where the membership numbers come from, so the bot can say so. */
 export const SNAPSHOT_COUNT_CAVEAT =
-  "Lost and new counts exclude members the founders marked as excluded. Manual losses and linked accounts are not applied yet, so the dashboard Overview can differ.";
+  "Same calculation as the KPI dashboard Overview (running total since January 2026, after exclusions, manual losses and linked accounts), from the month's saved snapshot.";
 
 /** One line on how final a month's snapshot is: finalized, the open month, or a closed month not yet reviewed. */
 export function monthStatusNote(status: string, month: number, year: number, now = new Date()): string {

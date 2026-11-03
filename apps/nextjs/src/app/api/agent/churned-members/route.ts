@@ -4,16 +4,15 @@
  * Single month: GET /api/agent/churned-members?month=10&year=2026
  * Range:        GET /api/agent/churned-members?startMonth=1&endMonth=9&year=2026
  *
- * Returns members who left (cancelled or went on hold) in the specified month(s).
- * Reads from finalized KPI snapshots in Supabase.
+ * Returns members who left (cancelled, went on hold, marked lost by hand, or lost with
+ * the member paying for them) in the specified month(s): the same lost list the KPI
+ * dashboard Overview shows, from getDerivedKpi. Excluded members are listed separately.
  */
 
-import { eq, and, gte, lte } from "@acme/db";
-import { db } from "@acme/db/client";
-import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { monthStatusNote, SNAPSHOT_COUNT_CAVEAT } from "~/lib/agent-kpi";
+import { getDerivedKpi } from "~/lib/kpi-derived";
 
 export const dynamic = "force-dynamic";
 
@@ -78,20 +77,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Get snapshots for the requested month range
-    const snapshots = await db
-      .select()
-      .from(KpiMonthlySnapshot)
-      .where(
-        and(
-          gte(KpiMonthlySnapshot.month, startMonth),
-          lte(KpiMonthlySnapshot.month, endMonth),
-          eq(KpiMonthlySnapshot.year, year)
-        )
-      )
-      .orderBy(KpiMonthlySnapshot.month);
+    const { months, gaps, overrides } = await getDerivedKpi();
+    const selected = months.filter((m) => m.year === year && m.month >= startMonth && m.month <= endMonth);
 
-    if (!snapshots.length) {
+    if (!selected.length) {
       const monthRange = isRangeQuery
         ? `${MONTH_NAMES[startMonth - 1]} - ${MONTH_NAMES[endMonth - 1]} ${year}`
         : `${MONTH_NAMES[startMonth - 1]} ${year}`;
@@ -108,78 +97,51 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 2. Get all exclusions for the month range
-    const overrides = await db
-      .select()
-      .from(KpiMemberOverride)
-      .where(
-        and(
-          gte(KpiMemberOverride.month, startMonth),
-          lte(KpiMemberOverride.month, endMonth),
-          eq(KpiMemberOverride.year, year),
-          eq(KpiMemberOverride.overrideType, "exclude_from_lost")
-        )
-      );
-
-    // Build a map of month -> excluded member IDs
-    const exclusionsByMonth = new Map<number, Set<string>>();
-    for (const override of overrides) {
-      if (!exclusionsByMonth.has(override.month)) {
-        exclusionsByMonth.set(override.month, new Set());
-      }
-      exclusionsByMonth.get(override.month)!.add(override.memberId);
-    }
-
-    // 3. Aggregate churned members across all months
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const allChurnedMembers: ChurnedMember[] = [];
     const allExcludedMembers: Array<{ memberId: string; name: string; revenue: number; reason: string; month: number; monthName: string }> = [];
     const byMonth: Array<{ month: number; monthName: string; dataStatus: string; count: number; revenue: number }> = [];
-    let hasAnyDraft = false;
 
-    for (const snapshot of snapshots) {
-      const month = snapshot.month;
-      const kpiData = snapshot.data;
-      const excludedIds = exclusionsByMonth.get(month) || new Set();
+    for (const { month, status, derived: d } of selected) {
+      const monthName = MONTH_NAMES[month - 1] ?? String(month);
+      const idx = months.findIndex((m) => m.year === year && m.month === month);
+      // A manual loss takes what they paid the month before, as on the dashboard
+      const prevPaid = new Map((months[idx - 1]?.derived.payingMembers ?? []).map((p) => [p.memberId, p.amount]));
 
-      if (snapshot.status === "draft") {
-        hasAnyDraft = true;
-      }
+      const lost: ChurnedMember[] = [
+        ...d.filteredLostMembers.map((m) => ({ memberId: m.memberId, name: m.name, revenue: m.amount, type: m.type === "hold" ? "On Hold" : "Cancelled" })),
+        ...d.manualLost.map((m) => ({ memberId: m.memberId, name: m.name, revenue: prevPaid.get(m.memberId) ?? 0, type: "Marked lost by hand" })),
+        ...d.linkedLost.map((l) => ({ memberId: l.memberId, name: l.memberName, revenue: 0, type: `Lost with ${l.paidByName}, who paid for them` })),
+      ];
+      allChurnedMembers.push(...lost.map((m) => ({ ...m, month, monthName })));
 
-      const lostMembers = kpiData.lostMembers || [];
-      const included = lostMembers.filter(m => !excludedIds.has(m.memberId));
-      const excluded = lostMembers.filter(m => excludedIds.has(m.memberId));
-
-      // Add to aggregated list with month info
-      for (const m of included) {
-        allChurnedMembers.push({
-          memberId: m.memberId,
-          name: m.name,
-          revenue: m.revenue,
-          type: m.type === "hold" ? "On Hold" : "Cancelled",
-          month,
-          monthName: MONTH_NAMES[month - 1],
-        });
-      }
-
-      for (const m of excluded) {
+      const excludedIds = new Set(
+        overrides.filter((o) => o.year === year && o.month === month && o.overrideType === "exclude_from_lost").map((o) => o.memberId)
+      );
+      for (const m of d.lostMembers.filter((x) => excludedIds.has(x.memberId))) {
         allExcludedMembers.push({
           memberId: m.memberId,
           name: m.name,
-          revenue: m.revenue,
-          reason: overrides.find(o => o.memberId === m.memberId && o.month === month)?.reason || "Data correction",
+          revenue: m.amount,
+          reason: overrides.find(o => o.memberId === m.memberId && o.year === year && o.month === month && o.overrideType === "exclude_from_lost")?.reason || "Data correction",
           month,
-          monthName: MONTH_NAMES[month - 1],
+          monthName,
         });
       }
 
       byMonth.push({
         month,
-        monthName: MONTH_NAMES[month - 1],
-        dataStatus: monthStatusNote(snapshot.status, month, year),
-        count: included.length,
-        revenue: Math.round(included.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100,
+        monthName,
+        dataStatus: monthStatusNote(status, month, year),
+        count: d.filteredLostCount,
+        revenue: round2(d.filteredLostRevenue),
       });
     }
+
+    const hasAnyDraft = selected.some((m) => m.status === "draft");
+    const note = gaps.length
+      ? `${SNAPSHOT_COUNT_CAVEAT} Missing months (${gaps.join(", ")}) break the running total.`
+      : SNAPSHOT_COUNT_CAVEAT;
 
     // 4. Build response
     const response = {
@@ -189,12 +151,14 @@ export async function GET(request: NextRequest) {
       endMonth,
       isRangeQuery,
       summary: {
-        totalLost: allChurnedMembers.length,
-        lostRevenue: Math.round(allChurnedMembers.reduce((sum, m) => sum + m.revenue, 0) * 100) / 100,
+        totalLost: byMonth.reduce((sum, m) => sum + m.count, 0),
+        lostRevenue: round2(byMonth.reduce((sum, m) => sum + m.revenue, 0)),
         excluded: allExcludedMembers.length,
         byType: {
           cancellations: allChurnedMembers.filter(m => m.type === "Cancelled").length,
           onHold: allChurnedMembers.filter(m => m.type === "On Hold").length,
+          markedLostByHand: allChurnedMembers.filter(m => m.type === "Marked lost by hand").length,
+          lostWithPayer: allChurnedMembers.filter(m => m.type.startsWith("Lost with")).length,
         },
         byMonth,
       },
@@ -203,11 +167,9 @@ export async function GET(request: NextRequest) {
       _meta: {
         generatedAt: new Date().toISOString(),
         dataSource: "supabase",
-        monthsCovered: snapshots.length,
+        monthsCovered: selected.length,
         monthsRequested: endMonth - startMonth + 1,
-        note: hasAnyDraft
-          ? `Some months are not finalized (see each month's dataStatus). ${SNAPSHOT_COUNT_CAVEAT}`
-          : SNAPSHOT_COUNT_CAVEAT,
+        note: hasAnyDraft ? `Some months are not finalized (see each month's dataStatus). ${note}` : note,
       },
     };
 
