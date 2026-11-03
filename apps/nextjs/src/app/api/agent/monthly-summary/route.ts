@@ -215,6 +215,8 @@ export async function GET(request: NextRequest) {
         membership: single.membership,
         revenue: single.revenue,
         metrics: single.metrics,
+        judgment: single.judgment,
+        vsLastMonth: single.vsLastMonth,
         _meta: {
           generatedAt: new Date().toISOString(),
           dataSource: "supabase",
