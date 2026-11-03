@@ -5,6 +5,9 @@
  *
  * Run from apps/nextjs with the database env loaded:
  *   npx tsx --tsconfig tsconfig.json scripts/check-kpi-parity.ts
+ *
+ * CI (.github/workflows/kpi-parity.yml) runs it with the KPI_PARITY_POSTGRES_URL secret:
+ * a role that can only SELECT kpi_monthly_snapshot, kpi_member_override and kpi_billing_link.
  */
 
 import { getDerivedKpi } from "~/lib/kpi-derived";
