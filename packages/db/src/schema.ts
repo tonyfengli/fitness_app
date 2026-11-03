@@ -687,6 +687,7 @@ export const KpiMonthlySnapshot = pgTable(
         totalRevenue: number;
         arm: number;
         churnRate: number | null;
+        armClasses?: number | null; // approved from Nov 3, 2026 on
         approvedAt: string;
       };
     }>(),

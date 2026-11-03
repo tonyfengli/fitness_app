@@ -13,7 +13,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { monthStatusNote, SNAPSHOT_COUNT_CAVEAT } from "~/lib/agent-kpi";
-import { getDerivedKpi } from "~/lib/kpi-derived";
+import { getDerivedKpi, type DerivedKpiMonth } from "~/lib/kpi-derived";
+import { armClassesJudgment, churnJudgment, newMembersJudgment } from "~/app/kpi/lib/metric-definitions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,18 +39,27 @@ interface MonthlyData {
     manualLosses: number;
   };
   revenue: {
-    total: number;
-    pt: number;
-    smallGroup: number;
+    gymmasterTotal: number; // all GymMaster revenue (true total incl. Venmo/Zelle is in QuickBooks)
+    recurring: number; // Classes + Open Gym
+    classes: number;
     openGym: number;
+    oneOffPT: number; // PT: mostly prepaid packages, lumpy month to month
+    otherNetOfRefunds: number;
     newMemberRevenue: number;
     lostMemberRevenue: number;
   };
   metrics: {
-    arm: number;
-    armGroups: number;
+    arm: number; // GymMaster revenue ÷ members
+    armClasses: number | null; // Classes revenue ÷ class members; null if the month wasn't re-saved after Nov 3, 2026
+    classMembers: number | null;
     churnRate: number | null;
   };
+  judgment: {
+    churn: string | null;
+    newMembers: string;
+    armClasses: string | null;
+  };
+  vsLastMonth: Record<string, number> | null; // this month minus last month, per figure
 }
 
 export async function GET(request: NextRequest) {
@@ -120,11 +130,14 @@ export async function GET(request: NextRequest) {
 
     const round2 = (n: number) => Math.round(n * 100) / 100;
     const hasAnyDraft = selected.some((m) => m.status === "draft");
-    const monthlyData: MonthlyData[] = selected.map(({ month, status, derived: d, prevDerivedTotal }) => ({
+    const toMonthly = ({ month, year: y, status, derived: d, prevDerivedTotal }: DerivedKpiMonth): MonthlyData => {
+      const churnRate = prevDerivedTotal ? round2((d.filteredLostCount / prevDerivedTotal) * 100) : null;
+      const armClasses = d.armClasses != null && d.classMembers ? round2(d.armClasses) : null;
+      return {
       month,
       monthName: MONTH_NAMES[month - 1] ?? String(month),
       status,
-      dataStatus: monthStatusNote(status, month, year),
+      dataStatus: monthStatusNote(status, month, y),
       membership: {
         totalMembers: d.derivedTotalMembers,
         groupMembers: d.groupMembers,
@@ -136,20 +149,55 @@ export async function GET(request: NextRequest) {
         manualLosses: d.manualLost.length,
       },
       revenue: {
-        total: d.totalRevenue,
-        pt: d.ptRevenue,
-        smallGroup: d.smallGroupRevenue,
+        gymmasterTotal: d.totalRevenue,
+        recurring: round2(d.smallGroupRevenue + d.openGymRevenue),
+        classes: d.smallGroupRevenue,
         openGym: d.openGymRevenue,
+        oneOffPT: d.ptRevenue,
+        otherNetOfRefunds: round2(d.totalRevenue - d.ptRevenue - d.smallGroupRevenue - d.openGymRevenue),
         newMemberRevenue: round2(d.filteredNewRevenue),
         lostMemberRevenue: round2(d.filteredLostRevenue),
       },
       metrics: {
         arm: d.derivedTotalMembers > 0 ? round2(d.totalRevenue / d.derivedTotalMembers) : 0,
-        armGroups: d.armGroups,
+        armClasses,
+        classMembers: armClasses != null ? (d.classMembers ?? null) : null,
         // Same as the dashboard: lost ÷ the previous month's total; none for the first month
-        churnRate: prevDerivedTotal ? round2((d.filteredLostCount / prevDerivedTotal) * 100) : null,
+        churnRate,
       },
-    }));
+      judgment: {
+        churn: churnRate != null ? churnJudgment(churnRate) : null,
+        newMembers: newMembersJudgment(d.filteredNewCount),
+        armClasses: armClasses != null ? armClassesJudgment(armClasses) : null,
+      },
+      vsLastMonth: null,
+      };
+    };
+
+    // Each month vs the month before (from the full history, so a single month still gets it)
+    const byKey = new Map(months.map((m) => [`${m.year}-${m.month}`, toMonthly(m)]));
+    const delta = (a: number | null, b: number | null) => (a != null && b != null ? round2(a - b) : null);
+    const monthlyData: MonthlyData[] = selected.map((m) => {
+      const cur = byKey.get(`${m.year}-${m.month}`)!;
+      const i = months.indexOf(m);
+      const prev = i > 0 ? byKey.get(`${months[i - 1]!.year}-${months[i - 1]!.month}`) : undefined;
+      if (!prev) return cur;
+      const changes: Record<string, number | null> = {
+        members: delta(cur.membership.totalMembers, prev.membership.totalMembers),
+        newMembers: delta(cur.membership.newMembers, prev.membership.newMembers),
+        lostMembers: delta(cur.membership.lostMembers, prev.membership.lostMembers),
+        churnRatePoints: delta(cur.metrics.churnRate, prev.metrics.churnRate),
+        gymmasterTotal: delta(cur.revenue.gymmasterTotal, prev.revenue.gymmasterTotal),
+        recurring: delta(cur.revenue.recurring, prev.revenue.recurring),
+        classes: delta(cur.revenue.classes, prev.revenue.classes),
+        openGym: delta(cur.revenue.openGym, prev.revenue.openGym),
+        oneOffPT: delta(cur.revenue.oneOffPT, prev.revenue.oneOffPT),
+        arm: delta(cur.metrics.arm, prev.metrics.arm),
+        armClasses: delta(cur.metrics.armClasses, prev.metrics.armClasses),
+      };
+      const vsLastMonth = Object.fromEntries(Object.entries(changes).filter(([, v]) => v != null)) as Record<string, number>;
+      return { ...cur, vsLastMonth };
+    });
 
     const note = gaps.length
       ? `${SNAPSHOT_COUNT_CAVEAT} Missing months (${gaps.join(", ")}) break the running total.`
@@ -182,18 +230,23 @@ export async function GET(request: NextRequest) {
     const first = monthlyData[0]!;
     const last = monthlyData[monthlyData.length - 1]!;
     const totals = {
-      totalRevenue: round2(monthlyData.reduce((sum, m) => sum + m.revenue.total, 0)),
+      totalGymmasterRevenue: round2(monthlyData.reduce((sum, m) => sum + m.revenue.gymmasterTotal, 0)),
       totalNewMembers: monthlyData.reduce((sum, m) => sum + m.membership.newMembers, 0),
       totalLostMembers: monthlyData.reduce((sum, m) => sum + m.membership.lostMembers, 0),
       avgChurnRate: churnRates.length ? round2(churnRates.reduce((sum, r) => sum + r, 0) / churnRates.length) : null,
       avgArm: round2(monthlyData.reduce((sum, m) => sum + m.metrics.arm, 0) / monthlyData.length),
     };
 
-    // Calculate month-over-month trends
+    // First vs last month of the range (for "compare X with Y"), plus each month's churn
     const trends = monthlyData.length >= 2 ? {
-      membershipChange: last.membership.totalMembers - first.membership.totalMembers,
-      revenueChange: round2(last.revenue.total - first.revenue.total),
-      churnTrend: monthlyData.map(m => ({ month: m.monthName, churnRate: m.metrics.churnRate })),
+      [`${first.monthName} → ${last.monthName}`]: {
+        members: last.membership.totalMembers - first.membership.totalMembers,
+        churnRatePoints: delta(last.metrics.churnRate, first.metrics.churnRate),
+        gymmasterRevenue: round2(last.revenue.gymmasterTotal - first.revenue.gymmasterTotal),
+        recurringRevenue: round2(last.revenue.recurring - first.revenue.recurring),
+        armClasses: delta(last.metrics.armClasses, first.metrics.armClasses),
+      },
+      churnTrend: monthlyData.map(m => ({ month: m.monthName, churnRate: m.metrics.churnRate, judgment: m.judgment.churn })),
     } : null;
 
     return NextResponse.json({
@@ -204,6 +257,7 @@ export async function GET(request: NextRequest) {
       isRangeQuery: true,
       summary: {
         monthsCovered: monthlyData.length,
+        range: `${first.monthName}–${last.monthName} ${year} (averages cover these months)`,
         ...totals,
         netMemberChange: totals.totalNewMembers - totals.totalLostMembers,
       },

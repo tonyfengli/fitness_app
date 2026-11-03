@@ -57,6 +57,10 @@ async function main() {
       d.derivedTotalMembers > 0 ? round2(d.totalRevenue / d.derivedTotalMembers) : 0,
       m.prevDerivedTotal ? round2((d.filteredLostCount / m.prevDerivedTotal) * 100) : -1,
     ]);
+    // ARM (Classes), for months approved after it existed
+    if (a.armClasses != null) {
+      report(keyOf(m), "approved ARM (Classes)", [a.armClasses], [d.armClasses != null ? round2(d.armClasses) : null]);
+    }
   }
 
   // Older months: numbers read off the dashboard

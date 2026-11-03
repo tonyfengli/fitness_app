@@ -244,7 +244,7 @@ export async function GET(
 
     // Get membership type
     const membershipType = memberData
-      ? String(memberData["Membership Type"] || memberData["Membership"] || "Unknown")
+      ? String(memberData["Membership Type Name"] || memberData["Membership Type"] || memberData["Membership"] || "Unknown")
       : null;
 
     // Build response

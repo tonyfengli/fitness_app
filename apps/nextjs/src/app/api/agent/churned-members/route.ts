@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { monthStatusNote, SNAPSHOT_COUNT_CAVEAT } from "~/lib/agent-kpi";
 import { getDerivedKpi } from "~/lib/kpi-derived";
+import { getLostMemberContext, type LostMemberContext } from "~/lib/lost-member-context";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ interface ChurnedMember {
   type: string;
   month?: number;
   monthName?: string;
+  context?: LostMemberContext; // plan, tenure, last visit, payments from that month on, returned
 }
 
 export async function GET(request: NextRequest) {
@@ -138,6 +140,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Who these people were (plan, tenure, last visit, later payments, came back), for investigations
+    let contextNote: string | null = null;
+    try {
+      const context = await getLostMemberContext(
+        allChurnedMembers.map((m) => ({ memberId: m.memberId, month: m.month!, year })),
+        months
+      );
+      for (const m of allChurnedMembers) {
+        m.context = context.get(`${m.memberId}:${year}-${String(m.month).padStart(2, "0")}`);
+      }
+    } catch (err) {
+      contextNote = `Member context unavailable (GymMaster: ${err instanceof Error ? err.message : "error"}).`;
+    }
+
     const hasAnyDraft = selected.some((m) => m.status === "draft");
     const note = gaps.length
       ? `${SNAPSHOT_COUNT_CAVEAT} Missing months (${gaps.join(", ")}) break the running total.`
@@ -169,7 +185,9 @@ export async function GET(request: NextRequest) {
         dataSource: "supabase",
         monthsCovered: selected.length,
         monthsRequested: endMonth - startMonth + 1,
-        note: hasAnyDraft ? `Some months are not finalized (see each month's dataStatus). ${note}` : note,
+        note: [hasAnyDraft ? `Some months are not finalized (see each month's dataStatus). ${note}` : note, contextNote]
+          .filter(Boolean)
+          .join(" "),
       },
     };
 

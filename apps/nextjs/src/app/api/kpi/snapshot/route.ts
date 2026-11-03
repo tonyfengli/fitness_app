@@ -228,16 +228,21 @@ export async function POST(request: NextRequest) {
 const APPROVED_FIELDS = ["newMembers", "lostMembers", "totalMembers", "totalRevenue", "arm"] as const;
 
 // The Overview's numbers for the month being finalized: finite numbers, churn may be null (first month)
-function isApproved(v: unknown): v is Record<(typeof APPROVED_FIELDS)[number], number> & { churnRate: number | null } {
+function isApproved(
+  v: unknown
+): v is Record<(typeof APPROVED_FIELDS)[number], number> & { churnRate: number | null; armClasses?: number | null } {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
   return (
     APPROVED_FIELDS.every((f) => typeof o[f] === "number" && Number.isFinite(o[f])) &&
-    (o.churnRate === null || (typeof o.churnRate === "number" && Number.isFinite(o.churnRate)))
+    (o.churnRate === null || (typeof o.churnRate === "number" && Number.isFinite(o.churnRate))) &&
+    (o.armClasses == null || (typeof o.armClasses === "number" && Number.isFinite(o.armClasses)))
   );
 }
 
-function pickApproved(v: Record<(typeof APPROVED_FIELDS)[number], number> & { churnRate: number | null }) {
+function pickApproved(
+  v: Record<(typeof APPROVED_FIELDS)[number], number> & { churnRate: number | null; armClasses?: number | null }
+) {
   return {
     newMembers: v.newMembers,
     lostMembers: v.lostMembers,
@@ -245,6 +250,7 @@ function pickApproved(v: Record<(typeof APPROVED_FIELDS)[number], number> & { ch
     totalRevenue: v.totalRevenue,
     arm: v.arm,
     churnRate: v.churnRate,
+    armClasses: v.armClasses ?? null,
   };
 }
 

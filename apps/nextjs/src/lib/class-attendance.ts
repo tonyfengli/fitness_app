@@ -7,7 +7,7 @@
  */
 
 export const DATA_START = "2026-08-01";
-const VALID_ATTENDANCE = ["Booking", "Showed", "Showed late"];
+export const VALID_ATTENDANCE = ["Booking", "Showed", "Showed late"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type ReportRow = Record<string, string | number | null>;

@@ -320,6 +320,7 @@ export function ReportingTab() {
             totalRevenue: Math.round(d.totalRevenue * 100) / 100,
             arm: d.derivedTotalMembers > 0 ? Math.round((d.totalRevenue / d.derivedTotalMembers) * 100) / 100 : 0,
             churnRate: prevTotal ? Math.round((d.filteredLostCount / prevTotal) * 10000) / 100 : null,
+            armClasses: d.armClasses != null ? Math.round(d.armClasses * 100) / 100 : null,
           };
         }
       }
