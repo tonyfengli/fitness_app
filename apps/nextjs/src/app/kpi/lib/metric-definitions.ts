@@ -80,7 +80,7 @@ export const METRICS = {
   members: {
     label: "Members",
     definition:
-      "Running total from January 2026 (never restarts): January's paying members, then + new − lost each month. PT-only clients count; free members are excluded by the founders.",
+      "Current members = running total from January 2026 (never restarts): January's paying members, then + new − lost each month, after the founders' adjustments. PT-only clients count; free members are excluded by the founders. Not the same as who paid this month: it also includes members paid for by another member (billing links), and members the founders kept (excluded from lost: a prepaid package, or a missed or failed charge they expect to recover).",
   },
   churn: {
     label: "Churn",
