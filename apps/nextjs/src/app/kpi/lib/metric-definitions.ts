@@ -72,6 +72,11 @@ export const METRICS = {
     definition:
       "Paid in either of the last 2 months, no payment this month, not on GymMaster's current-members list; going on hold counts as lost. Then founder adjustments (manual losses, exclusions, linked accounts).",
   },
+  cameBack: {
+    label: "Came back",
+    definition:
+      "A lost member is back only if the founders count them as a new member again (after exclusions). Payments after leaving that are admin-error charges or hold penalties are not returns; the founders exclude them.",
+  },
   members: {
     label: "Members",
     definition:
