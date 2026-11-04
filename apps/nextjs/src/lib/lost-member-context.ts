@@ -2,7 +2,8 @@
  * What was going on with each lost member, for churn investigations (walkthrough D3):
  * plan and fee, when they joined and ended, their last class before leaving (bookings,
  * the Retention attendance rule), any charges or refunds from the month they left onward,
- * and whether they came back. Three GymMaster calls cover every member in the period.
+ * and whether they came back (as the dashboard counts it: a later month's new members after
+ * the founders' exclusions). Three GymMaster calls cover every member in the period.
  */
 
 import { KPI_START_MONTH, KPI_START_YEAR } from "~/app/kpi/lib/derive-months";
@@ -20,7 +21,8 @@ export interface LostMemberContext {
   daysSinceLastClass: number | null; // at the start of the month they were lost (0 if they came that month)
   attendanceNote: string | null; // set when the dates fall before reliable booking data
   paymentsFromLossMonth: { date: string; amount: number }[]; // charges and refunds (negative) from that month on
-  returned: string | null; // first later month they paid again, "2026-10"
+  returned: string | null; // first later month counted as new again on the dashboard (after exclusions), "2026-10"
+  paidAgainNotCounted: string | null; // otherwise: the later month they paid again but weren't counted back, and why
 }
 
 const DAY = 864e5;
@@ -70,8 +72,15 @@ export async function getLostMemberContext(
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .map((p) => ({ date: iso(p.date), amount: p.amount }));
 
+    // Back only as the dashboard counts it (founder adjustments win): new again after exclusions, or linked under a payer
     const later = months.filter((m) => m.year > l.year || (m.year === l.year && m.month > l.month));
-    const back = later.find((m) => m.derived.payingMembers.some((p) => p.memberId === l.memberId));
+    const back = later.find(
+      (m) =>
+        m.derived.filteredNewMembers.some((n) => n.memberId === l.memberId) ||
+        m.derived.linkedAdded.some((x) => x.memberId === l.memberId)
+    );
+    const paidLater = back ? undefined : later.find((m) => m.derived.payingMembers.some((p) => p.memberId === l.memberId));
+    const excludedFromNew = paidLater?.derived.newMembers.some((n) => n.memberId === l.memberId);
 
     result.set(`${l.memberId}:${monthKey(l.year, l.month)}`, {
       plan: row ? String(row["Membership Type Name"] ?? "") || null : null,
@@ -85,6 +94,11 @@ export async function getLostMemberContext(
         lossStart < reliableFrom ? `Booking data before ${DATA_START} is unreliable; treat last class as approximate.` : null,
       paymentsFromLossMonth,
       returned: back ? monthKey(back.year, back.month) : null,
+      paidAgainNotCounted: paidLater
+        ? `paid again in ${monthKey(paidLater.year, paidLater.month)} but ${
+            excludedFromNew ? "the founders excluded them from new members" : "was not counted as a new member (e.g. the charge was refunded)"
+          }`
+        : null,
     });
   }
   return result;
