@@ -94,7 +94,7 @@ export const METRICS = {
   revenueSources: {
     label: "Revenue by source",
     definition:
-      "PT = payments GymMaster categorizes as Personal Training. Open Gym = membership payments where the member's current plan name contains 'open gym'. Classes = all other membership payments. Other (net of refunds) = everything else (day passes, fees, retail) minus uncategorized refunds; shown only when not $0. Other and refunds are also saved separately for investigations.",
+      "Each membership payment is sorted by the plan map (plan-categories.ts) from its plan name and GymMaster category: PT (one on one, partner, semi-private), Open Gym, or Classes (every other membership). Staff, comped and outside coaches' clients aren't membership revenue. Other (net of refunds) = everything else (day passes, fees, retail) minus uncategorized refunds; shown only when not $0. Other and refunds are also saved separately for investigations.",
   },
   arm: {
     label: "ARM (All)",

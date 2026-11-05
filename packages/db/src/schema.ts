@@ -910,3 +910,83 @@ export const CreateRetentionEventSchema = createInsertSchema(RetentionEvent, {
   id: true,
   createdAt: true,
 });
+
+// ============================================================================
+// GYMMASTER ARCHIVE - Copy of the old GymMaster account (closes after the Nov 2026 move)
+// ============================================================================
+// Rows are stored exactly as the report returned them (`data`), so the existing parsers
+// read archive rows unchanged; the key columns are only for filtering. A report's result
+// can depend on its date range (members, on hold, new members, cancellations), so each
+// pull keeps its range and the reader picks the pull that matches the request.
+
+export const GymMasterArchivePull = pgTable(
+  "gymmaster_archive_pull",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    account: t.varchar({ length: 20 }).notNull().default("old"),
+    reportId: t.integer().notNull(), // GymMaster standard report (1, 9, 103, ...)
+    startDate: t.date().notNull(),
+    endDate: t.date().notNull(), // inclusive, as GymMaster reads it
+    pass: t.integer().notNull(), // 1 = Nov 4, 2 = after the last old-account classes
+    rowCount: t.integer().notNull(),
+    pulledAt: t.timestamp().defaultNow().notNull(),
+  }),
+  (table) => ({
+    rangeUnique: unique().on(table.account, table.reportId, table.startDate, table.endDate),
+  })
+);
+
+export const GymMasterArchiveRow = pgTable(
+  "gymmaster_archive_row",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    pullId: t
+      .uuid()
+      .notNull()
+      .references(() => GymMasterArchivePull.id, { onDelete: "cascade" }),
+    reportId: t.integer().notNull(),
+    memberId: t.varchar({ length: 50 }), // old-account member ID, when the row has one
+    rowDate: t.date(), // payment, booking or billing date, when the row has one
+    amount: numeric("amount", { precision: 10, scale: 2 }),
+    data: t.jsonb().notNull().$type<Record<string, unknown>>(), // the report row as returned
+  }),
+  (table) => ({
+    pullIdx: index("idx_gm_archive_row_pull").on(table.pullId),
+    reportDateIdx: index("idx_gm_archive_row_report_date").on(table.reportId, table.rowDate),
+    memberIdx: index("idx_gm_archive_row_member").on(table.memberId),
+  })
+);
+
+// One row per old-account member (current and former): staff API profile and membership
+export const GymMasterArchiveMember = pgTable(
+  "gymmaster_archive_member",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    account: t.varchar({ length: 20 }).notNull().default("old"),
+    memberId: t.varchar({ length: 50 }).notNull(),
+    name: t.text(),
+    email: t.text(),
+    phone: t.varchar({ length: 50 }),
+    birthday: t.date(),
+    joinedOn: t.date(),
+    profile: t.jsonb().$type<Record<string, unknown>>(), // GET /member/{id}
+    membership: t.jsonb().$type<unknown>(), // GET /member/{id}/membership
+    pass: t.integer().notNull(),
+    pulledAt: t.timestamp().defaultNow().notNull(),
+  }),
+  (table) => ({
+    memberUnique: unique().on(table.account, table.memberId),
+  })
+);
+
+// Old GymMaster member ID -> new account member ID (Anaheim), so one person's history
+// continues across the Nov 2026 move. Matched by phone and email from the archive and
+// the new account; anything unclear is confirmed by the founders (matchedBy "founders").
+export const GymMasterMemberMatch = pgTable("gymmaster_member_match", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  oldMemberId: t.varchar({ length: 50 }).notNull().unique(),
+  newMemberId: t.varchar({ length: 50 }).notNull().unique(),
+  matchedBy: t.varchar({ length: 30 }).notNull(), // "phone+email", "email", "phone", "name+birthday", "founders"
+  note: t.text(),
+  createdAt: t.timestamp().defaultNow().notNull(),
+}));

@@ -14,6 +14,10 @@ import Stripe from "stripe";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { monthlyPlanPrice } from "~/lib/plan-price";
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
+import { getMemberMemberships, getMemberPhone } from "~/lib/gymmaster-member";
+import { getMatches, newAccountApi } from "~/lib/gymmaster-sources";
+import { paymentKind } from "~/app/kpi/lib/plan-categories";
 import type { BillingGap, PaymentFailure, PaymentRow } from "~/app/save-calls/types";
 import { needsAttention } from "~/app/save-calls/rules";
 
@@ -51,32 +55,8 @@ function parseGymMasterDate(s: unknown): string {
   return isNaN(d.getTime()) ? "" : iso(d);
 }
 
-async function fetchReport(reportId: number, startDate: string, endDate: string): Promise<ReportRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("Missing GymMaster configuration");
-
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-GM-API-KEY": apiKey,
-      },
-      body: JSON.stringify({ report_id: reportId, start_date: startDate, end_date: endDate }),
-    });
-    if (response.status === 429) {
-      await new Promise(r => setTimeout(r, 1500 * 2 ** attempt));
-      continue;
-    }
-    if (!response.ok) throw new Error(`GymMaster report ${reportId} error: ${response.status}`);
-    const data = await response.json();
-    if (data.error) throw new Error(`GymMaster report ${reportId} error: ${JSON.stringify(data.error)}`);
-    return data.result || [];
-  }
-  throw new Error(`GymMaster report ${reportId} rate limited`);
-}
+const fetchReport = (reportId: number, startDate: string, endDate: string) =>
+  fetchGymMasterReport(reportId, startDate, endDate) as unknown as Promise<ReportRow[]>;
 
 interface Membership {
   membershiptypeid?: number;
@@ -159,7 +139,10 @@ async function lookupStripe(
   memberId: string,
   since: string
 ): Promise<Pick<PaymentRow, "card" | "cardStatus" | "cardLastCharged"> & { failures: StripeFailure[] }> {
-  const customers = (await stripe.customers.search({ query: `metadata['mid']:'${memberId}'`, limit: 20 })).data;
+  // Stripe customers carry the old account's member number in `mid`; new numbers are searched too
+  const oldId = (await getMatches()).newToOld.get(memberId);
+  const query = oldId ? `metadata['mid']:'${memberId}' OR metadata['mid']:'${oldId}'` : `metadata['mid']:'${memberId}'`;
+  const customers = (await stripe.customers.search({ query, limit: 20 })).data;
 
   const cards: { id: string; brand: string; last4: string; expYear: number; expMonth: number; created: number }[] = [];
   const defaults = new Set<string>();
@@ -285,7 +268,9 @@ function findBillingGaps(
 
   const byDay = new Map<string, number>();
   for (const p of payments) {
-    if (!/Gym Memberships/.test(String(p["Payment Details"] ?? ""))) continue;
+    // Membership charges only (PT packages have no billing schedule), by the plan map
+    const kind = paymentKind(p);
+    if (kind.kind !== "membership" || !kind.member || kind.bucket === "pt" || kind.bucket === "other") continue;
     const amount = money(p["Payment Amount"]);
     const date = parseGymMasterDate(p["Payment Date"]);
     if (amount <= 0 || !date) continue;
@@ -359,7 +344,7 @@ export async function GET(request: NextRequest) {
       fetchReport(13, monthStart, today),
       fetchReport(127, monthStart, today),
       fetchReport(1, monthStart, today),
-      fetchStaffApi<{ id: number; name: string }[]>("/membershiptype/"),
+      newAccountApi<{ id: number; name: string }[]>("/api/v3/membershiptype/").catch(() => [] as { id: number; name: string }[]),
     ]);
     const typeNames = new Map((membershipTypes || []).map(t => [t.id, t.name]));
 
@@ -384,7 +369,7 @@ export async function GET(request: NextRequest) {
     const members = await mapLimit(payingMembers, CONCURRENCY, async (pm): Promise<PaymentRow> => {
       const memberId = String(pm.memberId);
       const [memberships, card] = await Promise.all([
-        fetchStaffApi<Membership[]>(`/member/${memberId}/membership`).then(r => r || []),
+        getMemberMemberships(memberId) as unknown as Promise<Membership[]>,
         // Paid for by another member: the charges and card live on the payer's row
         pm.paidBy
           ? Promise.resolve({ card: `Paid by ${pm.paidBy.name}`, cardStatus: "ok" as const, cardLastCharged: "", failures: [] })
@@ -402,12 +387,7 @@ export async function GET(request: NextRequest) {
       const fee = feesById.get(memberId)?.[0];
       // Phone from Current Members; members missing there (prepaid, one-off) fall back to their member record
       let phone = currentById.get(memberId)?.[0]?.["Member Cell"] || null;
-      if (!phone) {
-        type MemberPhones = { phonecell?: string; phonehome?: string; phonework?: string };
-        const record = await fetchStaffApi<MemberPhones | MemberPhones[]>(`/member/${memberId}`);
-        const m = Array.isArray(record) ? record[0] : record;
-        phone = m?.phonecell || m?.phonehome || m?.phonework || null;
-      }
+      if (!phone) phone = await getMemberPhone(memberId).catch(() => null);
 
       const ledger = buildLedger(paymentsById.get(memberId) || [], months, card.failures);
       const frequency = active.map(m => m.paymentfreq).filter(Boolean).join(" + ");

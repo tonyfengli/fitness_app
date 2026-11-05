@@ -6,6 +6,8 @@
  * out). Booking data before Aug 1, 2026 is unreliable, so earlier comparisons are omitted.
  */
 
+import { fetchGymMasterReport } from "./gymmaster-report";
+
 export const DATA_START = "2026-08-01";
 export const VALID_ATTENDANCE = ["Booking", "Showed", "Showed late"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -50,26 +52,7 @@ export const addDays = (date: string, days: number) => {
 };
 const dayCount = (start: string, end: string) => Math.round((Date.parse(end) - Date.parse(start)) / 864e5) + 1;
 
-async function fetchBookings(startDate: string, endDate: string): Promise<ReportRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("Missing GymMaster configuration");
-
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json", "X-GM-API-KEY": apiKey },
-      body: JSON.stringify({ report_id: 9, start_date: startDate, end_date: endDate }),
-    });
-    if (response.status === 429) {
-      await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt));
-      continue;
-    }
-    if (!response.ok) throw new Error(`GymMaster bookings error: ${response.status}`);
-    return (await response.json()).result || [];
-  }
-  throw new Error("GymMaster bookings rate limited");
-}
+const fetchBookings = (startDate: string, endDate: string) => fetchGymMasterReport(9, startDate, endDate) as unknown as Promise<ReportRow[]>;
 
 export interface ClassAttendance {
   range: { start: string; end: string; days: number };
@@ -90,7 +73,8 @@ export async function getClassAttendance(start: string, end: string): Promise<Cl
   type Session = { classType: string; date: string; rawTime: string; timeSort: number; attended: number };
   const sessions = new Map<string, Session>();
   for (const b of bookings) {
-    const classType = String(b["Class Name"] ?? "").trim();
+    // The new account's bookings report has no class name: a class attendant booking counts under its resource
+    const classType = String(b["Class Name"] ?? (b["Service"] === "Class Attendant" ? (b["Resource Name"] ?? "Class") : "")).trim();
     if (!classType || classType.includes("(Historic)")) continue; // Open Gym, non-class and retired classes
     const date = parseGymMasterDate(b["Booking Date"]);
     const rawTime = String(b["Booking Start Time"] ?? "");

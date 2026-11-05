@@ -13,6 +13,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
+import { getMemberPhone } from "~/lib/gymmaster-member";
 import type { MilestoneRow } from "~/app/save-calls/types";
 import { milestoneGroups } from "~/app/save-calls/rules";
 
@@ -43,40 +45,10 @@ function milestonesThrough(count: number): number[] {
   return list;
 }
 
-async function fetchReport(reportId: number, startDate: string, endDate: string): Promise<ReportRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("Missing GymMaster configuration");
+const fetchReport = (reportId: number, startDate: string, endDate: string) =>
+  fetchGymMasterReport(reportId, startDate, endDate) as unknown as Promise<ReportRow[]>;
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json", "X-GM-API-KEY": apiKey },
-      body: JSON.stringify({ report_id: reportId, start_date: startDate, end_date: endDate }),
-    });
-    if (response.status === 429) {
-      await new Promise(r => setTimeout(r, 1500 * 2 ** attempt));
-      continue;
-    }
-    if (!response.ok) throw new Error(`GymMaster report ${reportId} error: ${response.status}`);
-    const data = await response.json();
-    return data.result || [];
-  }
-  throw new Error(`GymMaster report ${reportId} rate limited`);
-}
-
-async function fetchMemberPhone(memberId: string): Promise<string | null> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_STAFF_API_KEY;
-  if (!baseUrl || !apiKey) return null;
-  const response = await fetch(`${baseUrl}/api/v3/member/${memberId}`, {
-    headers: { Accept: "application/json", "X-GM-API-KEY": apiKey },
-  });
-  if (!response.ok) return null;
-  const record = await response.json();
-  const m = (Array.isArray(record) ? record[0] : record) as { phonecell?: string; phonehome?: string; phonework?: string } | undefined;
-  return m?.phonecell || m?.phonehome || m?.phonework || null;
-}
+const fetchMemberPhone = getMemberPhone;
 
 export async function GET(request: NextRequest) {
   const authError = await validateFounderAccess(request);

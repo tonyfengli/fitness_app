@@ -3,6 +3,8 @@
  * Server-side only - do not import in client components
  */
 
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
+
 // Report IDs from GymMaster
 export const REPORT_IDS = {
   ALL_PAYMENTS: 103,
@@ -57,49 +59,13 @@ function getConfig(): GymMasterConfig {
  * Includes retry logic with exponential backoff for rate limiting
  */
 async function fetchReport(
-  config: GymMasterConfig,
+  _config: GymMasterConfig,
   reportId: number,
   startDate: string,
-  endDate: string,
-  retryCount = 0
+  endDate: string
 ): Promise<ReportRow[]> {
-  const url = `${config.baseUrl}/api/v2/report/standard_report`;
-  const MAX_RETRIES = 3;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": config.apiKey,
-    },
-    body: JSON.stringify({
-      report_id: reportId,
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  // Handle rate limiting with retry
-  if (response.status === 429 && retryCount < MAX_RETRIES) {
-    const waitTime = Math.pow(2, retryCount + 1) * 2000; // 4s, 8s, 16s
-    console.log(`[GymMaster API] Rate limited, waiting ${waitTime / 1000}s before retry ${retryCount + 1}/${MAX_RETRIES}...`);
-    await new Promise(r => setTimeout(r, waitTime));
-    return fetchReport(config, reportId, startDate, endDate, retryCount + 1);
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GymMaster API error (${response.status}): ${text}`);
-  }
-
-  const data = await response.json();
-
-  if (data.error) {
-    throw new Error(`GymMaster API error: ${JSON.stringify(data.error)}`);
-  }
-
-  return data.result || [];
+  // Across both accounts of the Nov 2026 move, in the new account's format (lib/gymmaster-sources.ts)
+  return (await fetchGymMasterReport(reportId, startDate, endDate)) as unknown as ReportRow[];
 }
 
 /**

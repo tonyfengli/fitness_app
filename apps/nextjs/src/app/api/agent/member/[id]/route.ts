@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
+import { fetchGymMasterReport as fetchReport } from "~/lib/gymmaster-report";
 
 export const dynamic = "force-dynamic";
 
@@ -35,39 +36,8 @@ interface GymMasterRow {
   [key: string]: string | number | null;
 }
 
-async function fetchGymMasterReport(
-  reportId: number,
-  startDate: string,
-  endDate: string
-): Promise<GymMasterRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing GymMaster configuration");
-  }
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": apiKey,
-    },
-    body: JSON.stringify({
-      report_id: reportId,
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`GymMaster API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.result || [];
-}
+const fetchGymMasterReport = (reportId: number, startDate: string, endDate: string) =>
+  fetchReport(reportId, startDate, endDate) as unknown as Promise<GymMasterRow[]>;
 
 function parseGymMasterDate(dateStr: string): Date {
   const parsed = new Date(dateStr);

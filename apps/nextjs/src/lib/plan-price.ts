@@ -4,6 +4,8 @@
  * monthly. Prepaid plans (no recurring charge, or no billing cycle) read "Prepaid".
  */
 
+import { getMemberMemberships } from "./gymmaster-member";
+
 export interface PlanMembership {
   startdate?: string;
   paymentfreq?: string;
@@ -30,23 +32,7 @@ export function monthlyPlanPrice(memberships: PlanMembership[]): string | null {
   return `$${Number.isInteger(monthly) ? monthly : monthly.toFixed(2)}/mo`;
 }
 
-async function fetchMemberships(memberId: string): Promise<PlanMembership[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_STAFF_API_KEY;
-  if (!baseUrl || !apiKey) return [];
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await fetch(`${baseUrl}/api/v3/member/${memberId}/membership`, {
-      headers: { Accept: "application/json", "X-GM-API-KEY": apiKey },
-    });
-    if (response.status === 429) {
-      await new Promise(r => setTimeout(r, 1000 * 2 ** attempt));
-      continue;
-    }
-    if (!response.ok) return [];
-    return ((await response.json()) || []) as PlanMembership[];
-  }
-  return [];
-}
+const fetchMemberships = (memberId: string): Promise<PlanMembership[]> => getMemberMemberships(memberId);
 
 // Plan price per member ID, a few lookups at a time
 export async function getPlanPrices(memberIds: string[]): Promise<Map<string, string | null>> {

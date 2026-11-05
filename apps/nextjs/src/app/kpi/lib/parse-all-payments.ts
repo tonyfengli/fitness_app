@@ -1,28 +1,9 @@
 import * as Papa from "papaparse";
 
-// Payment mapping config - mirrors /Users/tonyli/Desktop/KPI Automation/payment_mapping.json
-// Update this when Gym Master labels change after migration
-const PAYMENT_DETAILS_MAPPING: Record<string, CategoryKey> = {
-  "Membership Category: Gym Memberships": "small_grp",
-  "Membership Category: Personal Training Packages": "pt",
-  // Future mappings (uncomment after migration):
-  // "Membership Category: Open Gym": "open_gym",
-  // "Membership Category: Personal Training": "pt",
-  // "Membership Category: Sports Performance": "sports_perf",
-  // "Membership Category: Small Group": "small_grp",
-  // "Membership Category: Remote": "remote",
-  // "Membership Category: IC": "ic",
-  // "Day Pass": "day_pass",
-  // "Access Pass": "access_pass",
-  // "Class Pack": "packs",
-  // "Training Pack": "packs",
-  // "Booking Fee": "booking_fees",
-  // "NSF Fee": "nsf_fees",
-  // "Maintenance Fee": "maintenance_fee",
-  // "Freeze Fee": "other_fees",
-  // "Sign Up Fee": "sign_up_fees",
-  // "Product Purchase": "retail",
-};
+import { paymentKind } from "./plan-categories";
+
+// Memberships are sorted by the plan map (plan-categories.ts): Group -> small_grp, Open Gym, PT.
+// Everything else (products, fees, refund entries) is unmapped here and handled by the callers.
 
 // No exclusions - let refunds net out naturally
 // "Refunded" (+$65.27) + "Payment Refund (Debit Note)" (-$65.27) = $0
@@ -53,6 +34,7 @@ export interface AllPaymentsRow {
   Name: string;
   "Payment Origin": string;
   "Payment Details": string;
+  "Membership-Type Name"?: string;
   "Payment Method": string;
   "Payment Amount": string;
   "Payment Note": string;
@@ -146,15 +128,11 @@ export function parseAllPayments(csvContent: string): Promise<ParseResult> {
           }
 
           // Map to category
+          const kind = paymentKind({ ...row });
           let mapped = false;
-          for (const [pattern, category] of Object.entries(
-            PAYMENT_DETAILS_MAPPING,
-          )) {
-            if (paymentDetails.includes(pattern)) {
-              totals[category] += amount;
-              mapped = true;
-              break;
-            }
+          if (kind.kind === "membership" && kind.member && kind.bucket !== "other") {
+            totals[kind.bucket === "group" ? "small_grp" : kind.bucket] += amount;
+            mapped = true;
           }
 
           if (!mapped && amount !== 0) {

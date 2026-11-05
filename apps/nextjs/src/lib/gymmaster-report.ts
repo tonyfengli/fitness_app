@@ -3,6 +3,8 @@
  * members who have since left, with plan, start/end dates and last visit.
  */
 
+import { readGymMasterRows } from "./gymmaster-sources";
+
 export type GymMasterRow = Record<string, unknown>;
 
 export const GYMMASTER_REPORTS = {
@@ -12,19 +14,13 @@ export const GYMMASTER_REPORTS = {
   PAYMENTS: 103, // "Payment Date", "Payment Amount", "Payment Details", "Member ID", ...
 } as const;
 
+/**
+ * Rows of a GymMaster standard report for a date range (end inclusive), across both
+ * accounts of the Nov 2026 move: see gymmaster-sources.ts for which account serves which
+ * dates. Rows keep the old account's columns; `_account` says where each came from.
+ */
 export async function fetchGymMasterReport(reportId: number, startDate: string, endDate: string): Promise<GymMasterRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("Missing GymMaster configuration");
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json", "X-GM-API-KEY": apiKey },
-    body: JSON.stringify({ report_id: reportId, start_date: startDate, end_date: endDate }),
-  });
-  if (!response.ok) throw new Error(`GymMaster API error: ${response.status}`);
-  const data = (await response.json()) as { result?: GymMasterRow[] };
-  return data.result ?? [];
+  return readGymMasterRows(reportId, startDate, endDate);
 }
 
 /** GymMaster dates look like "Jun 5 2026"; returns null when missing or unreadable */

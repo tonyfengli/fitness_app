@@ -18,6 +18,7 @@ import {
 } from "recharts";
 
 import { formatCurrency } from "../lib/parse-all-payments";
+import { paymentKind } from "../lib/plan-categories";
 import { MobileMembershipChart } from "./MobileMembershipChart";
 import { MobileArmChart } from "./MobileArmChart";
 import { MobileChurnChart } from "./MobileChurnChart";
@@ -582,22 +583,6 @@ export function ReportingTab() {
         const paymentRows = parseCsvSimple(data.current.allPaymentsCsv);
         const currentMembersRows = parseCsvSimple(data.current.currentMembersCsv);
 
-        // Build membership type lookup: Member ID -> Membership Type Name
-        const membershipTypeLookup = new Map<string, string>();
-        for (const row of currentMembersRows) {
-          const memberId = row["Member ID"] || "";
-          const membershipType = row["Membership Type Name"] || "";
-          if (memberId && membershipType) {
-            membershipTypeLookup.set(memberId, membershipType);
-          }
-        }
-
-        // Helper to check if membership type is "Open Gym"
-        const isOpenGymType = (membershipType: string): boolean => {
-          const typeLower = membershipType.toLowerCase();
-          return typeLower.includes("open gym") || typeLower.includes("opengym");
-        };
-
         let ptRevenue = 0,
           smallGroupRevenue = 0,
           openGymRevenue = 0,
@@ -606,7 +591,8 @@ export function ReportingTab() {
           totalRevenue = 0,
           groupRevenue = 0;
 
-        const memberTotals = new Map<string, { name: string; total: number; group: number; classes: number }>();
+        // staffOnly: every payment so far was for a plan that doesn't make someone a member (staff, comped)
+        const memberTotals = new Map<string, { name: string; total: number; group: number; classes: number; staffOnly: boolean }>();
 
         for (const row of paymentRows) {
           const memberId = row["Member ID"] || "";
@@ -617,21 +603,22 @@ export function ReportingTab() {
           totalRevenue += amount;
 
           if (!memberTotals.has(memberId)) {
-            memberTotals.set(memberId, { name: memberName, total: 0, group: 0, classes: 0 });
+            memberTotals.set(memberId, { name: memberName, total: 0, group: 0, classes: 0, staffOnly: true });
           }
           const memberData = memberTotals.get(memberId)!;
           memberData.total += amount;
           if (memberName && !memberData.name) memberData.name = memberName;
 
-          if (details.includes("Personal Training")) {
+          // Sorted by the plan map: the payment row's plan name and GymMaster category
+          const kind = paymentKind(row);
+          const isMembership = kind.kind === "membership" && kind.member && kind.bucket !== "other";
+          if (!(kind.kind === "membership" && !kind.member)) memberData.staffOnly = false;
+          if (isMembership && kind.bucket === "pt") {
             ptRevenue += amount;
-          } else if (details.includes("Gym Memberships")) {
-            // Cross-reference with membership type to separate Open Gym from Classes
-            const membershipType = membershipTypeLookup.get(memberId) || "";
-            if (isOpenGymType(membershipType)) {
+          } else if (isMembership) {
+            if (kind.bucket === "open_gym") {
               openGymRevenue += amount;
             } else {
-              // All other Gym Memberships = Classes (including "unclear" types)
               smallGroupRevenue += amount;
               memberData.classes += amount;
             }
@@ -651,7 +638,7 @@ export function ReportingTab() {
         let classMembers = 0;
         const payingMembersList: MemberRecord[] = [];
         for (const [memberId, mData] of memberTotals) {
-          if (memberId && mData.total > 0) {
+          if (memberId && mData.total > 0 && !mData.staffOnly) {
             totalMembers++;
             payingMembersList.push({ memberId, name: mData.name || `Member ${memberId}`, amount: mData.total });
           }

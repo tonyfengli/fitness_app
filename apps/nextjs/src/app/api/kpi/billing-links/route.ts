@@ -11,6 +11,7 @@ import { db } from "@acme/db/client";
 import { CreateKpiBillingLinkSchema, KpiBillingLink } from "@acme/db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
+import { getMemberName } from "~/lib/gymmaster-member";
 
 export const dynamic = "force-dynamic";
 
@@ -27,20 +28,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Member name from GymMaster's staff API, as "Surname, Firstname" to match the KPI lists
+// Member name from GymMaster, as "First Last" to match the KPI lists
 async function lookupMemberName(memberId: string): Promise<string | null> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_STAFF_API_KEY;
-  if (!baseUrl || !apiKey || !/^\d+$/.test(memberId)) return null;
-
-  const response = await fetch(`${baseUrl}/api/v3/member/${memberId}`, {
-    headers: { Accept: "application/json", "X-GM-API-KEY": apiKey },
-  });
-  if (!response.ok) return null;
-  const record = await response.json();
-  const m = (Array.isArray(record) ? record[0] : record) as { firstname?: string; surname?: string } | undefined;
-  const name = [m?.surname, m?.firstname].filter(Boolean).join(", ");
-  return name || null;
+  if (!/^\d+$/.test(memberId)) return null;
+  return getMemberName(memberId);
 }
 
 export async function POST(request: NextRequest) {

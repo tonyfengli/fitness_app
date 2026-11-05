@@ -14,6 +14,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
+import { getMemberPhone } from "~/lib/gymmaster-member";
 
 export const dynamic = "force-dynamic";
 
@@ -109,68 +111,14 @@ function getWeekNumber(date: Date, referenceDate: Date): number {
 }
 
 async function fetchGymMasterBookings(startDate: string, endDate: string): Promise<BookingRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing GymMaster configuration");
-  }
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": apiKey,
-    },
-    body: JSON.stringify({
-      report_id: 9, // Bookings report
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`GymMaster API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.result || [];
+  return (await fetchGymMasterReport(9, startDate, endDate)) as unknown as BookingRow[];
 }
 
 async function fetchGymMasterCurrentMembers(): Promise<CurrentMemberRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing GymMaster configuration");
-  }
-
-  // Get current month date range
   const now = new Date();
   const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const endDate = now.toISOString().split("T")[0];
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": apiKey,
-    },
-    body: JSON.stringify({
-      report_id: 1, // Current Members report
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`GymMaster API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.result || [];
+  const endDate = now.toISOString().split("T")[0]!;
+  return (await fetchGymMasterReport(1, startDate, endDate)) as unknown as CurrentMemberRow[];
 }
 
 export async function GET(request: NextRequest) {
@@ -382,6 +330,8 @@ export async function GET(request: NextRequest) {
 
     const planPrices = await getPlanPrices(atRiskMembers.map(m => m.memberId));
     for (const m of atRiskMembers) m.planPrice = planPrices.get(m.memberId) ?? null;
+    // The new account's members report has no phone column: look the missing ones up
+    await Promise.all(atRiskMembers.filter(m => !m.phone).map(async m => { m.phone = await getMemberPhone(m.memberId).catch(() => null); }));
 
     // 6. Build summary stats
     const summary = {

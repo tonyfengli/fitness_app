@@ -7,6 +7,7 @@
  * Uses deterministic date matching (charge/payment date) for reconciliation.
  */
 
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
 import Stripe from "stripe";
 import { fetchProfitAndLoss } from "~/lib/quickbooks";
 
@@ -145,25 +146,7 @@ async function fetchGymMasterPayments(
   startDate: string,
   endDate: string
 ): Promise<{ gross: number; refunds: number }> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": apiKey!,
-    },
-    body: JSON.stringify({
-      report_id: 103, // ALL_PAYMENTS
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  const data = await response.json();
-  const payments = data.result || [];
+  const payments = await fetchGymMasterReport(103, startDate, endDate);
 
   let gross = 0;
   let refunds = 0;

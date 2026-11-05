@@ -7,6 +7,7 @@
  * Edge cases: Surface variance for manual review
  */
 
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateFounderAccess } from "~/lib/api-auth";
@@ -75,62 +76,11 @@ async function fetchGymMasterPayments(
   startDate: string,
   endDate: string
 ): Promise<Record<string, any>[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing GymMaster configuration");
-  }
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": apiKey,
-    },
-    body: JSON.stringify({
-      report_id: 103, // ALL_PAYMENTS
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`GymMaster API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.result || [];
+  return fetchGymMasterReport(103, startDate, endDate);
 }
 
 async function fetchCurrentMembers(year: number): Promise<Record<string, any>[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  if (!baseUrl || !apiKey) return [];
-
-  try {
-    const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-GM-API-KEY": apiKey,
-      },
-      body: JSON.stringify({
-        report_id: 1,
-        start_date: `${year}-01-01`,
-        end_date: `${year}-12-31`,
-      }),
-    });
-
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.result || [];
-  } catch {
-    return [];
-  }
+  return fetchGymMasterReport(1, `${year}-01-01`, `${year}-12-31`).catch(() => []);
 }
 
 function parseAmount(value: any): number {

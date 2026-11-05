@@ -5,6 +5,7 @@
  * Returns verification status for each GymMaster transaction
  */
 
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateFounderAccess } from "~/lib/api-auth";
@@ -49,38 +50,8 @@ async function fetchMemberPayments(
   startDate: string,
   endDate: string
 ): Promise<Record<string, unknown>[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing GymMaster configuration");
-  }
-
-  const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-GM-API-KEY": apiKey,
-    },
-    body: JSON.stringify({
-      report_id: 103, // ALL_PAYMENTS
-      start_date: startDate,
-      end_date: endDate,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`GymMaster API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const allPayments = data.result || [];
-
-  // Filter for this member
-  return allPayments.filter(
-    (p: Record<string, unknown>) => String(p["Member ID"]) === memberId
-  );
+  const allPayments = await fetchGymMasterReport(103, startDate, endDate);
+  return allPayments.filter((p) => String(p["Member ID"]) === memberId);
 }
 
 // Fetch Stripe charges for a date range

@@ -14,6 +14,8 @@
  *   3. AND was NOT on hold in X-1
  */
 
+import { paymentKind } from "./plan-categories";
+
 export interface LostMember {
   memberId: string;
   name: string;
@@ -78,13 +80,12 @@ function parsePaymentsNet(paymentsCsv: string): Map<string, { name: string; gym:
     const memberId = row["Member ID"] || "";
     const name = row["Name"] || "";
     const amountStr = row["Payment Amount"] || "0";
-    const details = row["Payment Details"] || "";
-
     const amount = parseFloat(amountStr.replace(/[$,]/g, "")) || 0;
 
-    let category: "gym" | "pt" | "other" = "other";
-    if (details.includes("Gym Memberships")) category = "gym";
-    else if (details.includes("Personal Training")) category = "pt";
+    // Group and Open Gym memberships count as "gym", by the plan map
+    const kind = paymentKind(row);
+    const category: "gym" | "pt" | "other" =
+      kind.kind !== "membership" || !kind.member || kind.bucket === "other" ? "other" : kind.bucket === "pt" ? "pt" : "gym";
 
     if (memberId && category !== "other") {
       if (!result.has(memberId)) {

@@ -7,10 +7,12 @@
  *   2. AND no payment in Month X-1
  *   (Reactivations - members who skipped a month - are counted as new)
  *
- * Categories:
- * - "Gym Memberships" -> New Group Members
- * - "Personal Training Packages" -> New PT Clients
+ * Categories (plan map, plan-categories.ts):
+ * - Group and Open Gym memberships -> New Group Members
+ * - PT -> New PT Clients
  */
+
+import { paymentKind } from "./plan-categories";
 
 export interface PaymentRecord {
   memberId: string;
@@ -39,10 +41,10 @@ export interface NewMembersResult {
 /**
  * Parse payment category from Payment Details field
  */
-function parseCategory(details: string): "gym" | "pt" | "other" {
-  if (details.includes("Gym Memberships")) return "gym";
-  if (details.includes("Personal Training")) return "pt";
-  return "other";
+function parseCategory(details: string, plan: string): "gym" | "pt" | "other" {
+  const kind = paymentKind({ "Payment Details": details, "Membership-Type Name": plan });
+  if (kind.kind !== "membership" || !kind.member || kind.bucket === "other") return "other";
+  return kind.bucket === "pt" ? "pt" : "gym";
 }
 
 /**
@@ -60,6 +62,7 @@ export function parsePayments(paymentsCsv: string): PaymentRecord[] {
   const amountIdx = headers.findIndex((h) => h === "Payment Amount");
   const dateIdx = headers.findIndex((h) => h === "Payment Date");
   const detailsIdx = headers.findIndex((h) => h === "Payment Details");
+  const planIdx = headers.findIndex((h) => h === "Membership-Type Name");
 
   if (memberIdIdx === -1 || amountIdx === -1) return [];
 
@@ -89,10 +92,11 @@ export function parsePayments(paymentsCsv: string): PaymentRecord[] {
     const amountStr = values[amountIdx] || "0";
     const date = values[dateIdx] || "";
     const details = values[detailsIdx] || "";
+    const plan = planIdx >= 0 ? (values[planIdx] ?? "") : "";
 
     // Parse amount (remove $, commas, handle negatives)
     const amount = parseFloat(amountStr.replace(/[$,]/g, "")) || 0;
-    const category = parseCategory(details);
+    const category = parseCategory(details, plan);
 
     if (memberId && category !== "other") {
       records.push({ memberId, name, amount, date, category });

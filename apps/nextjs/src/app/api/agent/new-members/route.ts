@@ -11,7 +11,7 @@
  * - in a finalized KPI month's new members (minus "exclude from new"), or
  * - not finalized yet: not on the KPI roster, and either paid since the cutoff with
  *   no payment in the finalized month (the KPI page's new-member rule: net payments
- *   per category, Gym Memberships or Personal Training), or has a membership that
+ *   per category, memberships (Group + Open Gym) or PT, by the plan map), or has a membership that
  *   hasn't started yet. "Exclude from new" for the cutoff month applies once saved.
  *
  * Members marked onboarded (retention_event "onboarded") drop off after 14 days;
@@ -25,6 +25,9 @@ import { KpiMemberOverride, KpiMonthlySnapshot, RetentionEvent } from "@acme/db/
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getKpiRoster } from "~/lib/kpi-roster";
 import { getPlanPrices } from "~/lib/plan-price";
+import { fetchGymMasterReport } from "~/lib/gymmaster-report";
+import { getMemberPhone } from "~/lib/gymmaster-member";
+import { paymentKind } from "~/app/kpi/lib/plan-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -56,47 +59,17 @@ function parseGymMasterDate(s: unknown): string {
   return isNaN(d.getTime()) ? "" : iso(d);
 }
 
-async function fetchReport(reportId: number, startDate: string, endDate: string): Promise<ReportRow[]> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_REPORT_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("Missing GymMaster configuration");
+const fetchReport = (reportId: number, startDate: string, endDate: string) =>
+  fetchGymMasterReport(reportId, startDate, endDate) as unknown as Promise<ReportRow[]>;
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await fetch(`${baseUrl}/api/v2/report/standard_report`, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json", "X-GM-API-KEY": apiKey },
-      body: JSON.stringify({ report_id: reportId, start_date: startDate, end_date: endDate }),
-    });
-    if (response.status === 429) {
-      await new Promise(r => setTimeout(r, 1500 * 2 ** attempt));
-      continue;
-    }
-    if (!response.ok) throw new Error(`GymMaster report ${reportId} error: ${response.status}`);
-    const data = await response.json();
-    return data.result || [];
-  }
-  throw new Error(`GymMaster report ${reportId} rate limited`);
-}
-
-async function fetchMemberPhone(memberId: string): Promise<string | null> {
-  const baseUrl = process.env.GYMMASTER_BASE_URL;
-  const apiKey = process.env.GYMMASTER_STAFF_API_KEY;
-  if (!baseUrl || !apiKey) return null;
-  const response = await fetch(`${baseUrl}/api/v3/member/${memberId}`, {
-    headers: { Accept: "application/json", "X-GM-API-KEY": apiKey },
-  });
-  if (!response.ok) return null;
-  const record = await response.json();
-  const m = (Array.isArray(record) ? record[0] : record) as { phonecell?: string; phonehome?: string; phonework?: string } | undefined;
-  return m?.phonecell || m?.phonehome || m?.phonework || null;
-}
+const fetchMemberPhone = getMemberPhone;
 
 // Net payments per member per KPI category (refunds net out), as on the KPI page
 function netByCategory(payments: ReportRow[]) {
   const net = { gym: new Map<string, number>(), pt: new Map<string, number>() };
   for (const p of payments) {
-    const details = String(p["Payment Details"] ?? "");
-    const category = details.includes("Gym Memberships") ? "gym" : details.includes("Personal Training") ? "pt" : null;
+    const kind = paymentKind(p);
+    const category = kind.kind !== "membership" || !kind.member || kind.bucket === "other" ? null : kind.bucket === "pt" ? "pt" : "gym";
     const memberId = String(p["Member ID"] ?? "");
     if (!category || !memberId) continue;
     net[category].set(memberId, (net[category].get(memberId) || 0) + money(p["Payment Amount"]));
