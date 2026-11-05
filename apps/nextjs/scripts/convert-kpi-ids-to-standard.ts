@@ -72,7 +72,8 @@ async function main() {
   if (!APPLY) return console.log("Dry run: nothing written. Re-run with --apply.");
 
   await db.transaction(async (tx) => {
-    for (const u of snapshotUpdates) await tx.update(KpiMonthlySnapshot).set({ data: u.data }).where(eq(KpiMonthlySnapshot.id, u.id));
+    // updatedAt is set by hand: its $onUpdateFn returns SQL, which the timestamp column can't map
+    for (const u of snapshotUpdates) await tx.update(KpiMonthlySnapshot).set({ data: u.data, updatedAt: new Date() }).where(eq(KpiMonthlySnapshot.id, u.id));
     for (const u of overrideUpdates) await tx.update(KpiMemberOverride).set({ memberId: u.memberId }).where(eq(KpiMemberOverride.id, u.id));
     for (const u of linkUpdates)
       await tx
