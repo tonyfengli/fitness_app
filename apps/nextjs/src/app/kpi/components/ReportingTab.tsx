@@ -881,6 +881,10 @@ export function ReportingTab() {
     setMonthsData([]);
     setOverrides({});
     setLastSavedAt(null);
+    // The exclusions live in the database; reload them so the cleared page still applies them
+    loadOverridesFromSupabase(reportYear)
+      .then((fresh) => saveOverrides(fresh))
+      .catch((e) => console.error("Failed to reload overrides:", e));
   };
 
   const formatSavedAt = (isoString: string) => {
