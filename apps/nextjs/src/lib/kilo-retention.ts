@@ -251,7 +251,9 @@ export async function syncRetentionBoard(opts: SyncOptions): Promise<SyncResult>
   const [computed, pipeline, contacts, fields, users] = await Promise.all([computeAtRisk(now), getRetentionPipeline(), listKiloContacts(), listKiloCustomFields(), kiloUsers()]);
   const ahead = bookedAhead(now);
   if (!computed) throw new Error("No finalized KPI month: no roster");
-  if (computed.gymMasterError) result.warnings.push(`GymMaster: ${computed.gymMasterError}`);
+  // Without bookings everyone reads as 60 days gone: never act on that
+  if (computed.gymMasterError) throw new Error(`GymMaster unavailable, board left alone: ${computed.gymMasterError}`);
+  if (!computed.bookingsQueried) throw new Error("GymMaster returned no bookings for the last 60 days, board left alone");
 
   const idField = fields.find((f) => f.name === ID_FIELD);
   if (!idField) throw new Error(`Kilo custom field "${ID_FIELD}" missing: run the member sync first`);
