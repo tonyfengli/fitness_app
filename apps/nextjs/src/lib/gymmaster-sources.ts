@@ -6,7 +6,8 @@
  *   - November: the old account (live until it closes, then the archive) + the new account
  *   - December on: the new account only, passed through
  * New-account rows are kept to Anaheim (company 5). Old-account rows read live (November
- * only) are converted on the way in. Every row carries `_account`.
+ * only) are converted on the way in. Every row carries `_account`; rows with a
+ * "Membership Start Date" also carry `_memberSince` (see getOldAccountStarts).
  */
 
 import { and, eq, gte, lte, ne } from "@acme/db";
@@ -229,7 +230,7 @@ export async function readGymMasterRows(reportId: number, startDate: string, end
     );
   }
 
-  const rows = (await Promise.all(parts)).flat();
+  const rows = await withMemberSince((await Promise.all(parts)).flat());
   if (!PER_MEMBER[reportId]) return rows;
 
   // One row per member: the new account's row wins over the old account's
@@ -240,4 +241,49 @@ export async function readGymMasterRows(reportId: number, startDate: string, end
     if (!seen || seen._account === "old") byMember.set(key, r);
   }
   return [...byMember.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Member since
+
+let startsCache: { at: number; byMember: Map<string, string> } | null = null;
+
+/**
+ * Each member's first start date in the old account: the earliest "Membership Start Date"
+ * in the archive, by member number (converted, so moved members are under their new
+ * number). The new account has no join date: its start dates are when members were
+ * re-entered (late Oct 2026). For anyone who was in the old account, the old account's
+ * date wins (decided with Tony 2026-11-06).
+ */
+async function getOldAccountStarts(): Promise<Map<string, string>> {
+  if (startsCache && Date.now() - startsCache.at < CACHE_MS) return startsCache.byMember;
+  const rows = await db
+    .select({ data: GymMasterArchiveRow.data })
+    .from(GymMasterArchiveRow)
+    .innerJoin(GymMasterArchivePull, eq(GymMasterArchiveRow.pullId, GymMasterArchivePull.id))
+    .where(and(eq(GymMasterArchiveRow.reportId, 1), eq(GymMasterArchivePull.account, "old")));
+  const byMember = new Map<string, string>();
+  for (const { data } of rows) {
+    const id = cell(data["Member ID"]);
+    const start = cell(data["Membership Start Date"]);
+    if (!id || isNaN(Date.parse(start))) continue;
+    const seen = byMember.get(id);
+    if (!seen || Date.parse(start) < Date.parse(seen)) byMember.set(id, start);
+  }
+  startsCache = { at: Date.now(), byMember };
+  return byMember;
+}
+
+/**
+ * `_memberSince`: the day the member first joined. "Membership Start Date" stays the start
+ * of the plan on that row (billing and lost-member context need it).
+ */
+async function withMemberSince(rows: GymMasterRow[]): Promise<GymMasterRow[]> {
+  if (!rows.some((r) => "Membership Start Date" in r)) return rows;
+  const starts = await getOldAccountStarts();
+  return rows.map((r) =>
+    "Membership Start Date" in r
+      ? { ...r, _memberSince: starts.get(cell(r["Member ID"])) ?? (cell(r["Membership Start Date"]) || null) }
+      : r,
+  );
 }

@@ -201,7 +201,7 @@ export async function GET(
 
     // Get membership tenure
     const memberSince = memberData
-      ? String(memberData["Membership Start Date"] || memberData["Join Date"] || "")
+      ? String(memberData._memberSince || memberData["Membership Start Date"] || memberData["Join Date"] || "")
       : null;
 
     let tenureMonths = 0;

@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
     const newMembers: NewMember[] = await Promise.all(
       ids.map(async (memberId) => {
         const row = currentById.get(memberId);
-        const startDate = parseGymMasterDate(row?.["Membership Start Date"]);
+        const startDate = parseGymMasterDate(row?._memberSince || row?.["Membership Start Date"]);
         const memberSince = startDate || firstPayment.get(memberId)?.date || today;
         const daysSince = (date: string) => Math.max(0, Math.round((Date.parse(today) - Date.parse(date)) / 864e5));
         const signedUp = firstPayment.get(memberId)?.date || (startDate && startDate <= today ? startDate : today);

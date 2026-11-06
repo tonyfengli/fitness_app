@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/trainerize-sync",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/kilo-retention",
+      "schedule": "0 10 * * *"
     }
   ]
 }

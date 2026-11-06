@@ -44,6 +44,7 @@ interface CurrentMemberRow {
   "Member ID": number;
   "Member Name"?: string;
   "Membership Start Date": string;
+  _memberSince?: string | null; // first joined (old account's date when they were there)
   "Membership Type Name"?: string;
   "Member Cell"?: string;
 }
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest) {
 
     for (const member of currentMembers) {
       const memberId = String(member["Member ID"]);
-      const startDateStr = member["Membership Start Date"];
+      const startDateStr = member._memberSince || member["Membership Start Date"];
       let memberSince: Date | null = null;
 
       if (startDateStr) {
