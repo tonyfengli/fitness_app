@@ -5,33 +5,27 @@
  * Each member is matched to a Kilo contact by the "GymMaster Member ID" custom field, then
  * by phone (last 10 digits). Matched contacts get the "current members" tag and the
  * member ID; members not in Kilo are created with both. Nothing else is changed, and
- * contacts are never deleted. Members without a phone in GymMaster are listed, not created.
+ * contacts are never deleted. Members without a phone in GymMaster (new account, else the archived old record) are listed, not created.
  *
  * Dry run by default (prints the plan, writes nothing). Apply with --apply.
  *   npx tsx --tsconfig tsconfig.json scripts/kilo-sync-members.ts [--apply]
  */
 
+import { getMemberPhone } from "~/lib/gymmaster-member";
+import { splitName } from "~/lib/gymmaster-standard";
 import { getKpiRoster } from "~/lib/kpi-roster";
-import { fetchGymMasterReport, GYMMASTER_REPORTS } from "~/lib/gymmaster-report";
 import { kiloConfig, kiloRequest, listKiloContacts, listKiloCustomFields, phoneKey } from "~/lib/kilo";
 
 const MEMBER_TAG = "current members"; // existing Kilo tag, reused
 const ID_FIELD = "GymMaster Member ID";
 const APPLY = process.argv.includes("--apply");
 
-function splitName(name: string) {
-  // GymMaster names are "Last, First"
-  const [last, first] = name.split(",").map((s) => s.trim());
-  return first ? { firstName: first, lastName: last ?? "" } : { firstName: name.trim(), lastName: "" };
-}
-
 async function main() {
   const { locationId } = kiloConfig();
   const roster = await getKpiRoster();
   if (!roster) throw new Error("No finalized KPI months: no roster");
-  const today = new Date().toISOString().slice(0, 10);
-  const gm = await fetchGymMasterReport(GYMMASTER_REPORTS.MEMBERS, "2026-01-01", today);
-  const cell = new Map(gm.map((m) => [String(m["Member ID"]), m["Member Cell"]]));
+  // New-account phone, else the archived old record's
+  const cell = new Map(await Promise.all(roster.members.map(async (m) => [m.memberId, await getMemberPhone(m.memberId)] as const)));
 
   const contacts = await listKiloContacts();
   const fields = await listKiloCustomFields();
@@ -74,7 +68,8 @@ async function main() {
         void (await kiloRequest("POST", "contacts/upsert", {
           body: {
             locationId,
-            ...splitName(m.name),
+            firstName: splitName(m.name).first,
+            lastName: splitName(m.name).last,
             phone: `+1${phone}`,
             tags: [MEMBER_TAG],
             source: "Elev8 dashboard sync",
