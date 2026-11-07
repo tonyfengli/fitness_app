@@ -6,10 +6,16 @@
  * Vercel's scheduler calls it with "Authorization: Bearer <CRON_SECRET>" (vercel.json);
  * a signed-in founder can call it too, to refresh the board now. Rules and test mode
  * (KILO_RETENTION_TEST_MEMBERS) in ~/lib/kilo-retention.
+ *
+ * With KILO_MEMBER_SYNC_ENABLED=true it first brings Kilo's contacts in line with
+ * fitness_app's current members (~/lib/kilo-members), so new members get a contact the
+ * night after their first payment and can carry cards. Off until Kilo's lead workflows
+ * filter out the "current members" tag.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
+import { syncKiloMembers } from "~/lib/kilo-members";
 import { syncRetentionBoard } from "~/lib/kilo-retention";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +31,16 @@ export async function GET(request: NextRequest) {
 
   const dry = request.nextUrl.searchParams.get("dry") === "1";
   try {
+    const membersEnabled = process.env.KILO_MEMBER_SYNC_ENABLED === "true";
+    const members = membersEnabled ? await syncKiloMembers({ apply: !dry }) : null;
+    if (members) console.log(`[cron/kilo-retention] members ${dry ? "dry run" : "applied"}: ${members.actions.length} actions, ${members.inSync} in sync, ${members.noPhone.length} without a phone`);
     const r = await syncRetentionBoard({ apply: !dry });
     const summary = {
       ranAt: new Date().toISOString(),
       applied: !dry,
+      members: members
+        ? { current: members.members.length, actions: members.actions.map(({ memberId, name, kind }) => ({ memberId, name, kind })), inSync: members.inSync, noPhone: members.noPhone, taggedByHand: members.taggedByHand }
+        : "off (KILO_MEMBER_SYNC_ENABLED)",
       testMembers: r.testMembers ? [...r.testMembers] : null,
       actions: r.actions.map(({ memberId, name, kind, detail }) => ({ memberId, name, kind, detail })),
       unchanged: r.unchanged.length,
