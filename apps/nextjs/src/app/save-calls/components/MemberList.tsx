@@ -17,6 +17,16 @@ interface MemberListProps {
 const formatShortDate = (date: string) =>
   new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+/** The Kilo board column as a status pill; no card yet reads as No Touches */
+const BOARD_STATUS: Record<string, { label: string; className: string }> = {
+  "At-Risk": { label: "No Touches", className: "bg-gray-100 text-gray-600" },
+  "Reached Out": { label: "Reached Out", className: "bg-blue-50 text-blue-700" },
+  "No Reply": { label: "No Reply", className: "bg-amber-50 text-amber-700" },
+  "In Conversation": { label: "In Conversation", className: "bg-green-50 text-green-700" },
+  Booked: { label: "Booked", className: "bg-teal-50 text-teal-700" },
+};
+const boardStatus = (stage?: string | null) => (stage && BOARD_STATUS[stage]) || BOARD_STATUS["At-Risk"]!;
+
 /** "today", "1d ago", "5d ago" from a YYYY-MM-DD date */
 function daysAgoLabel(date: string): string {
   const days = Math.max(0, Math.floor((Date.now() - Date.parse(`${date}T12:00:00`)) / 864e5));
@@ -123,26 +133,25 @@ function MemberRow({
           </div>
         ) : (
         <div className="hidden md:block w-44 flex-shrink-0 text-xs text-right pr-4">
-          {member.kilo ? (
-            <>
-              <div className="text-gray-700 font-medium">{member.kilo.stage}</div>
-              {member.touchCount > 0 && member.lastTouchDate ? (
-                <div className="text-gray-500">
-                  {member.lastTouchType} · {daysAgoLabel(member.lastTouchDate)}
-                  {member.touchCount > 1 ? ` · ${member.touchCount} touches` : ""}
-                </div>
-              ) : (
-                <div className="text-gray-400">No touches yet</div>
-              )}
-              <a href={member.kilo.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-                Open in Kilo ↗
-              </a>
-            </>
-          ) : member.touchCount > 0 ? (
-            <div className="text-gray-600">{member.lastTouchType}</div>
-          ) : (
-            <div className="text-gray-400">No touches yet</div>
-          )}
+          {(() => {
+            const status = boardStatus(member.kilo?.stage);
+            return (
+              <>
+                <span className={`inline-block px-2 py-0.5 rounded font-medium ${status.className}`}>{status.label}</span>
+                {member.touchCount > 0 && member.lastTouchDate && (
+                  <div className="mt-0.5 text-gray-400">
+                    {member.lastTouchType} · {daysAgoLabel(member.lastTouchDate)}
+                    {member.touchCount > 1 ? ` · ${member.touchCount} touches` : ""}
+                  </div>
+                )}
+                {member.kilo && (
+                  <a href={member.kilo.url} target="_blank" rel="noreferrer" className="block mt-0.5 text-gray-400 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                    Open in Kilo ↗
+                  </a>
+                )}
+              </>
+            );
+          })()}
         </div>
         )}
 
