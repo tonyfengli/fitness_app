@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { computeAtRisk, LOOKBACK_DAYS } from "~/lib/at-risk";
+import { readBoard, type BoardStatus } from "~/lib/kilo-retention";
 import { getPlanPrices } from "~/lib/plan-price";
 import { getMemberPhone } from "~/lib/gymmaster-member";
 
@@ -73,6 +74,14 @@ export async function GET(request: NextRequest) {
     for (const m of atRiskMembers) m.planPrice = planPrices.get(m.memberId) ?? null;
     // The new account's members report has no phone column: look the missing ones up
     await Promise.all(atRiskMembers.filter(m => !m.phone).map(async m => { m.phone = await getMemberPhone(m.memberId).catch(() => null); }));
+    // Where each member sits on the Kilo retention board; left off when Kilo isn't reachable
+    let board: Map<string, BoardStatus> | null = null;
+    try {
+      board = await readBoard(atRiskMembers.map(m => m.memberId));
+    } catch (err) {
+      console.warn("[at-risk] Kilo board unavailable:", err instanceof Error ? err.message : err);
+    }
+    const withBoard = atRiskMembers.map(m => ({ ...m, kilo: board?.get(m.memberId) ?? null }));
 
     // 6. Build summary stats
     const summary = {
@@ -92,7 +101,7 @@ export async function GET(request: NextRequest) {
       month,
       year,
       summary,
-      atRiskMembers,
+      atRiskMembers: withBoard,
       _meta: {
         generatedAt: new Date().toISOString(),
         dataSource: gymMasterError ? "supabase_only" : "supabase+gymmaster",
@@ -103,6 +112,7 @@ export async function GET(request: NextRequest) {
         lookbackDays: LOOKBACK_DAYS,
         excludedByOverride: excludedMemberIds.size,
         excludedPt: payingMembers.filter(m => ptMembers.has(m.memberId)).length,
+        kiloBoard: board ? "live" : "unavailable",
       },
     });
   } catch (error) {

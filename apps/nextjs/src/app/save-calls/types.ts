@@ -46,6 +46,7 @@ export interface MemberCallItem {
   onboarding?: { daysUncontacted: number; onboardedOn: string | null }; // New members tab: replaces days gone + tier
   weeklyVisits?: WeeklyVisits; // For expandable detail view
   totalVisits?: number; // Total visits in weeks 0-3
+  kilo?: { stage: string; url: string } | null; // the member's card on the Kilo retention board
 }
 
 export interface DayStats {

@@ -17,6 +17,12 @@ interface MemberListProps {
 const formatShortDate = (date: string) =>
   new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+/** "today", "1d ago", "5d ago" from a YYYY-MM-DD date */
+function daysAgoLabel(date: string): string {
+  const days = Math.max(0, Math.floor((Date.now() - Date.parse(`${date}T12:00:00`)) / 864e5));
+  return days === 0 ? "today" : `${days}d ago`;
+}
+
 function ChevronIcon({ className, expanded }: { className?: string; expanded?: boolean }) {
   return (
     <svg
@@ -117,18 +123,23 @@ function MemberRow({
           </div>
         ) : (
         <div className="hidden md:block w-44 flex-shrink-0 text-xs text-right pr-4">
-          {member.touchCount > 0 ? (
+          {member.kilo ? (
             <>
-              <div className="text-gray-600">
-                Touch {member.touchCount} · day {member.daysGone} gone: {member.lastTouchType || "call"}
-              </div>
-              <div className="text-red-500">
-                Call was due {member.callDueDate || "today"}
-              </div>
-              {member.lastAttemptResult && (
-                <div className="text-gray-400">Last: {member.lastAttemptResult}</div>
+              <div className="text-gray-700 font-medium">{member.kilo.stage}</div>
+              {member.touchCount > 0 && member.lastTouchDate ? (
+                <div className="text-gray-500">
+                  {member.lastTouchType} · {daysAgoLabel(member.lastTouchDate)}
+                  {member.touchCount > 1 ? ` · ${member.touchCount} touches` : ""}
+                </div>
+              ) : (
+                <div className="text-gray-400">No touches yet</div>
               )}
+              <a href={member.kilo.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                Open in Kilo ↗
+              </a>
             </>
+          ) : member.touchCount > 0 ? (
+            <div className="text-gray-600">{member.lastTouchType}</div>
           ) : (
             <div className="text-gray-400">No touches yet</div>
           )}

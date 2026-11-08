@@ -50,6 +50,7 @@ interface AtRiskApiMember {
   tenureMonths: number;
   weeklyVisits?: WeeklyVisitsApi;
   totalVisits?: number;
+  kilo?: { stage: string; url: string; touches: number; lastTouch: { what: string; at: string; by: string | null } | null } | null;
 }
 
 interface NewMemberApiMember {
@@ -94,13 +95,15 @@ function apiMemberToCallItem(member: AtRiskApiMember): MemberCallItem {
     daysGone: member.daysGone,
     tier: member.statusTier as AtRiskTier,
     phone: member.phone,
-    touchCount: 0, // No call logging yet
-    lastTouchType: null,
-    lastTouchDate: null,
+    // Touches come from the Kilo retention board (texts, calls and drags logged by the nightly sync)
+    touchCount: member.kilo?.touches ?? 0,
+    lastTouchType: member.kilo?.lastTouch ? `${member.kilo.lastTouch.what}${member.kilo.lastTouch.by ? ` by ${member.kilo.lastTouch.by}` : ""}` : null,
+    lastTouchDate: member.kilo?.lastTouch?.at ?? null,
     callDueDate: null,
     lastAttemptResult: null,
     weeklyVisits: member.weeklyVisits,
     totalVisits: member.totalVisits,
+    kilo: member.kilo ? { stage: member.kilo.stage, url: member.kilo.url } : null,
   };
 }
 

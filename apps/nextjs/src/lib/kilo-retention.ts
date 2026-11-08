@@ -10,10 +10,13 @@
  *       Reached Out      a person texted / called / emailed from Kilo, within the last 5 days, nothing back since
  *       In Conversation  the member replied, or a call connected for 30+ seconds, within the last 5 days
  *       No Reply         we reached out, and the last word from anyone is 5+ days old
+ *       (a card dragged into one of these by hand, with nothing in Kilo's log, is taken as a
+ *        touch by other means, dated from the drag: it stays, and goes to No Reply after 5 days)
  *   - a class booked ahead in GymMaster -> Booked (back to the column above if that booking goes away)
  *   - attended a class            -> close Won
  *   - off the roster              -> close Lost
- * The middle columns follow the conversation log in either direction. Attendance always wins.
+ * The middle columns follow the conversation log in either direction, and never back to
+ * At-Risk once someone has reached out. Attendance always wins.
  * Each change is also written to retention_event, which keeps the per-episode history Kilo can't
  * (a reopened card is one card with several episodes).
  *
@@ -141,8 +144,8 @@ interface KiloMessage {
 }
 
 /** The last word in the conversation, for the card name: "texted 3d ago", "replied 1d ago", "called 2d ago" */
-interface Touch {
-  what: "texted" | "called" | "emailed" | "replied" | "talked";
+export interface Touch {
+  what: "texted" | "called" | "emailed" | "replied" | "talked" | "contacted";
   at: string;
 }
 
@@ -360,13 +363,23 @@ export async function syncRetentionBoard(opts: SyncOptions): Promise<SyncResult>
     const since = episodeStart.get(m.memberId) ?? card.lastStatusChangeAt ?? card.createdAt;
     const convo = await readConversation(contact.id, since);
     const newOutreach = convo.outreach.filter((o) => !loggedOutreach.has(o.id));
-    const target: StageKey = (await ahead(m.memberId)) ? "booked" : (conversationStage(convo, now) ?? "atRisk");
-    const fullName = cardName(m.name, m.daysGone, convo.lastWord ?? undefined, now);
+    // Dragged into a middle column with nothing in Kilo's log: a touch by other means, from the drag
+    const dragged = !convo.lastOutreach && (stage === "reachedOut" || stage === "noReply" || stage === "inConversation");
+    const dragAt = dragged ? (card.lastStageChangeAt ?? card.createdAt) : null;
+    const dragKey = dragAt ? `kilo:drag:${card.id}:${dragAt}` : null;
+    const fromLog = conversationStage(convo, now);
+    const target: StageKey = (await ahead(m.memberId))
+      ? "booked"
+      : fromLog ?? (dragAt ? (daysAgo(dragAt, now) >= NO_REPLY_DAYS ? "noReply" : stage) : stage === "booked" ? "atRisk" : stage);
+    const lastWord: Touch | undefined = convo.lastWord ?? (dragAt ? { what: "contacted", at: dragAt } : undefined);
+    const fullName = cardName(m.name, m.daysGone, lastWord, now);
 
     const changes: string[] = [];
     if (card.name !== fullName) changes.push(`rename "${card.name}" -> "${fullName}"`);
     if (target !== stage) changes.push(`${STAGE_NAMES[stage]} -> ${STAGE_NAMES[target]}`);
     for (const o of newOutreach) changes.push(`log ${method(o)} by ${users.get(o.userId ?? "") ?? "staff"} ${o.dateAdded.slice(0, 10)}`);
+    const logDrag = !!dragKey && !loggedOutreach.has(dragKey.slice(5));
+    if (logDrag) changes.push(`log contact by other means (card moved to ${STAGE_NAMES[stage]} ${dragAt!.slice(0, 10)})`);
     if (!changes.length) {
       result.unchanged.push(`${label}: ${STAGE_NAMES[stage]}, ${m.daysGone}d`);
       continue;
@@ -380,6 +393,7 @@ export async function syncRetentionBoard(opts: SyncOptions): Promise<SyncResult>
         const reached = realCall(o) || (o.messageType === "TYPE_CALL" && o.meta?.call?.status === "completed");
         await log({ ...base, eventType: "outreach_sent", eventDate: o.dateAdded.slice(0, 10), outreachMethod: method(o), outcome: method(o) === "sms" ? "texted" : method(o) === "email" ? "emailed" : reached ? "reached" : "no_answer", atRiskTier: tier, daysGone: m.daysGone, createdBy: users.get(o.userId ?? "") ?? "kilo", notes: `kilo:${o.id}` });
       }
+      if (logDrag) await log({ ...base, eventType: "outreach_sent", eventDate: dragAt!.slice(0, 10), outreachMethod: "in_person", outcome: "reached", atRiskTier: tier, daysGone: m.daysGone, createdBy: "kilo board", notes: dragKey! });
     });
   }
 
@@ -390,4 +404,62 @@ export async function syncRetentionBoard(opts: SyncOptions): Promise<SyncResult>
     }
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// The board, for the Retention tab
+
+export interface BoardStatus {
+  stage: string; // column label, e.g. "Reached Out"
+  cardId: string;
+  contactId: string;
+  url: string; // the contact in Kilo
+  touches: number; // outreach this episode (texts, calls, emails, drags), from our log
+  lastTouch: { what: string; at: string; by: string | null } | null;
+}
+
+const KILO_APP = "https://kilo.gymleadmachine.com";
+
+/**
+ * Where each member's open card sits and what's been done this episode: cards read live
+ * from Kilo (one call), touches from retention_event (written by the nightly run). Members
+ * without an open card are left out. Throws if Kilo is unreachable; callers decide.
+ */
+export async function readBoard(memberIds: string[]): Promise<Map<string, BoardStatus>> {
+  const { locationId } = kiloConfig();
+  const [pipeline, contacts, fields] = await Promise.all([getRetentionPipeline(), listKiloContacts(), listKiloCustomFields()]);
+  const idField = fields.find((f) => f.name === ID_FIELD);
+  const memberByContact = new Map<string, string>();
+  for (const c of contacts) {
+    const v = idField ? c.customFields?.find((f) => f.id === idField.id)?.value : undefined;
+    if (v) memberByContact.set(c.id, String(v));
+  }
+  const cards = (await listCards(pipeline.id)).filter((c) => c.status === "open");
+  const wanted = new Set(memberIds);
+  const open = cards.map((c) => ({ card: c, memberId: memberByContact.get(c.contactId) })).filter((x): x is { card: Card; memberId: string } => !!x.memberId && wanted.has(x.memberId));
+  if (!open.length) return new Map();
+
+  const events = await db
+    .select({ memberId: RetentionEvent.memberId, eventType: RetentionEvent.eventType, eventDate: RetentionEvent.eventDate, outreachMethod: RetentionEvent.outreachMethod, outcome: RetentionEvent.outcome, createdBy: RetentionEvent.createdBy, createdAt: RetentionEvent.createdAt })
+    .from(RetentionEvent)
+    .where(and(inArray(RetentionEvent.memberId, open.map((o) => o.memberId)), inArray(RetentionEvent.eventType, ["flagged_at_risk", "outreach_sent"])))
+    .orderBy(desc(RetentionEvent.createdAt));
+
+  const out = new Map<string, BoardStatus>();
+  for (const { card, memberId } of open) {
+    const mine = events.filter((e) => e.memberId === memberId);
+    const start = mine.find((e) => e.eventType === "flagged_at_risk")?.createdAt ?? new Date(card.createdAt);
+    const touches = mine.filter((e) => e.eventType === "outreach_sent" && new Date(`${e.eventDate}T23:59:59Z`) >= start);
+    const last = touches[0];
+    const what = last ? (last.outreachMethod === "in_person" ? "contacted" : last.outcome === "reached" ? "talked" : last.outreachMethod === "phone" ? "called" : last.outreachMethod === "email" ? "emailed" : "texted") : null;
+    out.set(memberId, {
+      stage: STAGE_NAMES[pipeline.stageKey.get(card.pipelineStageId) ?? "atRisk"],
+      cardId: card.id,
+      contactId: card.contactId,
+      url: `${KILO_APP}/v2/location/${locationId}/contacts/detail/${card.contactId}`,
+      touches: touches.length,
+      lastTouch: last && what ? { what, at: String(last.eventDate), by: last.createdBy && last.createdBy !== "kilo" && last.createdBy !== "kilo board" ? last.createdBy : null } : null,
+    });
+  }
+  return out;
 }
