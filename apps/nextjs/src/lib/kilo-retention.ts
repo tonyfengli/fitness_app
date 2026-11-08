@@ -233,7 +233,11 @@ function bookedAhead(now: Date) {
   };
 }
 
-/** A forced test member's last attended class, from the new account's member API (live) */
+/**
+ * A forced test member's last attended class, from the new account's member API (live).
+ * That API lists upcoming bookings only, so this finds a class booked for today at most:
+ * `--force ID:real` reads as attended only on the day of the class.
+ */
 async function lastAttended(memberId: string, now: Date): Promise<string | null> {
   if (!newAccountConfig()) return null;
   const b = await newAccountApi<{ arrival?: string; resultname?: string }[]>(`/api/v3/member/${memberId}/booking`).catch(() => []);
