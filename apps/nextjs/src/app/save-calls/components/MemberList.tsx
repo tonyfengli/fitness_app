@@ -144,11 +144,6 @@ function MemberRow({
                     {member.touchCount > 1 ? ` · ${member.touchCount} touches` : ""}
                   </div>
                 )}
-                {member.kilo && (
-                  <a href={member.kilo.url} target="_blank" rel="noreferrer" className="block mt-0.5 text-gray-400 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-                    Open in Kilo ↗
-                  </a>
-                )}
               </>
             );
           })()}
