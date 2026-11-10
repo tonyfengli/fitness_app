@@ -7,6 +7,7 @@
  *   unblock   back to open               decline   the owner rejects it (text = why)
  *   move      new due date (dueAt ISO); hard deadlines refuse; owners may shift ≤ 2 days
  *   handoff   new owner (newOwnerSlackUserId); creator or workflow owner only
+ *   unassign  back to the backlog; owner, creator or workflow owner
  *   cancel    no longer needed; creator or workflow owner only
  *   note      a note on the task (text)
  * Who: a signed-in founder (acts as themselves) or the COS with X-TEAM-AGENT-KEY acting as
@@ -16,7 +17,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
-import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, reopen, review, start, TeamRuleError, unblock } from "~/lib/team/tasks";
+import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, reopen, review, start, TeamRuleError, unassign, unblock } from "~/lib/team/tasks";
 import type { Actor, Channel } from "~/lib/team/tasks";
 import { traceTask } from "~/lib/team/trace";
 
@@ -88,6 +89,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         break;
       case "reopen":
         await reopen(task, actor, channel);
+        break;
+      case "unassign":
+        await unassign(task, actor, channel, text);
         break;
       case "edit":
         await edit(task, actor, channel, { title: body.title, details: body.details });

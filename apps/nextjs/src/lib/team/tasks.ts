@@ -204,6 +204,18 @@ export async function reassign(task: Task, actor: Actor, channel: Channel, newOw
   });
 }
 
+/** Back to the unassigned backlog: the owner gives it up, or the creator / workflow owner takes it off them. */
+export async function unassign(task: Task, actor: Actor, channel: Channel, note?: string): Promise<Task> {
+  if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
+  if (!task.ownerId) return task;
+  if (!isOwner(task, actor) && !(await mayManage(task, actor))) throw new TeamRuleError("Only the owner or the creator can unassign this task");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(TeamTask).set({ ownerId: null, blockedOnId: null, nextCheckAt: null }).where(eq(TeamTask.id, task.id)).returning();
+    await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "reassigned", ...actorColumns(actor), channel, fromValue: task.ownerId, toValue: "unassigned", note: note ?? null });
+    return orThrow(updated);
+  });
+}
+
 /** Up to SMALL_SHIFT_DAYS the owner may move a soft due date; more needs the creator. Hard deadlines never move. */
 export const SMALL_SHIFT_DAYS = 2;
 

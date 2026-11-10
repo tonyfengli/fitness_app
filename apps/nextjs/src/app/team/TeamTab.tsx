@@ -213,6 +213,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
               <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Move</button>
             )}
             <button className={sub === "handoff" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "handoff" ? "none" : "handoff")}>Hand off</button>
+            <button className={BTN_WHITE} disabled={!!busy} onClick={() => act("unassign", { text: "Unassigned at the meeting" })}>Unassign</button>
             <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
           </div>
           {sub === "move" && (
