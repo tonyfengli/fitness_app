@@ -24,6 +24,12 @@ const config = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
+  /** Celebration cards draw text from bundled fonts (src/lib/celebrations/text.ts); ship them with the functions */
+  outputFileTracingIncludes: {
+    "/api/cron/celebrations": ["./src/lib/celebrations/fonts/*.ttf"],
+    "/api/agent/celebrations": ["./src/lib/celebrations/fonts/*.ttf"],
+  },
+
   /** React Native Web config */
   webpack: (config) => {
     config.resolve.alias = {

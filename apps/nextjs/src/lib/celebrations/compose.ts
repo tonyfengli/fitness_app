@@ -3,11 +3,13 @@
  * circle, the headline and the Elev8 mark. Deterministic; no model involved.
  *
  * Output: 1080×1080 PNG (square posts well everywhere, GroupMe included).
- * Text is rendered through an SVG overlay, so it uses the fonts installed where this runs.
- * Phase 2 note: Vercel functions ship few fonts; bundle a TTF before deploying this.
+ * Text goes in as outlines from the bundled Montserrat (text.ts), so Vercel renders it the
+ * same as a Mac; no system fonts are involved.
  */
 
 import sharp from "sharp";
+
+import { fitSize, textPath } from "./text";
 
 export const CARD = 1080;
 const PHOTO = 440;
@@ -24,14 +26,7 @@ export interface ComposeInput {
   brand?: string;
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-/** Fit the headline on one line: shrink the font for long names */
-function headlineSize(text: string) {
-  if (text.length <= 18) return 84;
-  if (text.length <= 24) return 68;
-  return 56;
-}
+const TEXT_MAX_WIDTH = CARD - 2 * 60;
 
 async function circularPhoto(photo: Buffer | null, initials: string): Promise<Buffer> {
   const mask = Buffer.from(`<svg width="${PHOTO}" height="${PHOTO}"><circle cx="${PHOTO / 2}" cy="${PHOTO / 2}" r="${PHOTO / 2}"/></svg>`);
@@ -44,9 +39,10 @@ async function circularPhoto(photo: Buffer | null, initials: string): Promise<Bu
       .toBuffer();
   }
   // Initials on a solid disc when the member has no photo
+  const initial = textPath(initials, { size: 170, weight: "extrabold", cx: PHOTO / 2, y: PHOTO / 2 + 60 });
   const svg = `<svg width="${PHOTO}" height="${PHOTO}">
     <circle cx="${PHOTO / 2}" cy="${PHOTO / 2}" r="${PHOTO / 2}" fill="#1f2937"/>
-    <text x="50%" y="50%" dy="0.36em" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="170" fill="#f9fafb">${esc(initials)}</text>
+    <path d="${initial.d}" fill="#f9fafb"/>
   </svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
@@ -65,6 +61,10 @@ export async function composeCelebration(input: ComposeInput): Promise<Buffer> {
   );
 
   const textTop = PHOTO_TOP + PHOTO + 110;
+  const headlineSize = fitSize(input.headline, "extrabold", TEXT_MAX_WIDTH, 84, 44);
+  const headline = textPath(input.headline, { size: headlineSize, weight: "extrabold", cx: CARD / 2, y: textTop });
+  const subline = input.subline ? textPath(input.subline, { size: fitSize(input.subline, "semibold", TEXT_MAX_WIDTH, 40, 28), weight: "semibold", cx: CARD / 2, y: textTop + 72 }) : null;
+  const mark = textPath(brand, { size: 30, weight: "semibold", cx: CARD / 2, y: CARD - 48, letterSpacing: 6 });
   const overlay = `<svg width="${CARD}" height="${CARD}">
     <defs>
       <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
@@ -73,9 +73,9 @@ export async function composeCelebration(input: ComposeInput): Promise<Buffer> {
       </linearGradient>
     </defs>
     <rect x="0" y="${CARD - 420}" width="${CARD}" height="420" fill="url(#fade)"/>
-    <text x="50%" y="${textTop}" text-anchor="middle" font-family="Arial Black, Helvetica, Arial, sans-serif" font-weight="900" font-size="${headlineSize(input.headline)}" fill="#ffffff" stroke="#000" stroke-opacity="0.35" stroke-width="2" paint-order="stroke">${esc(input.headline)}</text>
-    ${input.subline ? `<text x="50%" y="${textTop + 72}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="600" font-size="40" fill="#f5c542">${esc(input.subline)}</text>` : ""}
-    <text x="50%" y="${CARD - 48}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="30" letter-spacing="6" fill="#e5e7eb">${esc(brand)}</text>
+    <path d="${headline.d}" fill="#ffffff" stroke="#000" stroke-opacity="0.35" stroke-width="2" paint-order="stroke"/>
+    ${subline ? `<path d="${subline.d}" fill="#f5c542"/>` : ""}
+    <path d="${mark.d}" fill="#e5e7eb"/>
   </svg>`;
 
   return sharp(background)

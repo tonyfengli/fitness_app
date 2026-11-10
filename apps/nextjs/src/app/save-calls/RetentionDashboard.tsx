@@ -19,9 +19,11 @@ import {
   type ClassAttendanceData,
 } from "./components";
 import { CallBlock, MemberCallItem, AtRiskTier, PaymentRow, MilestoneRow } from "./types";
+import { CelebrationsView } from "./components/CelebrationsView";
+import type { CelebrationAction, CelebrationRow } from "./components/CelebrationsView";
 
-export type RetentionView = "at-risk" | "new-members" | "payments" | "milestones" | "classes";
-export const RETENTION_VIEWS: RetentionView[] = ["at-risk", "new-members", "payments", "milestones", "classes"];
+export type RetentionView = "at-risk" | "new-members" | "payments" | "milestones" | "celebrations" | "classes";
+export const RETENTION_VIEWS: RetentionView[] = ["at-risk", "new-members", "payments", "milestones", "celebrations", "classes"];
 
 // API response types
 interface WeeklyVisitsApi {
@@ -305,6 +307,8 @@ export function RetentionDashboard({
   const [milestonesError, setMilestonesError] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassAttendanceData | null>(null);
   const [classesError, setClassesError] = useState<string | null>(null);
+  const [celebrations, setCelebrations] = useState<CelebrationRow[] | null>(null);
+  const [celebrationsError, setCelebrationsError] = useState<string | null>(null);
 
   // Each source loads on its own; a refresh clears and reloads all of them
   const load = useCallback(<T,>(
@@ -342,7 +346,35 @@ export function RetentionDashboard({
     );
     // Last 4 weeks for the card; the Classes view fetches other ranges itself
     load(() => fetchJson<ClassAttendanceData>("/api/agent/classes", "Classes"), setClasses, setClassesError, "classes");
+    load(
+      () => fetchJson<{ celebrations?: CelebrationRow[] }>("/api/agent/celebrations", "Celebrations").then(b => b.celebrations ?? []),
+      setCelebrations,
+      setCelebrationsError,
+      "celebrations"
+    );
   }, [load, refreshKey]);
+
+  // Posted / Skip / Undo / Re-render on a celebration card, then update the row in place
+  const celebrationAction = async (row: CelebrationRow, action: CelebrationAction) => {
+    const res = await fetch("/api/agent/celebrations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: row.id, action }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; imageUrl?: string; renderedAt?: string; at?: string };
+    if (!res.ok) {
+      alert(body.error ?? "Couldn't update the card. Please try again.");
+      return;
+    }
+    const update = (c: CelebrationRow): CelebrationRow => {
+      if (c.id !== row.id) return c;
+      if (action === "rerender") return { ...c, imageUrl: `${body.imageUrl ?? ""}?v=${Date.now()}`, renderedAt: body.renderedAt ?? null };
+      if (action === "reopen") return { ...c, status: "ready", postedAt: null, skippedAt: null, skippedReason: null, actedBy: null };
+      const at = body.at ?? new Date().toISOString();
+      return { ...c, status: action, postedAt: action === "posted" ? at : null, skippedAt: action === "skipped" ? at : null, actedBy: "you" };
+    };
+    setCelebrations((prev) => prev?.map(update) ?? null);
+  };
 
   const handleCopyPhone = (phone: string) => {
     navigator.clipboard.writeText(phone.replace(/[^\d]/g, ""));
@@ -406,8 +438,10 @@ export function RetentionDashboard({
     "new-members": "",
     payments: "Billing status for every member. Owes, failed or short charges first.",
     milestones: `Class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1. Celebrate, or get ready for the next one.`,
+    celebrations: "Birthday cards for the next 7 days, rendered nightly. Download, post it in GroupMe, then tap Posted.",
     classes: "",
   };
+  const readyCards = celebrations ? celebrations.filter((c) => c.status === "ready") : null;
 
   return (
     <div className="mt-6">
@@ -423,7 +457,7 @@ export function RetentionDashboard({
       </div>
 
       {/* Summary cards = view navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryCard
           title="At-risk & low frequency"
           active={view === "at-risk"}
@@ -465,6 +499,17 @@ export function RetentionDashboard({
           tone={groups?.justHit.length ? "good" : "neutral"}
           loading={!groups}
           error={milestonesError}
+        />
+        <SummaryCard
+          title="Celebrations"
+          active={view === "celebrations"}
+          onClick={() => onViewChange("celebrations")}
+          value={readyCards ? readyCards.length : null}
+          unit="to post"
+          detail={readyCards?.length ? `Next: ${readyCards[0]!.memberName.split(" ")[0]} in ${readyCards[0]!.daysAway}d` : "Next 7 days"}
+          tone={readyCards?.some((c) => c.daysAway <= 1) ? "bad" : "neutral"}
+          loading={!celebrations}
+          error={celebrationsError}
         />
         <SummaryCard
           title="Classes"
@@ -532,6 +577,9 @@ export function RetentionDashboard({
 
       {view === "milestones" && <ViewState error={milestonesError} loading={!milestones && !milestonesError} label="milestones" />}
       {view === "milestones" && milestones && <MilestonesTable members={milestones} onCopyPhone={handleCopyPhone} />}
+
+      {view === "celebrations" && <ViewState error={celebrationsError} loading={!celebrations && !celebrationsError} label="celebrations" />}
+      {view === "celebrations" && celebrations && <CelebrationsView rows={celebrations} onAction={celebrationAction} />}
 
       {view === "classes" && (classesError ? (
         <ViewState error={classesError} loading={false} label="class attendance" />

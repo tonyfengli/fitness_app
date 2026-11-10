@@ -18,6 +18,7 @@ export * from "./schema/workout-selections";
 export * from "./types/exerciseRatings";
 export * from "./schema/spotify-tracks";
 export * from "./schema/music-tracks";
+export * from "./schema/celebration";
 
 export const Business = pgTable("business", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
