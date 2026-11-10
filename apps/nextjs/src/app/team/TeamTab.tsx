@@ -197,7 +197,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
             <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Change date</button>
             <button className={sub === "handoff" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "handoff" ? "none" : "handoff")}>Hand off</button>
             <button className={BTN_WHITE} disabled={!!busy} onClick={() => act("unassign", { text: "Unassigned at the meeting" })}>Unassign</button>
-            <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
+            <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Delete</button>
           </div>
           {sub === "move" && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -259,7 +259,7 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
               void act("handoff", { newOwnerUserId: id, text: "Assigned at the meeting" });
             }}
           />
-          <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
+          <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Delete</button>
         </div>
       </div>
       {error && <div className="mt-2 text-sm text-red-700">{error}</div>}
