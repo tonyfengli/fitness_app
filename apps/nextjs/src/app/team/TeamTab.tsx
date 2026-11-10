@@ -157,8 +157,29 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
                   void act("edit", { title });
                 }}
               >
-                <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border border-blue-400 px-3 py-1.5 text-base font-semibold text-gray-900 ring-2 ring-blue-100" />
-                <button type="submit" className={BTN_WHITE} disabled={!!busy}>Save</button>
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setTitle(t.title);
+                      setEditing(false);
+                    }
+                  }}
+                  className="w-full rounded-md border border-blue-400 px-3 py-1.5 text-base font-semibold text-gray-900 ring-2 ring-blue-100"
+                />
+                <button type="submit" className={BTN_WHITE} disabled={!!busy || !title.trim() || title === t.title}>Save</button>
+                <button
+                  type="button"
+                  className={`${BTN} border-transparent text-gray-600 hover:bg-gray-100`}
+                  onClick={() => {
+                    setTitle(t.title);
+                    setEditing(false);
+                  }}
+                >
+                  Cancel
+                </button>
               </form>
             ) : (
               <span className={`text-base font-semibold ${closed ? "text-gray-500 line-through" : "text-gray-900"}`}>
@@ -327,8 +348,6 @@ export function TeamTab() {
         </div>
       </header>
 
-      <NewItems owners={data.owners} drafts={drafts} setDrafts={setDrafts} onSent={load} />
-
       {data.people.map((p) => {
         const stuck = p.closedThisWeek.filter((t) => touched.has(t.id));
         return (
@@ -353,7 +372,7 @@ export function TeamTab() {
         );
       })}
 
-      {/* Intake happens at the end of the meeting too: the same drafts list, bottom of the page */}
+      {/* Intake happens at the end of the meeting: drafts (Granola later) + add form */}
       {data.people.length > 0 && <NewItems owners={data.owners} drafts={drafts} setDrafts={setDrafts} onSent={load} />}
 
       {closedTotal > 0 && (
