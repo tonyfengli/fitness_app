@@ -81,7 +81,11 @@ function Tags({ t }: { t: ReviewTask }) {
   return (
     <span className="ml-2 inline-flex flex-wrap items-center gap-2 align-middle text-sm">
       {!closed && d !== null && d < 0 && <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>}
-      {!closed && t.hardDeadline && <span className="text-gray-600">Hard deadline{d !== null && d >= 0 && d <= 1 ? ` · ${d === 0 ? "today" : "tomorrow"}` : ""}</span>}
+      {!closed && t.hardDeadline && (
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${d !== null && d < 0 ? "bg-red-50 text-red-700" : d !== null && d <= 1 ? "bg-amber-50 text-amber-800" : "bg-gray-100 text-gray-700"}`} title="Hard deadline: the owner gets one message the morning it's due">
+        ⏱ {fmt(t.dueAt, { weekday: "short", day: "numeric", month: "short" })}
+        </span>
+      )}
       {!closed && !t.hardDeadline && d !== null && d >= 0 && d <= 1 && <span className="text-gray-600">{d === 0 ? "Today" : "Tomorrow"}</span>}
       {t.status === "blocked" && <span className="text-gray-600">Blocked</span>}
       {t.carryOvers > 0 && <span className="font-semibold text-gray-900">×{t.carryOvers}</span>}
@@ -199,21 +203,19 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
       {more && !closed && (
         <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            {t.hardDeadline ? (
-              <span className={`${BTN} cursor-default border-transparent text-gray-400`} title="This deadline can't move">Move</span>
-            ) : (
-              <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Move</button>
-            )}
+            <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Move</button>
             <button className={sub === "handoff" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "handoff" ? "none" : "handoff")}>Hand off</button>
             <button className={BTN_WHITE} disabled={!!busy} onClick={() => act("unassign", { text: "Unassigned at the meeting" })}>Unassign</button>
             <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
           </div>
           {sub === "move" && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button className={BTN_WHITE} onClick={() => act("move", { dueAt: at9am(ymd(new Date(nextMeeting))), text: "Moved at the meeting" })}>Next meeting</button>
-              <button className={BTN_WHITE} onClick={() => act("move", { dueAt: at9am(plusDays(3)), text: "Moved at the meeting" })}>+3 days</button>
-              <button className={BTN_WHITE} onClick={() => act("move", { dueAt: at9am(plusDays(7)), text: "Moved at the meeting" })}>+1 week</button>
-              <input type="date" value={custom} onChange={(e) => setCustom(e.target.value)} onBlur={() => custom && act("move", { dueAt: at9am(custom), text: "Moved at the meeting" })} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm" />
+              <button className={BTN_WHITE} onClick={() => act("set_deadline", { dueAt: at9am(ymd(new Date(nextMeeting))), text: "Moved at the meeting" })}>Next meeting</button>
+              <button className={BTN_WHITE} onClick={() => act("set_deadline", { dueAt: at9am(plusDays(3)), text: "Moved at the meeting" })}>+3 days</button>
+              <button className={BTN_WHITE} onClick={() => act("set_deadline", { dueAt: at9am(plusDays(7)), text: "Moved at the meeting" })}>+1 week</button>
+              <input type="date" value={custom} onChange={(e) => setCustom(e.target.value)} onBlur={() => custom && act("set_deadline", { dueAt: at9am(custom), text: "Moved at the meeting" })} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm" />
+              {t.dueAt && <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} onClick={() => act("set_deadline", { dueAt: null, hardDeadline: false, text: "Date removed at the meeting" })}>No date</button>}
+              <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!t.dueAt && !t.hardDeadline} onClick={() => act("set_deadline", { hardDeadline: !t.hardDeadline })}>{t.hardDeadline ? "Make soft" : "Make hard"}</button>
             </div>
           )}
           {sub === "handoff" && (

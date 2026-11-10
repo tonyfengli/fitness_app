@@ -215,6 +215,28 @@ export async function unassign(task: Task, actor: Actor, channel: Channel, note?
   });
 }
 
+/**
+ * The meeting's deadline control (dashboard): set or clear the date and switch the hard flag,
+ * hard deadlines included. Any founder may (Tony's call, Nov 10); every change is an event.
+ * The agent path (changeDeadline) keeps its limits.
+ */
+export async function setDeadline(task: Task, actor: Actor, channel: Channel, patch: { dueAt?: Date | null; hardDeadline?: boolean }, note?: string): Promise<Task> {
+  if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
+  return db.transaction(async (tx) => {
+    const set: Partial<typeof TeamTask.$inferInsert> = { nextCheckAt: new Date() };
+    if (patch.dueAt !== undefined) set.dueAt = patch.dueAt;
+    if (patch.hardDeadline !== undefined) set.hardDeadline = patch.hardDeadline;
+    const [updated] = await tx.update(TeamTask).set(set).where(eq(TeamTask.id, task.id)).returning();
+    if (patch.dueAt !== undefined && (patch.dueAt?.getTime() ?? null) !== (task.dueAt?.getTime() ?? null)) {
+      await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "deadline_changed", ...actorColumns(actor), channel, fromValue: task.dueAt?.toISOString() ?? null, toValue: patch.dueAt?.toISOString() ?? null, note: note ?? null });
+    }
+    if (patch.hardDeadline !== undefined && patch.hardDeadline !== task.hardDeadline) {
+      await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, fromValue: String(task.hardDeadline), toValue: String(patch.hardDeadline), note: patch.hardDeadline ? "Hard deadline on" : "Hard deadline off" });
+    }
+    return orThrow(updated);
+  });
+}
+
 /** Up to SMALL_SHIFT_DAYS the owner may move a soft due date; more needs the creator. Hard deadlines never move. */
 export const SMALL_SHIFT_DAYS = 2;
 

@@ -7,7 +7,8 @@
  *   unblock   back to open               decline   the owner rejects it (text = why)
  *   move      new due date (dueAt ISO); hard deadlines refuse; owners may shift ≤ 2 days
  *   handoff   new owner (newOwnerSlackUserId); creator or workflow owner only
- *   unassign  back to the backlog; owner, creator or workflow owner
+ *   unassign  back to the backlog; anyone (recorded)
+ *   set_deadline  dashboard only: dueAt (ISO | null to clear) and/or hardDeadline (bool), hard deadlines included
  *   cancel    no longer needed; creator or workflow owner only
  *   note      a note on the task (text)
  * Who: a signed-in founder (acts as themselves) or the COS with X-TEAM-AGENT-KEY acting as
@@ -17,7 +18,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
-import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, reopen, review, start, TeamRuleError, unassign, unblock } from "~/lib/team/tasks";
+import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, reopen, review, setDeadline, start, TeamRuleError, unassign, unblock } from "~/lib/team/tasks";
 import type { Actor, Channel } from "~/lib/team/tasks";
 import { traceTask } from "~/lib/team/trace";
 
@@ -27,10 +28,11 @@ interface Body {
   action?: string;
   actorSlackUserId?: string;
   text?: string;
-  dueAt?: string;
+  dueAt?: string | null;
   blockedOnSlackUserId?: string;
   newOwnerSlackUserId?: string;
   newOwnerUserId?: string; // the dashboard knows user ids, not Slack ids
+  hardDeadline?: boolean;
   title?: string;
   details?: string | null;
   traceId?: string;
@@ -93,6 +95,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       case "unassign":
         await unassign(task, actor, channel, text);
         break;
+      case "set_deadline": {
+        // dueAt: ISO sets, null clears, absent keeps; hardDeadline: boolean or absent
+        if (writer.via === "agent") return NextResponse.json({ status: "refused", reason: "The agent can't change hard deadlines; use move" }, { status: 403 });
+        let due: Date | null | undefined;
+        if (body.dueAt === null) due = null;
+        else if (typeof body.dueAt === "string") {
+          due = new Date(body.dueAt);
+          if (isNaN(due.getTime())) return NextResponse.json({ error: "bad dueAt" }, { status: 400 });
+        }
+        await setDeadline(task, actor, channel, { dueAt: due, hardDeadline: body.hardDeadline }, text);
+        break;
+      }
       case "edit":
         await edit(task, actor, channel, { title: body.title, details: body.details });
         break;
