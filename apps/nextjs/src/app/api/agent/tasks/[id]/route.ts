@@ -16,7 +16,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
-import { addNote, block, cancel, changeDeadline, complete, decline, getTask, reassign, recordReply, start, TeamRuleError, unblock } from "~/lib/team/tasks";
+import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, review, start, TeamRuleError, unblock } from "~/lib/team/tasks";
 import type { Actor, Channel } from "~/lib/team/tasks";
 import { traceTask } from "~/lib/team/trace";
 
@@ -29,6 +29,9 @@ interface Body {
   dueAt?: string;
   blockedOnSlackUserId?: string;
   newOwnerSlackUserId?: string;
+  newOwnerUserId?: string; // the dashboard knows user ids, not Slack ids
+  title?: string;
+  details?: string | null;
   traceId?: string;
 }
 
@@ -75,11 +78,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         break;
       }
       case "handoff": {
-        const to = body.newOwnerSlackUserId ? await userBySlackId(body.newOwnerSlackUserId) : null;
-        if (!to) return NextResponse.json({ error: "newOwnerSlackUserId is required" }, { status: 400 });
+        const to = body.newOwnerSlackUserId ? await userBySlackId(body.newOwnerSlackUserId) : body.newOwnerUserId ? { id: body.newOwnerUserId } : null;
+        if (!to) return NextResponse.json({ error: "newOwnerSlackUserId or newOwnerUserId is required" }, { status: 400 });
         await reassign(task, actor, channel, to.id, text);
         break;
       }
+      case "review":
+        await review(task, actor, channel);
+        break;
+      case "edit":
+        await edit(task, actor, channel, { title: body.title, details: body.details });
+        break;
       case "cancel":
         await cancel(task, actor, channel, text);
         break;

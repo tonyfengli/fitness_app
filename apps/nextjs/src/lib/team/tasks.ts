@@ -219,6 +219,35 @@ export async function changeDeadline(task: Task, actor: Actor, channel: Channel,
   });
 }
 
+/** "Still on" at the Monday review: the item was looked at and carries over unchanged. Counted as a carry-over. */
+export const REVIEW_NOTE = "Reviewed at the meeting: still on";
+
+export async function review(task: Task, actor: Actor, channel: Channel): Promise<Task> {
+  if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(TeamTask).set({ nextCheckAt: new Date() }).where(eq(TeamTask.id, task.id)).returning();
+    await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, note: REVIEW_NOTE });
+    return orThrow(updated);
+  });
+}
+
+/** Fix the wording (a Granola draft got it wrong). Creator, workflow owner or the owner. */
+export async function edit(task: Task, actor: Actor, channel: Channel, patch: { title?: string; details?: string | null }): Promise<Task> {
+  if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
+  if (!isOwner(task, actor) && !(await mayManage(task, actor))) throw new TeamRuleError("Only the owner or the creator can edit this task");
+  const title = patch.title?.trim();
+  if (patch.title !== undefined && !title) throw new TeamRuleError("Title can't be empty");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(TeamTask)
+      .set({ ...(title ? { title } : {}), ...(patch.details !== undefined ? { details: patch.details } : {}) })
+      .where(eq(TeamTask.id, task.id))
+      .returning();
+    await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, fromValue: task.title, toValue: title ?? task.title, note: "Edited" });
+    return orThrow(updated);
+  });
+}
+
 export async function addNote(task: Task, actor: Actor, channel: Channel, note: string, traceId?: string): Promise<void> {
   await db.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, note, traceId: traceId ?? null });
 }
