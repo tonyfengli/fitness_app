@@ -6,7 +6,6 @@
  */
 
 import { index, pgEnum, pgTable, unique } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 
 import { user } from "../auth-schema";
 import { Business } from "../schema";
@@ -40,11 +39,12 @@ export const Celebration = pgTable(
     skippedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     skippedReason: t.text(),
     createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
+    // A Date, not sql`now()`: Drizzle maps timestamp values with toISOString and fails on SQL
     updatedAt: t
       .timestamp({ withTimezone: true })
       .defaultNow()
       .notNull()
-      .$onUpdateFn(() => sql`now()`),
+      .$onUpdateFn(() => new Date()),
   }),
   (table) => ({
     oneCardPerOccasion: unique("celebration_member_occasion").on(table.businessId, table.memberId, table.type, table.occasionDate),
