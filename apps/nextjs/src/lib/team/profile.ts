@@ -58,10 +58,10 @@ export async function listProfiles(): Promise<Profile[]> {
 
 export async function setProfileFields(userId: string, patch: { role?: string | null; owns?: string | null; answerStyle?: string | null; focus?: string | null }): Promise<void> {
   const clean: Record<string, string | null> = {};
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === undefined) continue;
-    const trimmed = v?.trim() ?? "";
-    clean[k] = trimmed ? trimmed : null;
+  for (const key of ["role", "owns", "answerStyle", "focus"] as const) {
+    if (!(key in patch)) continue;
+    const trimmed = patch[key]?.trim() ?? "";
+    clean[key] = trimmed ? trimmed : null;
   }
   if (!Object.keys(clean).length) return;
   await db.update(TeamProfile).set(clean).where(eq(TeamProfile.userId, userId));
