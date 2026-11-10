@@ -22,8 +22,8 @@ import { CallBlock, MemberCallItem, AtRiskTier, PaymentRow, MilestoneRow } from 
 import { CelebrationsView } from "./components/CelebrationsView";
 import type { CelebrationAction, CelebrationRow } from "./components/CelebrationsView";
 
-export type RetentionView = "at-risk" | "new-members" | "payments" | "milestones" | "celebrations" | "classes";
-export const RETENTION_VIEWS: RetentionView[] = ["at-risk", "new-members", "payments", "milestones", "celebrations", "classes"];
+export type RetentionView = "at-risk" | "new-members" | "payments" | "milestones" | "classes";
+export const RETENTION_VIEWS: RetentionView[] = ["at-risk", "new-members", "payments", "milestones", "classes"];
 
 // API response types
 interface WeeklyVisitsApi {
@@ -437,8 +437,7 @@ export function RetentionDashboard({
     "at-risk": "No visit in 14+ days, or weekly visits trending down. Today's save-call list.",
     "new-members": "",
     payments: "Billing status for every member. Owes, failed or short charges first.",
-    milestones: `Class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1. Celebrate, or get ready for the next one.`,
-    celebrations: "Birthday cards for the next 7 days, rendered nightly. Download, post it in GroupMe, then tap Posted.",
+    milestones: `Birthday cards for the next 7 days (download, post in GroupMe, tap Posted), then class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1.`,
     classes: "",
   };
   const readyCards = celebrations ? celebrations.filter((c) => c.status === "ready") : null;
@@ -457,7 +456,7 @@ export function RetentionDashboard({
       </div>
 
       {/* Summary cards = view navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           title="At-risk & low frequency"
           active={view === "at-risk"}
@@ -495,21 +494,13 @@ export function RetentionDashboard({
           onClick={() => onViewChange("milestones")}
           value={groups ? groups.justHit.length : null}
           unit="just hit"
-          detail={groups ? `${groups.comingUp.length} within ${COMING_UP_WITHIN} classes` : ""}
-          tone={groups?.justHit.length ? "good" : "neutral"}
+          detail={[
+            readyCards?.length ? `${readyCards.length} birthday card${readyCards.length === 1 ? "" : "s"} to post` : "",
+            groups ? `${groups.comingUp.length} within ${COMING_UP_WITHIN} classes` : "",
+          ].filter(Boolean).join(" · ")}
+          tone={readyCards?.some((c) => c.daysAway <= 1) ? "bad" : groups?.justHit.length ? "good" : "neutral"}
           loading={!groups}
-          error={milestonesError}
-        />
-        <SummaryCard
-          title="Celebrations"
-          active={view === "celebrations"}
-          onClick={() => onViewChange("celebrations")}
-          value={readyCards ? readyCards.length : null}
-          unit="to post"
-          detail={readyCards?.length ? `Next: ${readyCards[0]!.memberName.split(" ")[0]} in ${readyCards[0]!.daysAway}d` : "Next 7 days"}
-          tone={readyCards?.some((c) => c.daysAway <= 1) ? "bad" : "neutral"}
-          loading={!celebrations}
-          error={celebrationsError}
+          error={milestonesError ?? celebrationsError}
         />
         <SummaryCard
           title="Classes"
@@ -575,11 +566,20 @@ export function RetentionDashboard({
         )
       )}
 
-      {view === "milestones" && <ViewState error={milestonesError} loading={!milestones && !milestonesError} label="milestones" />}
-      {view === "milestones" && milestones && <MilestonesTable members={milestones} onCopyPhone={handleCopyPhone} />}
-
-      {view === "celebrations" && <ViewState error={celebrationsError} loading={!celebrations && !celebrationsError} label="celebrations" />}
-      {view === "celebrations" && celebrations && <CelebrationsView rows={celebrations} onAction={celebrationAction} />}
+      {view === "milestones" && (
+        <div className="space-y-10">
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Birthdays</h2>
+            <ViewState error={celebrationsError} loading={!celebrations && !celebrationsError} label="birthday cards" />
+            {celebrations && <CelebrationsView rows={celebrations} onAction={celebrationAction} />}
+          </section>
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Class milestones</h2>
+            <ViewState error={milestonesError} loading={!milestones && !milestonesError} label="milestones" />
+            {milestones && <MilestonesTable members={milestones} onCopyPhone={handleCopyPhone} />}
+          </section>
+        </div>
+      )}
 
       {view === "classes" && (classesError ? (
         <ViewState error={classesError} loading={false} label="class attendance" />
