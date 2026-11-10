@@ -61,14 +61,14 @@ const BTN_DONE = `${BTN} border-emerald-600 bg-emerald-600 text-white hover:bg-e
 const BTN_ACTIVE = `${BTN} border-blue-300 bg-blue-50 text-blue-700`;
 const BTN_PICK = `${BTN} border-blue-600 bg-blue-600 text-white`;
 
-function NamePicker({ owners, value, onPick, exclude }: { owners: Owner[]; value?: string; onPick: (id: string) => void; exclude?: string | null }) {
+function NamePicker({ owners, value, onPick, exclude, disabled }: { owners: Owner[]; value?: string; onPick: (id: string) => void; exclude?: string | null; disabled?: boolean }) {
   return (
     <div className="flex flex-wrap gap-2">
       {owners
         .filter((o) => o.userId !== exclude)
         .map((o) => (
-          <button key={o.userId} type="button" onClick={() => onPick(o.userId)} className={o.userId === value ? BTN_PICK : BTN_WHITE}>
-            {first(o.name)}
+          <button key={o.userId} type="button" disabled={disabled} onClick={() => onPick(o.userId)} className={o.userId === value ? BTN_PICK : BTN_WHITE}>
+            {o.userId === value && disabled ? `${first(o.name)}…` : first(o.name)}
           </button>
         ))}
     </div>
@@ -112,6 +112,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
+  const [picked, setPicked] = useState<string | undefined>();
   const closed = !OPEN.includes(t.status);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
@@ -217,7 +218,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
           )}
           {sub === "handoff" && (
             <div className="mt-3">
-              <NamePicker owners={owners} exclude={t.ownerId} onPick={(id) => act("handoff", { newOwnerUserId: id, text: "Handed off at the meeting" })} />
+              <NamePicker owners={owners} exclude={t.ownerId} value={picked} disabled={!!busy} onPick={(id) => { setPicked(id); void act("handoff", { newOwnerUserId: id, text: "Handed off at the meeting" }); }} />
             </div>
           )}
           <Meta t={t} />
@@ -232,6 +233,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
 
 function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     setBusy(true);
@@ -246,14 +248,24 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
     }
   };
   return (
-    <li className="border-t border-gray-100 px-5 py-4 first:border-t-0">
+    <li className={`border-t border-gray-100 px-5 py-4 first:border-t-0 transition-opacity ${busy ? "opacity-60" : ""}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-base font-semibold text-gray-900">
           {t.title}
-          <span className="ml-2 text-sm font-normal text-gray-600">{t.dueAt ? `Due ${fmt(t.dueAt)}` : "no date"}{t.hardDeadline ? " · hard deadline" : ""}</span>
+          <span className="ml-2 text-sm font-normal text-gray-600">
+            {busy && picked ? `Assigning to ${first(owners.find((o) => o.userId === picked)?.name ?? "")}…` : `${t.dueAt ? `Due ${fmt(t.dueAt)}` : "no date"}${t.hardDeadline ? " · hard deadline" : ""}`}
+          </span>
         </span>
         <div className="flex flex-wrap items-center gap-2">
-          <NamePicker owners={owners} onPick={(id) => act("handoff", { newOwnerUserId: id, text: "Assigned at the meeting" })} />
+          <NamePicker
+            owners={owners}
+            value={picked}
+            disabled={busy}
+            onPick={(id) => {
+              setPicked(id);
+              void act("handoff", { newOwnerUserId: id, text: "Assigned at the meeting" });
+            }}
+          />
           <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
         </div>
       </div>
@@ -373,7 +385,7 @@ export function TeamTab() {
         <button onClick={load} className="ml-auto text-gray-400 hover:text-gray-700" aria-label="Refresh" title="Refresh">↻</button>
       </div>
 
-      {data.unassigned.length > 0 && (
+      {data.unassigned.length > 0 ? (
         <section className="rounded-xl border border-amber-200 bg-white">
           <div className="flex items-baseline gap-3 px-5 py-4">
             <h3 className="text-lg font-semibold text-gray-900">Unassigned</h3>
@@ -385,6 +397,11 @@ export function TeamTab() {
             ))}
           </ul>
         </section>
+      ) : (
+        <div className="flex items-baseline gap-3 rounded-xl border border-dashed border-gray-200 px-5 py-3">
+          <h3 className="text-base font-medium text-gray-400">Unassigned</h3>
+          <span className="text-sm text-gray-400">Nothing open.</span>
+        </div>
       )}
 
       {data.people.map((p) => {
