@@ -61,15 +61,6 @@ const BTN_DONE = `${BTN} border-emerald-600 bg-emerald-600 text-white hover:bg-e
 const BTN_ACTIVE = `${BTN} border-blue-300 bg-blue-50 text-blue-700`;
 const BTN_PICK = `${BTN} border-blue-600 bg-blue-600 text-white`;
 
-function Chip({ n, label }: { n: number; label: string }) {
-  return (
-    <div className="flex items-baseline gap-1.5 rounded-lg bg-gray-100 px-3 py-2">
-      <span className="text-lg font-semibold tabular-nums text-gray-900">{n}</span>
-      <span className="text-sm text-gray-600">{label}</span>
-    </div>
-  );
-}
-
 function NamePicker({ owners, value, onPick, exclude }: { owners: Owner[]; value?: string; onPick: (id: string) => void; exclude?: string | null }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -373,16 +364,14 @@ export function TeamTab() {
 
   return (
     <div className="mt-6 space-y-4">
-      <header className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4">
-        <h2 className="text-2xl font-bold text-gray-900">Monday review</h2>
-        <span className="text-sm text-gray-600">Next: {fmt(data._meta.nextMeeting)}</span>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Chip n={openTotal} label="open" />
-          <Chip n={closedTotal} label="closed" />
-          <Chip n={carried} label="carried" />
-          <button onClick={load} className={BTN_WHITE} aria-label="Refresh" title="Refresh">↻</button>
-        </div>
-      </header>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm text-gray-500">
+        <span>Next meeting {fmt(data._meta.nextMeeting)}</span>
+        <span aria-hidden>·</span>
+        <span><span className="font-medium text-gray-700">{openTotal}</span> open</span>
+        <span><span className="font-medium text-gray-700">{closedTotal}</span> closed</span>
+        <span><span className={`font-medium ${carried ? "text-amber-700" : "text-gray-700"}`}>{carried}</span> carried</span>
+        <button onClick={load} className="ml-auto text-gray-400 hover:text-gray-700" aria-label="Refresh" title="Refresh">↻</button>
+      </div>
 
       {data.unassigned.length > 0 && (
         <section className="rounded-xl border border-amber-200 bg-white">
