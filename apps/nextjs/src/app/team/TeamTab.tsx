@@ -194,7 +194,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
       {more && !closed && (
         <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Move</button>
+            <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Change date</button>
             <button className={sub === "handoff" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "handoff" ? "none" : "handoff")}>Hand off</button>
             <button className={BTN_WHITE} disabled={!!busy} onClick={() => act("unassign", { text: "Unassigned at the meeting" })}>Unassign</button>
             <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
@@ -246,7 +246,7 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
         <span className="text-base font-semibold text-gray-900">
           {t.title}
           <span className="ml-2 text-sm font-normal text-gray-600">
-            {busy && picked ? `Assigning to ${first(owners.find((o) => o.userId === picked)?.name ?? "")}…` : `${t.dueAt ? `Due ${fmt(t.dueAt)}` : "no date"}${t.hardDeadline ? " · hard deadline" : ""}`}
+            {busy && picked ? `Assigning to ${first(owners.find((o) => o.userId === picked)?.name ?? "")}…` : t.dueAt ? `Due ${fmt(t.dueAt)}` : "no date"}
           </span>
         </span>
         <div className="flex flex-wrap items-center gap-2">
