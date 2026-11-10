@@ -219,6 +219,13 @@ export async function changeDeadline(task: Task, actor: Actor, channel: Channel,
   });
 }
 
+/** Undo a Done / Drop / Decline at the meeting: back to open. Owner, creator or workflow owner. */
+export async function reopen(task: Task, actor: Actor, channel: Channel): Promise<Task> {
+  if (OPEN.includes(task.status)) return task;
+  if (!isOwner(task, actor) && !(await mayManage(task, actor))) throw new TeamRuleError("Only the owner or the creator can reopen this task");
+  return transition(task, "open", actor, channel, "status_changed", { completedAt: null, nextCheckAt: new Date() }, "Reopened");
+}
+
 /** "Still on" at the Monday review: the item was looked at and carries over unchanged. Counted as a carry-over. */
 export const REVIEW_NOTE = "Reviewed at the meeting: still on";
 

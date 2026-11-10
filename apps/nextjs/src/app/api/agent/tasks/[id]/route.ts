@@ -16,7 +16,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
-import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, review, start, TeamRuleError, unblock } from "~/lib/team/tasks";
+import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, reopen, review, start, TeamRuleError, unblock } from "~/lib/team/tasks";
 import type { Actor, Channel } from "~/lib/team/tasks";
 import { traceTask } from "~/lib/team/trace";
 
@@ -85,6 +85,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
       case "review":
         await review(task, actor, channel);
+        break;
+      case "reopen":
+        await reopen(task, actor, channel);
         break;
       case "edit":
         await edit(task, actor, channel, { title: body.title, details: body.details });
