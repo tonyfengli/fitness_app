@@ -5,8 +5,7 @@
  * Nov 10: header with open / closed / carried chips; a New items card (drafts: editable title,
  * source chip, owner as a row of names, remove; add form; Send creates them all at once, later
  * pre-filled by Granola); one block per founder with Done / Still on / More (Move, Hand off,
- * Drop, meta line); closed rows stay in place struck through with Undo; birthday cards of the
- * same day fold into one group row. Desktop first, works on a phone.
+ * Drop, meta line); closed rows stay in place struck through with Undo. Desktop first, works on a phone.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -215,49 +214,6 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
   );
 }
 
-// --- birthday cards of the same day fold into one row ------------------------------
-
-function groupRows(tasks: ReviewTask[]): { key: string; tasks: ReviewTask[] }[] {
-  const groups = new Map<string, ReviewTask[]>();
-  for (const t of tasks) {
-    const key = t.source === "celebrations" && t.dueAt ? `celebrations:${t.dueAt.slice(0, 10)}` : t.id;
-    groups.set(key, [...(groups.get(key) ?? []), t]);
-  }
-  return [...groups].map(([key, ts]) => ({ key, tasks: ts }));
-}
-
-function CardGroup({ tasks, owners, nextMeeting, onChange }: { tasks: ReviewTask[]; owners: Owner[]; nextMeeting: string; onChange: () => void }) {
-  const [open, setOpen] = useState(false);
-  const done = tasks.filter((t) => !OPEN.includes(t.status)).length;
-  const d = daysUntil(tasks[0]?.dueAt ?? null);
-  return (
-    <li className="border-t border-gray-100 first:border-t-0">
-      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 px-5 py-4 text-left">
-        <div className="flex flex-none -space-x-2">
-          {tasks.slice(0, 3).map((t) => (
-            <div key={t.id} className="h-11 w-11 overflow-hidden rounded-md border-2 border-white bg-gray-100">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Blob URL */}
-              {typeof t.context?.imageUrl === "string" && <img src={t.context.imageUrl} alt="" className="h-full w-full object-cover" />}
-            </div>
-          ))}
-        </div>
-        <span className="text-base font-semibold text-gray-900">
-          Birthday cards · {fmt(tasks[0]?.dueAt ?? null)} · {tasks.length}
-          <span className="ml-2 text-sm font-normal text-gray-600">{d === 0 ? "Today" : d === 1 ? "Tomorrow" : d !== null && d < 0 ? "Overdue" : ""}{done ? ` · ${done} of ${tasks.length} posted` : ""}</span>
-        </span>
-        <span className="ml-auto text-sm text-gray-500">{open ? "▾" : "▸"}</span>
-      </button>
-      {open && (
-        <ul className="border-t border-gray-100 bg-gray-50/60 pl-4">
-          {tasks.map((t) => (
-            <Row key={t.id} t={t} owners={owners} nextMeeting={nextMeeting} onChange={onChange} thumb={typeof t.context?.imageUrl === "string" ? t.context.imageUrl : null} />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-}
-
 // --- new items -------------------------------------------------------------------------
 
 function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; drafts: Draft[]; setDrafts: (d: Draft[]) => void; onSent: () => void }) {
@@ -374,7 +330,6 @@ export function TeamTab() {
       <NewItems owners={data.owners} drafts={drafts} setDrafts={setDrafts} onSent={load} />
 
       {data.people.map((p) => {
-        const rows = groupRows(p.open);
         const stuck = p.closedThisWeek.filter((t) => touched.has(t.id));
         return (
           <section key={p.userId} className="rounded-xl border border-gray-200 bg-white">
@@ -383,13 +338,11 @@ export function TeamTab() {
               <span className="text-sm text-gray-600">{p.open.length ? `${p.open.length} open` : "Nothing open."}</span>
               {p.carryOvers > 0 && <span className="text-sm text-gray-600">{p.carryOvers} carried</span>}
             </div>
-            {(rows.length > 0 || stuck.length > 0) && (
+            {(p.open.length > 0 || stuck.length > 0) && (
               <ul className="border-t border-gray-100">
-                {rows.map((g) => {
-                  const single = g.tasks.length === 1 ? g.tasks[0] : undefined;
-                  if (!single) return <CardGroup key={g.key} tasks={g.tasks} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed(g.tasks.map((t) => t.id))} />;
-                  const image = typeof single.context?.imageUrl === "string" ? single.context.imageUrl : null;
-                  return <Row key={g.key} t={single} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed([single.id])} thumb={single.source === "celebrations" ? image : undefined} />;
+                {p.open.map((t) => {
+                  const image = typeof t.context?.imageUrl === "string" ? t.context.imageUrl : null;
+                  return <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed([t.id])} thumb={t.source === "celebrations" ? image : undefined} />;
                 })}
                 {stuck.map((t) => (
                   <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed([t.id])} />
