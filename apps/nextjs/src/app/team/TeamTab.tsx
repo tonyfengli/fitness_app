@@ -400,6 +400,9 @@ export function TeamTab() {
         );
       })}
 
+      {/* Intake happens at the end of the meeting too: the same drafts list, bottom of the page */}
+      {data.people.length > 0 && <NewItems owners={data.owners} drafts={drafts} setDrafts={setDrafts} onSent={load} />}
+
       {closedTotal > 0 && (
         <section className="rounded-xl border border-gray-200 bg-white">
           <button onClick={() => setShowClosed(!showClosed)} className="flex w-full items-center gap-2 px-5 py-4 text-left text-sm font-medium text-gray-900">
