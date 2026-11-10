@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ReviewPerson, ReviewTask } from "../api/agent/tasks/review/route";
+import { FoundersSection } from "./FoundersSection";
 
 interface Owner {
   userId: string;
@@ -415,6 +416,8 @@ export function TeamTab() {
       })}
 
       {adding && <AddItemModal owners={data.owners} onClose={() => setAdding(false)} onAdded={load} />}
+
+      <FoundersSection />
 
       {closedTotal > 0 && (
         <section className="rounded-xl border border-gray-200 bg-white">

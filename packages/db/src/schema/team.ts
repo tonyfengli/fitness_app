@@ -55,6 +55,12 @@ export const TeamProfile = pgTable("team_profile", (t) => ({
     .references(() => Business.id, { onDelete: "cascade" }),
   slackUserId: t.varchar({ length: 20 }), // e.g. U0ARQLTA57D; null = no Slack delivery
   aliases: t.text().array().notNull().default(sql`'{}'::text[]`), // names a transcript may use ("Richie")
+  // What the Chief of Staff knows about working with this person (business only). Seeded by
+  // Tony, grown by the Chief through team_profile_note; these four are the short summary.
+  role: t.varchar({ length: 120 }), // "Co-founder, runs in-gym coaching"
+  owns: t.text(), // areas and recurring responsibilities
+  answerStyle: t.text(), // how they like answers: numbers first, short, detailed, …
+  focus: t.text(), // what they're chasing right now
   timezone: t.varchar({ length: 60 }).notNull().default("America/Los_Angeles"),
   quietStart: t.smallint().notNull().default(21), // no messages from this hour (local)...
   quietEnd: t.smallint().notNull().default(8), // ...until this hour
@@ -66,6 +72,39 @@ export const TeamProfile = pgTable("team_profile", (t) => ({
     .notNull()
     .$onUpdateFn(() => new Date()),
 }));
+
+/**
+ * What the Chief of Staff learns about a founder over time, one line per note, append-only.
+ * Written by the Chief (source agent, with its trace) or a founder (source person). A wrong
+ * note is retired, not deleted, so the record of what the Chief believed stays readable.
+ */
+export const teamProfileNoteKindEnum = pgEnum("team_profile_note_kind", ["preference", "responsibility", "focus", "pattern", "fact"]);
+
+export const TeamProfileNote = pgTable(
+  "team_profile_note",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    businessId: t
+      .uuid()
+      .notNull()
+      .references(() => Business.id, { onDelete: "cascade" }),
+    userId: t
+      .text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }), // whom the note is about
+    kind: teamProfileNoteKindEnum().notNull().default("pattern"),
+    text: t.varchar({ length: 500 }).notNull(),
+    source: teamActorEnum().notNull(), // person or agent
+    authorId: t.text().references(() => user.id), // when source = person
+    traceId: t.varchar({ length: 120 }), // the conversation the Chief learned it from
+    createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
+    retiredAt: t.timestamp({ withTimezone: true }),
+    retiredBy: t.text().references(() => user.id),
+  }),
+  (table) => ({
+    byPerson: index("idx_team_profile_note_person").on(table.userId, table.createdAt),
+  }),
+);
 
 /** An automatic source of tasks (celebrations, weekly_meeting, …) and the trainer who answers for it */
 export const TeamWorkflow = pgTable("team_workflow", (t) => ({
