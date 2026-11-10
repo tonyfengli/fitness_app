@@ -8,7 +8,7 @@
  *   move      new due date (dueAt ISO); hard deadlines refuse; owners may shift ≤ 2 days
  *   handoff   new owner (newOwnerSlackUserId); creator or workflow owner only
  *   unassign  back to the backlog; anyone (recorded)
- *   set_deadline  dashboard only: dueAt (ISO | null to clear) and/or hardDeadline (bool), hard deadlines included
+ *   set_deadline  dashboard only: dueAt (ISO | null), hardDeadline (bool), nudgeAt (ISO | null = back to the rule)
  *   cancel    no longer needed; creator or workflow owner only
  *   note      a note on the task (text)
  * Who: a signed-in founder (acts as themselves) or the COS with X-TEAM-AGENT-KEY acting as
@@ -33,6 +33,7 @@ interface Body {
   newOwnerSlackUserId?: string;
   newOwnerUserId?: string; // the dashboard knows user ids, not Slack ids
   hardDeadline?: boolean;
+  nudgeAt?: string | null; // ISO sets, null clears (back to the rule), absent keeps
   title?: string;
   details?: string | null;
   traceId?: string;
@@ -104,7 +105,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           due = new Date(body.dueAt);
           if (isNaN(due.getTime())) return NextResponse.json({ error: "bad dueAt" }, { status: 400 });
         }
-        await setDeadline(task, actor, channel, { dueAt: due, hardDeadline: body.hardDeadline }, text);
+        let nudge: Date | null | undefined;
+        if (body.nudgeAt === null) nudge = null;
+        else if (typeof body.nudgeAt === "string") {
+          nudge = new Date(body.nudgeAt);
+          if (isNaN(nudge.getTime())) return NextResponse.json({ error: "bad nudgeAt" }, { status: 400 });
+        }
+        await setDeadline(task, actor, channel, { dueAt: due, hardDeadline: body.hardDeadline, nudgeAt: nudge }, text);
         break;
       }
       case "edit":

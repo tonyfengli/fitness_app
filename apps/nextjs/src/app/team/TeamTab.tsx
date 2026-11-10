@@ -79,6 +79,11 @@ function Tags({ t }: { t: ReviewTask }) {
         </span>
       )}
       {!closed && !t.hardDeadline && d !== null && d >= 0 && d <= 1 && <span className="text-gray-600">{d === 0 ? "Today" : "Tomorrow"}</span>}
+      {!closed && t.nudgeAt && (
+        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700" title={`Message goes out ${t.nudgeSetBy === "rule" ? "by the rule (8am on the due day)" : `at a time set by ${t.nudgeSetBy === "person" ? "a founder" : t.nudgeSetBy}`}`}>
+          🔔 {fmt(t.nudgeAt, { weekday: "short", day: "numeric", month: "short" })} {new Date(t.nudgeAt).toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" })}{t.nudgeSetBy !== "rule" ? " · set" : ""}
+        </span>
+      )}
       {t.status === "blocked" && <span className="text-gray-600">Blocked</span>}
       {t.carryOvers > 0 && <span className="font-semibold text-gray-900">×{t.carryOvers}</span>}
     </span>
@@ -108,6 +113,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
+  const [nudgeLocal, setNudgeLocal] = useState("");
   const [picked, setPicked] = useState<string | undefined>();
   const closed = !OPEN.includes(t.status);
 
@@ -210,6 +216,15 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
               <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!t.dueAt && !t.hardDeadline} onClick={() => act("set_deadline", { hardDeadline: !t.hardDeadline })}>{t.hardDeadline ? "Make soft" : "Make hard"}</button>
             </div>
           )}
+          {sub === "move" && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+              <span className="text-sm text-gray-600">Message at</span>
+              <input type="datetime-local" value={nudgeLocal} onChange={(e) => setNudgeLocal(e.target.value)} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm" />
+              <button className={BTN_WHITE} disabled={!nudgeLocal} onClick={() => act("set_deadline", { nudgeAt: new Date(nudgeLocal).toISOString(), text: "Nudge time set at the meeting" })}>Set</button>
+              {t.nudgeSetBy && t.nudgeSetBy !== "rule" && <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} onClick={() => act("set_deadline", { nudgeAt: null })}>Back to the rule</button>}
+              <span className="text-xs text-gray-400">Rule: hard deadline → 8am on the due day; else no message. Checked every 5 min; one per person per day; quiet hours 9pm–8am.</span>
+            </div>
+          )}
           {sub === "handoff" && (
             <div className="mt-3">
               <NamePicker owners={owners} exclude={t.ownerId} value={picked} disabled={!!busy} onPick={(id) => { setPicked(id); void act("handoff", { newOwnerUserId: id, text: "Handed off at the meeting" }); }} />
@@ -275,6 +290,7 @@ function AddItemModal({ owners, onClose, onAdded }: { owners: Owner[]; onClose: 
   const [ownerId, setOwnerId] = useState("");
   const [due, setDue] = useState("");
   const [hard, setHard] = useState(false);
+  const [nudge, setNudge] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState(0);
@@ -289,10 +305,11 @@ function AddItemModal({ owners, onClose, onAdded }: { owners: Owner[]; onClose: 
     setBusy(true);
     setError(null);
     try {
-      await post("/api/agent/tasks", { tasks: [{ title: title.trim(), ownerUserId: ownerId || undefined, dueAt: due ? at9am(due) : null, hardDeadline: hard }] });
+      await post("/api/agent/tasks", { tasks: [{ title: title.trim(), ownerUserId: ownerId || undefined, dueAt: due ? at9am(due) : null, hardDeadline: hard, nudgeAt: nudge ? new Date(nudge).toISOString() : null }] });
       setAdded((n) => n + 1);
       setTitle("");
       setHard(false);
+      setNudge("");
       onAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -315,6 +332,11 @@ function AddItemModal({ owners, onClose, onAdded }: { owners: Owner[]; onClose: 
         <div className="flex flex-wrap items-center gap-3">
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="rounded-md border border-gray-200 px-3 py-2 text-sm" />
           <label className="flex items-center gap-1.5 text-sm text-gray-700"><input type="checkbox" checked={hard} onChange={(e) => setHard(e.target.checked)} disabled={!due} /> Hard deadline</label>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-gray-600">Message at</span>
+          <input type="datetime-local" value={nudge} onChange={(e) => setNudge(e.target.value)} className="rounded-md border border-gray-200 px-3 py-2 text-sm" />
+          <span className="text-xs text-gray-400">optional; otherwise hard deadlines message at 8am on the day</span>
         </div>
         {error && <div className="text-sm text-red-700">{error}</div>}
         <div className="flex justify-end gap-2">

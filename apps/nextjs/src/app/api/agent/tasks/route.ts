@@ -80,6 +80,7 @@ interface NewTaskBody {
   ownerSlackUserId?: string;
   dueAt?: string | null;
   hardDeadline?: boolean;
+  nudgeAt?: string | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -97,6 +98,8 @@ export async function POST(request: NextRequest) {
       if (t.ownerSlackUserId && !ownerId) return NextResponse.json({ error: `tasks[${i}]: unknown ownerSlackUserId` }, { status: 400 });
       const dueAt = t.dueAt ? new Date(t.dueAt) : null;
       if (dueAt && isNaN(dueAt.getTime())) return NextResponse.json({ error: `tasks[${i}]: bad dueAt` }, { status: 400 });
+      const nudgeAt = t.nudgeAt ? new Date(t.nudgeAt) : null;
+      if (nudgeAt && isNaN(nudgeAt.getTime())) return NextResponse.json({ error: `tasks[${i}]: bad nudgeAt` }, { status: 400 });
       input.push({
         title,
         details: t.details?.trim() ? t.details.trim() : undefined,
@@ -104,6 +107,7 @@ export async function POST(request: NextRequest) {
         creatorId: writer.userId,
         dueAt,
         hardDeadline: !!t.hardDeadline,
+        nudgeAt,
         source: body.source ?? "meeting",
         sourceRef: `${stamp}:${i}:${Math.random().toString(36).slice(2, 8)}`,
       });

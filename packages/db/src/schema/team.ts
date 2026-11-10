@@ -140,6 +140,10 @@ export const TeamTask = pgTable(
     status: teamTaskStatusEnum().notNull().default("open"),
     dueAt: t.timestamp({ withTimezone: true }),
     hardDeadline: t.boolean().notNull().default(false), // the date can't move (a birthday)
+    // When the one message about this task goes out. Null = the rule (hard deadline → 8am local
+    // on the due day; otherwise never). Set by a person, later by the agent; nudgeSetBy says who.
+    nudgeAt: t.timestamp({ withTimezone: true }),
+    nudgeSetBy: teamActorEnum(),
     blockedOnId: t.text().references(() => user.id), // "waiting on Richie": nudges go there
     blockedReason: t.text(),
     nextCheckAt: t.timestamp({ withTimezone: true }), // when to consider a nudge next

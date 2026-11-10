@@ -29,6 +29,7 @@ export interface NewTask {
   workflowKey?: string;
   dueAt?: Date | null;
   hardDeadline?: boolean;
+  nudgeAt?: Date | null; // explicit send time for the one message; null = the rule
   source: string;
   sourceRef: string;
 }
@@ -79,6 +80,8 @@ export async function createTasks(input: NewTask[], actor: Actor, channel: Chann
           workflowKey: t.workflowKey ?? null,
           dueAt: t.dueAt ?? null,
           hardDeadline: t.hardDeadline ?? false,
+          nudgeAt: t.nudgeAt ?? null,
+          nudgeSetBy: t.nudgeAt ? actor.kind : null,
           nextCheckAt: new Date(), // eligible for the next nudge run
           source: t.source,
           sourceRef: t.sourceRef,
@@ -220,12 +223,19 @@ export async function unassign(task: Task, actor: Actor, channel: Channel, note?
  * hard deadlines included. Any founder may (Tony's call, Nov 10); every change is an event.
  * The agent path (changeDeadline) keeps its limits.
  */
-export async function setDeadline(task: Task, actor: Actor, channel: Channel, patch: { dueAt?: Date | null; hardDeadline?: boolean }, note?: string): Promise<Task> {
+export async function setDeadline(task: Task, actor: Actor, channel: Channel, patch: { dueAt?: Date | null; hardDeadline?: boolean; nudgeAt?: Date | null }, note?: string): Promise<Task> {
   if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
   return db.transaction(async (tx) => {
     const set: Partial<typeof TeamTask.$inferInsert> = { nextCheckAt: new Date() };
     if (patch.dueAt !== undefined) set.dueAt = patch.dueAt;
     if (patch.hardDeadline !== undefined) set.hardDeadline = patch.hardDeadline;
+    if (patch.nudgeAt !== undefined) {
+      set.nudgeAt = patch.nudgeAt;
+      set.nudgeSetBy = patch.nudgeAt ? actor.kind : null;
+      if ((patch.nudgeAt?.getTime() ?? null) !== (task.nudgeAt?.getTime() ?? null)) {
+        await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, fromValue: task.nudgeAt?.toISOString() ?? null, toValue: patch.nudgeAt?.toISOString() ?? null, note: patch.nudgeAt ? "Nudge time set" : "Nudge time cleared (back to the rule)" });
+      }
+    }
     const [updated] = await tx.update(TeamTask).set(set).where(eq(TeamTask.id, task.id)).returning();
     if (patch.dueAt !== undefined && (patch.dueAt?.getTime() ?? null) !== (task.dueAt?.getTime() ?? null)) {
       await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "deadline_changed", ...actorColumns(actor), channel, fromValue: task.dueAt?.toISOString() ?? null, toValue: patch.dueAt?.toISOString() ?? null, note: note ?? null });

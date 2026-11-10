@@ -11,6 +11,7 @@ import { db } from "@acme/db/client";
 import { TeamProfile, TeamTask, TeamTaskEvent, user } from "@acme/db/schema";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getGymBusinessId } from "~/lib/business";
+import { nudgeTimeFor } from "~/lib/team/dayof";
 import { nextMeeting } from "~/lib/team/meeting";
 import { REVIEW_NOTE } from "~/lib/team/tasks";
 
@@ -27,6 +28,8 @@ export interface ReviewTask {
   ownerId: string | null; // null = unassigned backlog
   dueAt: string | null;
   hardDeadline: boolean;
+  nudgeAt: string | null; // when the one message goes out (explicit or by rule); null = never
+  nudgeSetBy: "rule" | "person" | "agent" | "workflow" | "cron" | null;
   blockedOnId: string | null;
   blockedReason: string | null;
   source: string;
@@ -92,6 +95,8 @@ export async function GET(request: NextRequest) {
         ownerId: t.ownerId,
         dueAt: t.dueAt?.toISOString() ?? null,
         hardDeadline: t.hardDeadline,
+        nudgeAt: nudgeTimeFor(t, "America/Los_Angeles")?.at.toISOString() ?? null,
+        nudgeSetBy: nudgeTimeFor(t, "America/Los_Angeles")?.setBy ?? null,
         blockedOnId: t.blockedOnId,
         blockedReason: t.blockedReason,
         source: t.source,

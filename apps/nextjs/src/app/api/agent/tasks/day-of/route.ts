@@ -1,6 +1,6 @@
 /**
  * The day-of message (BUSINESS-ACCOUNTABILITY.md → MVP, "one touch, day of").
- * GET  /api/agent/tasks/day-of   what's due for a message right now, per person, with the
+ * GET  /api/agent/tasks/day-of   whose message time has arrived, per person, with the
  *                                facts the Chief of Staff needs to write it. Founders or the
  *                                read-only OpenClaw key.
  * POST /api/agent/tasks/day-of   { slackUserId, taskIds, text, traceId? }: send it. The COS
@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
         title: d.task.title,
         details: d.task.details,
         dueAt: d.task.dueAt?.toISOString() ?? null,
+        nudgeTime: d.nudgeTime.toISOString(),
+        nudgeSetBy: d.nudgeSetBy,
         status: d.task.status,
         blockedReason: d.task.blockedReason,
         context: d.task.context,
