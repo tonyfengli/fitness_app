@@ -95,10 +95,7 @@ export const TeamTask = pgTable(
     title: t.varchar({ length: 200 }).notNull(),
     details: t.text(),
     context: t.jsonb().$type<Record<string, unknown>>(), // source-specific: celebrationId + imageUrl; meeting quote + link
-    ownerId: t
-      .text()
-      .notNull()
-      .references(() => user.id),
+    ownerId: t.text().references(() => user.id), // null = unassigned backlog: no nudges, assigned at the meeting
     creatorId: t.text().references(() => user.id), // a person who created it (meeting items: Tony)
     workflowKey: t.varchar({ length: 40 }).references(() => TeamWorkflow.key), // the workflow that created it
     status: teamTaskStatusEnum().notNull().default("open"),

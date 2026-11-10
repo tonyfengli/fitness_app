@@ -54,6 +54,10 @@ export async function dayOfItems(now = new Date()): Promise<{ due: DayOfItem[]; 
   for (const t of tasks) {
     if (!isUrgent(t, now) || !t.dueAt) continue;
     const responsibleId = t.status === "blocked" ? (t.blockedOnId ?? t.ownerId) : t.ownerId;
+    if (!responsibleId) {
+      skipped.push({ taskId: t.id, title: t.title, reason: "unassigned" });
+      continue;
+    }
     const p = byId.get(responsibleId);
     if (!p?.active) {
       skipped.push({ taskId: t.id, title: t.title, reason: "no active profile" });

@@ -24,7 +24,7 @@ export interface NewTask {
   title: string;
   details?: string;
   context?: Record<string, unknown>;
-  ownerId: string;
+  ownerId?: string | null; // null = unassigned (backlog); nobody is nudged until the meeting assigns it
   creatorId?: string;
   workflowKey?: string;
   dueAt?: Date | null;
@@ -54,7 +54,7 @@ export async function createTasks(input: NewTask[], actor: Actor, channel: Chann
   const businessId = await getGymBusinessId();
   for (const t of input) {
     if (!t.creatorId && !t.workflowKey) throw new TeamRuleError(`Task "${t.title}" needs a creator or a workflow`);
-    await assertTrainer(t.ownerId);
+    if (t.ownerId) await assertTrainer(t.ownerId);
   }
   if (input.some((t) => t.workflowKey)) {
     const keys = [...new Set(input.map((t) => t.workflowKey).filter((k): k is string => !!k))];
@@ -74,7 +74,7 @@ export async function createTasks(input: NewTask[], actor: Actor, channel: Chann
           title: t.title,
           details: t.details ?? null,
           context: t.context ?? null,
-          ownerId: t.ownerId,
+          ownerId: t.ownerId ?? null,
           creatorId: t.creatorId ?? null,
           workflowKey: t.workflowKey ?? null,
           dueAt: t.dueAt ?? null,
@@ -88,7 +88,7 @@ export async function createTasks(input: NewTask[], actor: Actor, channel: Chann
       .returning();
     if (created.length) {
       await tx.insert(TeamTaskEvent).values(
-        created.map((c) => ({ businessId, taskId: c.id, type: "created" as const, ...actorColumns(actor), channel, toValue: c.ownerId, note: c.title })),
+        created.map((c) => ({ businessId, taskId: c.id, type: "created" as const, ...actorColumns(actor), channel, toValue: c.ownerId ?? "unassigned", note: c.title })),
       );
     }
     return created;
@@ -124,7 +124,7 @@ async function mayManage(task: Task, actor: Actor): Promise<boolean> {
   return (await escalationTarget(task)) === actor.userId;
 }
 
-const isOwner = (task: Task, actor: Actor) => actor.kind !== "person" || task.ownerId === actor.userId;
+const isOwner = (task: Task, actor: Actor) => actor.kind !== "person" || (!!task.ownerId && task.ownerId === actor.userId);
 
 const OPEN: TaskStatus[] = ["open", "in_progress", "blocked"];
 
@@ -194,11 +194,12 @@ export async function unblock(task: Task, actor: Actor, channel: Channel, note?:
 
 export async function reassign(task: Task, actor: Actor, channel: Channel, newOwnerId: string, note?: string): Promise<Task> {
   if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
-  if (!(await mayManage(task, actor))) throw new TeamRuleError("Only the creator (or the workflow's owner) can reassign this task");
+  // Anyone may take a task out of the unassigned backlog; reassigning an owned task needs the creator
+  if (task.ownerId && !(await mayManage(task, actor))) throw new TeamRuleError("Only the creator (or the workflow's owner) can reassign this task");
   await assertTrainer(newOwnerId);
   return db.transaction(async (tx) => {
     const [updated] = await tx.update(TeamTask).set({ ownerId: newOwnerId, nextCheckAt: new Date() }).where(eq(TeamTask.id, task.id)).returning();
-    await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "reassigned", ...actorColumns(actor), channel, fromValue: task.ownerId, toValue: newOwnerId, note: note ?? null });
+    await tx.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "reassigned", ...actorColumns(actor), channel, fromValue: task.ownerId ?? "unassigned", toValue: newOwnerId, note: note ?? null });
     return orThrow(updated);
   });
 }
@@ -283,5 +284,5 @@ export async function openTasksFor(userId: string): Promise<Task[]> {
     .select()
     .from(TeamTask)
     .where(and(eq(TeamTask.businessId, businessId), inArray(TeamTask.status, OPEN)));
-  return rows.filter((t) => (t.status === "blocked" ? (t.blockedOnId ?? t.ownerId) === userId : t.ownerId === userId));
+  return rows.filter((t) => !!t.ownerId && (t.status === "blocked" ? (t.blockedOnId ?? t.ownerId) === userId : t.ownerId === userId));
 }

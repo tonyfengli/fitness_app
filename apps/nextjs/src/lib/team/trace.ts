@@ -82,7 +82,7 @@ export async function traceTask(taskId: string): Promise<TaskTrace | null> {
   const nudges = nudgeLinks.map((n) => n.nudge);
 
   // Names for every person involved
-  const ids = new Set<string>([t.ownerId]);
+  const ids = new Set<string>(t.ownerId ? [t.ownerId] : []);
   for (const id of [t.creatorId, t.blockedOnId, workflow?.ownerId]) if (id) ids.add(id);
   for (const e of events) if (e.actorId) ids.add(e.actorId);
   for (const n of nudges) ids.add(n.recipientId);
@@ -148,7 +148,7 @@ export async function traceTask(taskId: string): Promise<TaskTrace | null> {
       id: t.id,
       title: t.title,
       status: t.status,
-      owner: name(t.ownerId) ?? t.ownerId,
+      owner: name(t.ownerId) ?? "unassigned",
       creator: name(t.creatorId),
       workflow: t.workflowKey,
       workflowOwner: name(workflow?.ownerId),

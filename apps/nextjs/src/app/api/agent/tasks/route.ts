@@ -8,7 +8,8 @@
  * Founders, or the OpenClaw key (read-only).
  * POST /api/agent/tasks                create tasks at the meeting (founder) or for a Slack user
  *                                      (COS with the write key). Body: { tasks: [{ title, details?,
- *                                      ownerUserId | ownerSlackUserId, dueAt?, hardDeadline? }] }.
+ *                                      ownerUserId? | ownerSlackUserId?, dueAt?, hardDeadline? }] }.
+ *                                      No owner = the unassigned backlog (assigned at the meeting).
  *                                      All or nothing; the creator is whoever is signed in.
  */
 
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     const rows = await db
       .select({ task: TeamTask, ownerName: user.name })
       .from(TeamTask)
-      .innerJoin(user, eq(user.id, TeamTask.ownerId))
+      .leftJoin(user, eq(user.id, TeamTask.ownerId))
       .where(and(...conds))
       .orderBy(all ? desc(TeamTask.createdAt) : asc(TeamTask.dueAt));
     const cutoff = nextMeeting();
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
         title: t.title,
         status: t.status,
         ownerId: t.ownerId,
-        owner: ownerName,
+        owner: ownerName ?? "unassigned",
         dueAt: t.dueAt?.toISOString() ?? null,
         hardDeadline: t.hardDeadline,
         blockedOnId: t.blockedOnId,
@@ -93,13 +94,13 @@ export async function POST(request: NextRequest) {
       const title = t.title?.trim();
       if (!title) return NextResponse.json({ error: `tasks[${i}]: title is required` }, { status: 400 });
       const ownerId = t.ownerUserId ?? (t.ownerSlackUserId ? (await userBySlackId(t.ownerSlackUserId))?.id : undefined);
-      if (!ownerId) return NextResponse.json({ error: `tasks[${i}]: ownerUserId or a known ownerSlackUserId is required` }, { status: 400 });
+      if (t.ownerSlackUserId && !ownerId) return NextResponse.json({ error: `tasks[${i}]: unknown ownerSlackUserId` }, { status: 400 });
       const dueAt = t.dueAt ? new Date(t.dueAt) : null;
       if (dueAt && isNaN(dueAt.getTime())) return NextResponse.json({ error: `tasks[${i}]: bad dueAt` }, { status: 400 });
       input.push({
         title,
         details: t.details?.trim() ? t.details.trim() : undefined,
-        ownerId,
+        ownerId: ownerId ?? null,
         creatorId: writer.userId,
         dueAt,
         hardDeadline: !!t.hardDeadline,

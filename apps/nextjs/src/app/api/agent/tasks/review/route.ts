@@ -24,7 +24,7 @@ export interface ReviewTask {
   title: string;
   details: string | null;
   status: string;
-  ownerId: string;
+  ownerId: string | null; // null = unassigned backlog
   dueAt: string | null;
   hardDeadline: boolean;
   blockedOnId: string | null;
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
           .orderBy(desc(TeamTaskEvent.createdAt))
       : [];
     // Owners of open tasks who have no profile still get a block
-    const ownerIds = new Set(tasks.map((t) => t.ownerId));
+    const ownerIds = new Set(tasks.map((t) => t.ownerId).filter((id): id is string => !!id));
     const known = new Set(people.map((p) => p.userId));
     const extra = [...ownerIds].filter((id) => !known.has(id));
     const extraPeople = extra.length ? await db.select({ userId: user.id, name: user.name }).from(user).where(inArray(user.id, extra)) : [];
@@ -113,8 +113,11 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.open.length - a.open.length || a.name.localeCompare(b.name));
 
+    const unassigned = tasks.filter((t) => !t.ownerId && OPEN.includes(t.status as (typeof OPEN)[number])).map(shape);
+
     return NextResponse.json({
       status: "ok",
+      unassigned,
       people: byPerson,
       owners: everyone, // for the owner pickers
       _meta: { generatedAt: now.toISOString(), nextMeeting: nextMeeting(now).toISOString(), since: since.toISOString() },

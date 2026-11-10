@@ -17,6 +17,7 @@ interface Owner {
   name: string;
 }
 interface ReviewData {
+  unassigned: ReviewTask[];
   people: ReviewPerson[];
   owners: Owner[];
   _meta: { nextMeeting: string; since: string };
@@ -69,7 +70,7 @@ function Chip({ n, label }: { n: number; label: string }) {
   );
 }
 
-function NamePicker({ owners, value, onPick, exclude }: { owners: Owner[]; value?: string; onPick: (id: string) => void; exclude?: string }) {
+function NamePicker({ owners, value, onPick, exclude }: { owners: Owner[]; value?: string; onPick: (id: string) => void; exclude?: string | null }) {
   return (
     <div className="flex flex-wrap gap-2">
       {owners
@@ -197,7 +198,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
           ) : (
             <>
               <button className={`${BTN_DONE} flex-1 sm:flex-none sm:px-5`} disabled={!!busy} onClick={() => act("complete")}>{busy === "complete" ? "…" : "Done"}</button>
-              <button className={`${BTN_WHITE} flex-1 sm:flex-none`} disabled={!!busy} onClick={() => act("review")}>{busy === "review" ? "…" : "Still on"}</button>
+              <button className={`${BTN_WHITE} flex-1 sm:flex-none`} disabled={!!busy} onClick={() => act("review")}>{busy === "review" ? "…" : "Not yet"}</button>
               <button className={`${more ? BTN_ACTIVE : BTN_WHITE} flex-1 sm:flex-none`} onClick={() => setMore(!more)}>More</button>
             </>
           )}
@@ -235,6 +236,40 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
   );
 }
 
+// --- unassigned backlog: assign or drop, nothing else ------------------------------------
+
+function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const act = async (action: string, extra: Record<string, unknown> = {}) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await post(`/api/agent/tasks/${t.id}`, { action, ...extra });
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <li className="border-t border-gray-100 px-5 py-4 first:border-t-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-base font-semibold text-gray-900">
+          {t.title}
+          <span className="ml-2 text-sm font-normal text-gray-600">{t.dueAt ? `Due ${fmt(t.dueAt)}` : "no date"}{t.hardDeadline ? " · hard deadline" : ""}</span>
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <NamePicker owners={owners} onPick={(id) => act("handoff", { newOwnerUserId: id, text: "Assigned at the meeting" })} />
+          <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Drop</button>
+        </div>
+      </div>
+      {error && <div className="mt-2 text-sm text-red-700">{error}</div>}
+    </li>
+  );
+}
+
 // --- new items -------------------------------------------------------------------------
 
 function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; drafts: Draft[]; setDrafts: (d: Draft[]) => void; onSent: () => void }) {
@@ -251,12 +286,12 @@ function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; draf
     setTitle("");
     setHard(false);
   };
-  const ready = drafts.filter((d) => d.title.trim() && d.ownerId);
+  const ready = drafts.filter((d) => d.title.trim()); // no owner = goes to the unassigned backlog
   const send = async () => {
     setBusy(true);
     setError(null);
     try {
-      await post("/api/agent/tasks", { tasks: ready.map((d) => ({ title: d.title.trim(), ownerUserId: d.ownerId, dueAt: d.due ? at9am(d.due) : null, hardDeadline: d.hard })) });
+      await post("/api/agent/tasks", { tasks: ready.map((d) => ({ title: d.title.trim(), ownerUserId: d.ownerId || undefined, dueAt: d.due ? at9am(d.due) : null, hardDeadline: d.hard })) });
       setDrafts(drafts.filter((d) => !ready.includes(d)));
       onSent();
     } catch (err) {
@@ -281,7 +316,7 @@ function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; draf
               <input value={d.title} onChange={(e) => update(d.key, { title: e.target.value })} className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
               {d.source === "granola" && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Granola</span>}
               <div className="flex items-center gap-2">
-                <NamePicker owners={owners} value={d.ownerId} onPick={(id) => update(d.key, { ownerId: id })} />
+                <NamePicker owners={owners} value={d.ownerId} onPick={(id) => update(d.key, { ownerId: d.ownerId === id ? "" : id })} />
                 <input type="date" value={d.due} onChange={(e) => update(d.key, { due: e.target.value })} className="rounded-md border border-gray-200 px-2 py-2 text-sm" title="Due" />
                 <button type="button" onClick={() => setDrafts(drafts.filter((x) => x.key !== d.key))} className="px-2 text-lg text-gray-400 hover:text-gray-700" aria-label="Remove">×</button>
               </div>
@@ -347,6 +382,20 @@ export function TeamTab() {
           <button onClick={load} className={BTN_WHITE} aria-label="Refresh" title="Refresh">↻</button>
         </div>
       </header>
+
+      {data.unassigned.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-white">
+          <div className="flex items-baseline gap-3 px-5 py-4">
+            <h3 className="text-lg font-semibold text-gray-900">Unassigned</h3>
+            <span className="text-sm text-gray-600">{data.unassigned.length} to assign · nobody is nudged until these have an owner</span>
+          </div>
+          <ul className="border-t border-gray-100">
+            {data.unassigned.map((t) => (
+              <UnassignedRow key={t.id} t={t} owners={data.owners} onChange={() => changed([t.id])} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       {data.people.map((p) => {
         const stuck = p.closedThisWeek.filter((t) => touched.has(t.id));
