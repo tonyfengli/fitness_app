@@ -388,7 +388,7 @@ export function TeamTab() {
         <section className="rounded-xl border border-amber-200 bg-white">
           <div className="flex items-baseline gap-3 px-5 py-4">
             <h3 className="text-lg font-semibold text-gray-900">Unassigned</h3>
-            <span className="text-sm text-gray-600">{data.unassigned.length} to assign · nobody is nudged until these have an owner</span>
+            <span className="text-sm text-gray-600">{data.unassigned.length} open</span>
           </div>
           <ul className="border-t border-gray-100">
             {data.unassigned.map((t) => (
