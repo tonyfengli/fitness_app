@@ -12,10 +12,6 @@
     {
       "path": "/api/cron/celebrations",
       "schedule": "30 10 * * *"
-    },
-    {
-      "path": "/api/cron/team-nudges",
-      "schedule": "0 16 * * *"
     }
   ]
 }
