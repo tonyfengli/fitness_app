@@ -16,7 +16,7 @@ import { Celebration, user } from "@acme/db/schema";
 import { auth } from "~/auth/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getGymBusinessId } from "~/lib/business";
-import { renderCard } from "~/lib/celebrations/service";
+import { renderCard, settleTask } from "~/lib/celebrations/service";
 import type { CelebrationRow } from "~/app/save-calls/components/CelebrationsView";
 
 export const dynamic = "force-dynamic";
@@ -101,7 +101,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const businessId = await getGymBusinessId();
-    const [c] = await db.select({ id: Celebration.id, status: Celebration.status }).from(Celebration).where(and(eq(Celebration.id, id), eq(Celebration.businessId, businessId))).limit(1);
+    const [c] = await db
+      .select({ id: Celebration.id, status: Celebration.status, memberId: Celebration.memberId, type: Celebration.type, occasionDate: Celebration.occasionDate })
+      .from(Celebration)
+      .where(and(eq(Celebration.id, id), eq(Celebration.businessId, businessId)))
+      .limit(1);
     if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const now = new Date();
 
@@ -115,6 +119,8 @@ export async function POST(request: NextRequest) {
             : { status: "skipped", skippedAt: now, skippedBy: userId, skippedReason: body.reason?.trim().slice(0, 500) ?? null },
         )
         .where(eq(Celebration.id, id));
+      // The accountability side: the founder's task is done (posted) or cancelled (skipped)
+      await settleTask(c, action, { kind: "person", userId }).catch((err) => console.warn("[API /agent/celebrations] task not settled:", err instanceof Error ? err.message : err));
       return NextResponse.json({ id, status: action, at: now.toISOString() });
     }
     if (action === "reopen") {

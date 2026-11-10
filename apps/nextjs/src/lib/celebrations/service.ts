@@ -9,7 +9,7 @@
 
 import { and, eq } from "@acme/db";
 import { db } from "@acme/db/client";
-import { Celebration, CelebrationBackground } from "@acme/db/schema";
+import { Celebration, CelebrationBackground, TeamWorkflow } from "@acme/db/schema";
 
 import { generateImage } from "../ai/images";
 import { getGymBusinessId } from "../business";
@@ -21,6 +21,11 @@ import { fetchMemberPhoto, hasRealPhoto } from "./photo";
 import { backgroundPath, cardPath, storePng } from "./storage";
 import { DEFAULT_THEME, THEMES } from "./themes";
 import type { Theme } from "./themes";
+import { cancel, complete, createTasks, findTask, TeamRuleError } from "../team/tasks";
+import type { Actor } from "../team/tasks";
+
+export const WORKFLOW_KEY = "celebrations";
+const taskRef = (c: { memberId: string; type: string; occasionDate: string }) => `${c.type}:${c.memberId}:${c.occasionDate}`;
 
 export const DAYS_AHEAD = 7;
 
@@ -33,6 +38,7 @@ export interface CelebrationRun {
   rendered: string[];
   failed: { memberId: string; error: string }[];
   backgroundsGenerated: string[]; // theme keys
+  tasksCreated: string[]; // member ids whose card got a team task this run
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -78,7 +84,50 @@ export async function renderCard(celebrationId: string, run?: CelebrationRun): P
   });
   const imageUrl = await storePng(cardPath(c.id), png);
   await db.update(Celebration).set({ imageUrl, renderedAt: new Date() }).where(eq(Celebration.id, c.id));
+  await ensureTask({ ...c, imageUrl });
   return imageUrl;
+}
+
+/**
+ * The accountability hookup: a rendered card is a commitment for the workflow's owner to post
+ * it. One task per card (the task's sourceRef is the card's occasion); nothing if the workflow
+ * isn't registered yet (team-setup.ts), so celebrations keep working without the team layer.
+ */
+async function ensureTask(c: { id: string; memberId: string; memberName: string; type: string; occasionDate: string; imageUrl: string }, run?: CelebrationRun) {
+  const [w] = await db.select({ ownerId: TeamWorkflow.ownerId, active: TeamWorkflow.active }).from(TeamWorkflow).where(eq(TeamWorkflow.key, WORKFLOW_KEY)).limit(1);
+  if (!w?.active) return;
+  const firstName = c.memberName.split(" ")[0] ?? c.memberName;
+  const when = new Date(`${c.occasionDate}T17:00:00Z`); // 9am Pacific on the day
+  try {
+    const created = await createTasks(
+      [
+        {
+          title: `Post ${firstName}'s ${c.type} card in GroupMe`,
+          details: `${c.memberName} (#${c.memberId}), ${c.type} on ${c.occasionDate}. Download the card from the Retention tab, post it, then tap Posted.`,
+          context: { celebrationId: c.id, imageUrl: c.imageUrl, memberId: c.memberId },
+          ownerId: w.ownerId,
+          workflowKey: WORKFLOW_KEY,
+          dueAt: when,
+          hardDeadline: true,
+          source: WORKFLOW_KEY,
+          sourceRef: taskRef(c),
+        },
+      ],
+      { kind: "workflow" },
+    );
+    if (created.length) run?.tasksCreated.push(c.memberId);
+  } catch (err) {
+    if (!(err instanceof TeamRuleError)) throw err;
+    console.warn(`[celebrations] no task for ${c.memberId}: ${err.message}`);
+  }
+}
+
+/** Posted → the task is done; skipped → cancelled. Called by the agent route with the founder as actor. */
+export async function settleTask(c: { memberId: string; type: string; occasionDate: string }, outcome: "posted" | "skipped", actor: Actor): Promise<void> {
+  const task = await findTask(WORKFLOW_KEY, taskRef(c));
+  if (!task) return;
+  if (outcome === "posted") await complete(task, actor, "dashboard", "Marked Posted on the Retention tab");
+  else await cancel(task, { kind: "workflow" }, "dashboard", "Card skipped on the Retention tab");
 }
 
 /**
@@ -88,7 +137,7 @@ export async function renderCard(celebrationId: string, run?: CelebrationRun): P
 export async function runCelebrations(opts: { apply: boolean; now?: Date; testMemberIds?: string[] }): Promise<CelebrationRun> {
   const now = opts.now ?? new Date();
   const today = iso(now);
-  const run: CelebrationRun = { today, members: 0, withDob: 0, upcoming: [], created: [], rendered: [], failed: [], backgroundsGenerated: [] };
+  const run: CelebrationRun = { today, members: 0, withDob: 0, upcoming: [], created: [], rendered: [], failed: [], backgroundsGenerated: [], tasksCreated: [] };
   const businessId = await getGymBusinessId();
 
   const members = opts.testMemberIds?.length
@@ -120,17 +169,16 @@ export async function runCelebrations(opts: { apply: boolean; now?: Date; testMe
     if (inserted.length) run.created.push(b.memberId);
   }
 
-  // Render whatever has no card yet (new rows, and earlier rows whose render failed)
-  const pending = await db
-    .select({ id: Celebration.id, memberId: Celebration.memberId })
-    .from(Celebration)
-    .where(and(eq(Celebration.businessId, businessId), eq(Celebration.status, "ready")));
+  // Render whatever has no card yet (new rows, and earlier rows whose render failed);
+  // make sure every ready card has its team task (rendered before the team layer existed, or a failed insert)
+  const pending = await db.select().from(Celebration).where(and(eq(Celebration.businessId, businessId), eq(Celebration.status, "ready")));
   for (const c of pending) {
-    const [row] = await db.select({ imageUrl: Celebration.imageUrl }).from(Celebration).where(eq(Celebration.id, c.id)).limit(1);
-    if (row?.imageUrl) continue;
     try {
-      await renderCard(c.id, run);
-      run.rendered.push(c.memberId);
+      if (c.imageUrl) await ensureTask({ ...c, imageUrl: c.imageUrl }, run);
+      else {
+        await renderCard(c.id, run);
+        run.rendered.push(c.memberId);
+      }
     } catch (err) {
       run.failed.push({ memberId: c.memberId, error: err instanceof Error ? err.message : String(err) });
     }
