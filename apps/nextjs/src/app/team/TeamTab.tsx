@@ -142,17 +142,17 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
   return (
     <li className="border-t border-gray-100 px-5 py-4 first:border-t-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {thumb !== undefined && (
             <div className="h-11 w-11 flex-none overflow-hidden rounded-md bg-gray-100">
               {/* eslint-disable-next-line @next/next/no-img-element -- Blob URL, already a sized PNG */}
               {thumb && <img src={thumb} alt="" className="h-full w-full object-cover" />}
             </div>
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             {editing ? (
               <form
-                className="flex gap-2"
+                className="flex w-full gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void act("edit", { title });
