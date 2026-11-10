@@ -22,15 +22,6 @@ interface ReviewData {
   owners: Owner[];
   _meta: { nextMeeting: string; since: string };
 }
-interface Draft {
-  key: string;
-  title: string;
-  ownerId: string;
-  due: string; // YYYY-MM-DD or ""
-  hard: boolean;
-  source?: "granola";
-}
-
 const TZ = "America/Los_Angeles";
 const fmt = (iso: string | null, opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" }) => (iso ? new Date(iso).toLocaleDateString("en-GB", { timeZone: TZ, ...opts }) : "no date");
 const ymd = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -276,30 +267,32 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
   );
 }
 
-// --- new items -------------------------------------------------------------------------
+// --- add an item (modal from the + in Unassigned) ------------------------------------------
 
-function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; drafts: Draft[]; setDrafts: (d: Draft[]) => void; onSent: () => void }) {
+function AddItemModal({ owners, onClose, onAdded }: { owners: Owner[]; onClose: () => void; onAdded: () => void }) {
   const [title, setTitle] = useState("");
+  const [ownerId, setOwnerId] = useState("");
   const [due, setDue] = useState("");
   const [hard, setHard] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const update = (key: string, patch: Partial<Draft>) => setDrafts(drafts.map((d) => (d.key === key ? { ...d, ...patch } : d)));
-  const add = (e: React.FormEvent) => {
+  const [added, setAdded] = useState(0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    setDrafts([...drafts, { key: `${Date.now()}`, title: title.trim(), ownerId: "", due, hard }]);
-    setTitle("");
-    setHard(false);
-  };
-  const ready = drafts.filter((d) => d.title.trim()); // no owner = goes to the unassigned backlog
-  const send = async () => {
     setBusy(true);
     setError(null);
     try {
-      await post("/api/agent/tasks", { tasks: ready.map((d) => ({ title: d.title.trim(), ownerUserId: d.ownerId || undefined, dueAt: d.due ? at9am(d.due) : null, hardDeadline: d.hard })) });
-      setDrafts(drafts.filter((d) => !ready.includes(d)));
-      onSent();
+      await post("/api/agent/tasks", { tasks: [{ title: title.trim(), ownerUserId: ownerId || undefined, dueAt: due ? at9am(due) : null, hardDeadline: hard }] });
+      setAdded((n) => n + 1);
+      setTitle("");
+      setHard(false);
+      onAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -307,39 +300,28 @@ function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; draf
     }
   };
   return (
-    <section className="rounded-xl border border-gray-200 bg-white">
-      <div className="flex items-center gap-2 px-5 py-4">
-        <h3 className="text-lg font-semibold text-gray-900">New items</h3>
-        {drafts.length > 0 && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{drafts.length}</span>}
-        {ready.length > 0 && (
-          <button onClick={send} disabled={busy} className={`${BTN_PICK} ml-auto`}>{busy ? "Sending…" : `Send ${ready.length} item${ready.length === 1 ? "" : "s"}`}</button>
-        )}
-      </div>
-      {drafts.length > 0 && (
-        <ul className="space-y-2 border-t border-gray-100 px-5 py-4">
-          {drafts.map((d) => (
-            <li key={d.key} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input value={d.title} onChange={(e) => update(d.key, { title: e.target.value })} className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
-              {d.source === "granola" && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Granola</span>}
-              <div className="flex items-center gap-2">
-                <NamePicker owners={owners} value={d.ownerId} onPick={(id) => update(d.key, { ownerId: d.ownerId === id ? "" : id })} />
-                <input type="date" value={d.due} onChange={(e) => update(d.key, { due: e.target.value })} className="rounded-md border border-gray-200 px-2 py-2 text-sm" title="Due" />
-                <button type="button" onClick={() => setDrafts(drafts.filter((x) => x.key !== d.key))} className="px-2 text-lg text-gray-400 hover:text-gray-700" aria-label="Remove">×</button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form onSubmit={add} className="grid gap-2 border-t border-gray-100 bg-gray-50/60 px-5 py-4 sm:grid-cols-[1fr_auto]">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add an item" className="rounded-md border border-gray-200 bg-white px-3 py-2.5 text-base" />
-        <div className="flex flex-wrap items-center gap-2">
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm" />
-          <label className="flex items-center gap-1.5 text-sm text-gray-700"><input type="checkbox" checked={hard} onChange={(e) => setHard(e.target.checked)} /> Hard deadline</label>
-          <button type="submit" disabled={!title.trim()} className={`${BTN_WHITE} sm:px-8`}>Add</button>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 sm:items-center" onClick={onClose}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="w-full max-w-lg space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Add an item</h3>
+          {added > 0 && <span className="text-sm text-gray-500">{added} added</span>}
+        </div>
+        <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing" className="w-full rounded-md border border-gray-200 px-3 py-2.5 text-base font-medium text-gray-900 focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+        <div>
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Owner <span className="font-normal normal-case tracking-normal">(none = unassigned)</span></div>
+          <NamePicker owners={owners} value={ownerId} onPick={(id) => setOwnerId(ownerId === id ? "" : id)} />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="rounded-md border border-gray-200 px-3 py-2 text-sm" />
+          <label className="flex items-center gap-1.5 text-sm text-gray-700"><input type="checkbox" checked={hard} onChange={(e) => setHard(e.target.checked)} disabled={!due} /> Hard deadline</label>
+        </div>
+        {error && <div className="text-sm text-red-700">{error}</div>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={BTN_WHITE}>Close</button>
+          <button type="submit" disabled={busy || !title.trim()} className={`${BTN_PICK} px-6`}>{busy ? "Adding…" : "Add"}</button>
         </div>
       </form>
-      {error && <div className="px-5 pb-3 text-sm text-red-700">{error}</div>}
-    </section>
+    </div>
   );
 }
 
@@ -348,7 +330,7 @@ function NewItems({ owners, drafts, setDrafts, onSent }: { owners: Owner[]; draf
 export function TeamTab() {
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [adding, setAdding] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
   const [touched, setTouched] = useState<Set<string>>(new Set()); // closed during this review: stay in place with Undo
   const load = useCallback(() => {
@@ -389,9 +371,10 @@ export function TeamTab() {
 
       {data.unassigned.length > 0 ? (
         <section className="rounded-xl border border-amber-200 bg-white">
-          <div className="flex items-baseline gap-3 px-5 py-4">
+          <div className="flex items-center gap-3 px-5 py-4">
             <h3 className="text-lg font-semibold text-gray-900">Unassigned</h3>
             <span className="text-sm text-gray-600">{data.unassigned.length} open</span>
+            <button onClick={() => setAdding(true)} className={`${BTN_WHITE} ml-auto px-3`} aria-label="Add an item" title="Add an item">+</button>
           </div>
           <ul className="border-t border-gray-100">
             {data.unassigned.map((t) => (
@@ -400,9 +383,10 @@ export function TeamTab() {
           </ul>
         </section>
       ) : (
-        <div className="flex items-baseline gap-3 rounded-xl border border-dashed border-gray-200 px-5 py-3">
+        <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 px-5 py-3">
           <h3 className="text-base font-medium text-gray-400">Unassigned</h3>
           <span className="text-sm text-gray-400">Nothing open.</span>
+          <button onClick={() => setAdding(true)} className={`${BTN_WHITE} ml-auto px-3`} aria-label="Add an item" title="Add an item">+</button>
         </div>
       )}
 
@@ -430,8 +414,7 @@ export function TeamTab() {
         );
       })}
 
-      {/* Intake happens at the end of the meeting: drafts (Granola later) + add form */}
-      {data.people.length > 0 && <NewItems owners={data.owners} drafts={drafts} setDrafts={setDrafts} onSent={load} />}
+      {adding && <AddItemModal owners={data.owners} onClose={() => setAdding(false)} onAdded={load} />}
 
       {closedTotal > 0 && (
         <section className="rounded-xl border border-gray-200 bg-white">
