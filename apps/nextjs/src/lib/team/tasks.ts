@@ -10,9 +10,9 @@
  * - createTasks is all-or-nothing and never duplicates a (source, sourceRef).
  */
 
-import { and, eq, inArray } from "@acme/db";
+import { and, desc, eq, inArray, isNull } from "@acme/db";
 import { db } from "@acme/db/client";
-import { TeamTask, TeamTaskEvent, TeamWorkflow, user } from "@acme/db/schema";
+import { TeamNudge, TeamNudgeTask, TeamTask, TeamTaskEvent, TeamWorkflow, user } from "@acme/db/schema";
 
 import { getGymBusinessId } from "../business";
 
@@ -219,8 +219,25 @@ export async function changeDeadline(task: Task, actor: Actor, channel: Channel,
   });
 }
 
-export async function addNote(task: Task, actor: Actor, channel: Channel, note: string): Promise<void> {
-  await db.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, note });
+export async function addNote(task: Task, actor: Actor, channel: Channel, note: string, traceId?: string): Promise<void> {
+  await db.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "note", ...actorColumns(actor), channel, note, traceId: traceId ?? null });
+}
+
+/**
+ * A person answered a nudge about this task. Records their words as an event and marks the
+ * latest nudge that covered the task as replied. The agent then acts (complete, block, …) as
+ * a separate call, so the timeline shows the reply and the decision as two lines.
+ */
+export async function recordReply(task: Task, from: { userId: string }, channel: Channel, text: string, traceId?: string): Promise<void> {
+  await db.insert(TeamTaskEvent).values({ businessId: task.businessId, taskId: task.id, type: "replied", actor: "person", actorId: from.userId, channel, note: text, traceId: traceId ?? null });
+  const [latest] = await db
+    .select({ id: TeamNudge.id })
+    .from(TeamNudge)
+    .innerJoin(TeamNudgeTask, eq(TeamNudgeTask.nudgeId, TeamNudge.id))
+    .where(and(eq(TeamNudgeTask.taskId, task.id), eq(TeamNudge.recipientId, from.userId)))
+    .orderBy(desc(TeamNudge.sentAt))
+    .limit(1);
+  if (latest) await db.update(TeamNudge).set({ outcome: "replied", respondedAt: new Date() }).where(and(eq(TeamNudge.id, latest.id), isNull(TeamNudge.respondedAt)));
 }
 
 /** Open tasks that someone is responsible for right now: their own, plus ones blocked on them */

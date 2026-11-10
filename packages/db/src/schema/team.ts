@@ -25,6 +25,7 @@ export const teamTaskEventTypeEnum = pgEnum("team_task_event_type", [
   "unblocked",
   "note",
   "nudged",
+  "replied", // the owner (or blocked-on person) answered a nudge; note = their words
   "escalated",
   "completed",
   "declined",
@@ -143,6 +144,7 @@ export const TeamTaskEvent = pgTable(
     fromValue: t.text(),
     toValue: t.text(),
     note: t.text(),
+    traceId: t.varchar({ length: 120 }), // Langfuse trace / OpenClaw session that produced this, when a model was involved
     createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
   }),
   (table) => ({
