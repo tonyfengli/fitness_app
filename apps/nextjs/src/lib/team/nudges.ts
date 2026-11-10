@@ -56,14 +56,28 @@ function dueLabel(t: Task, now: Date) {
   return `due in ${d} days`;
 }
 
-/** Which of a person's open tasks belong in today's message */
-export function tasksToMention(tasks: Task[], now: Date): Task[] {
+/**
+ * Which of a person's open tasks belong in today's message: anything they haven't been told
+ * about yet (first notice), anything due within DUE_SOON_DAYS or overdue, and anything blocked.
+ */
+export function tasksToMention(tasks: Task[], now: Date, alreadyNudged: Set<string>): Task[] {
   return tasks
     .filter((t) => {
+      if (!alreadyNudged.has(t.id)) return true;
       const d = daysUntil(t.dueAt, now);
       return t.status === "blocked" || d === null || d <= DUE_SOON_DAYS;
     })
     .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
+}
+
+/** Ids of the given tasks that have been in a nudge before */
+async function nudgedBefore(tasks: Task[]): Promise<Set<string>> {
+  if (!tasks.length) return new Set();
+  const rows = await db
+    .select({ taskId: TeamTaskEvent.taskId })
+    .from(TeamTaskEvent)
+    .where(and(inArray(TeamTaskEvent.taskId, tasks.map((t) => t.id)), eq(TeamTaskEvent.type, "nudged")));
+  return new Set(rows.map((r) => r.taskId));
 }
 
 function link(t: Task): string {
@@ -75,6 +89,7 @@ function link(t: Task): string {
 export function reminderText(name: string, tasks: Task[], now: Date): string {
   const first = name.split(" ")[0] ?? name;
   const lines = [`🤖 Elev8 Ops — morning, ${first}. ${tasks.length === 1 ? "One thing on your plate" : `${tasks.length} things on your plate`}:`];
+  // (new assignments appear here once, then again when they're due within a few days)
   for (const t of tasks) {
     const url = link(t);
     const blocked = t.status === "blocked" ? ` — waiting: ${t.blockedReason ?? "blocked"}` : "";
@@ -127,7 +142,8 @@ export async function runNudges(opts: { apply: boolean; now?: Date }): Promise<N
       run.skipped.push({ userId: p.userId, name: p.name, reason: `quiet hours (${hour}:00 local)` });
       continue;
     }
-    const tasks = tasksToMention(await openTasksFor(p.userId), now);
+    const open = await openTasksFor(p.userId);
+    const tasks = tasksToMention(open, now, await nudgedBefore(open));
     if (!tasks.length) {
       run.skipped.push({ userId: p.userId, name: p.name, reason: "nothing due" });
       continue;
