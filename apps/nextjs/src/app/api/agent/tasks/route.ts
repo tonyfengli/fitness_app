@@ -17,7 +17,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq, inArray } from "@acme/db";
 import { db } from "@acme/db/client";
-import { TeamTask, user } from "@acme/db/schema";
+import { TeamProfile, TeamTask, user } from "@acme/db/schema";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getGymBusinessId } from "~/lib/business";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
@@ -27,6 +27,20 @@ import { createTasks, TeamRuleError } from "~/lib/team/tasks";
 export const dynamic = "force-dynamic";
 
 const OPEN = ["open", "in_progress", "blocked"] as const;
+
+/** A founder by first name, full name or alias ("Richie"); undefined when none or several match */
+async function ownerByName(raw: string): Promise<string | undefined> {
+  const q = raw.trim().toLowerCase();
+  if (!q) return undefined;
+  const businessId = await getGymBusinessId();
+  const rows = await db
+    .select({ id: user.id, name: user.name, aliases: TeamProfile.aliases })
+    .from(TeamProfile)
+    .innerJoin(user, eq(user.id, TeamProfile.userId))
+    .where(and(eq(TeamProfile.businessId, businessId), eq(TeamProfile.active, true)));
+  const hits = rows.filter((r) => r.name.toLowerCase() === q || r.name.split(" ")[0]?.toLowerCase() === q || r.aliases.some((a) => a.toLowerCase() === q));
+  return hits.length === 1 ? hits[0]?.id : undefined;
+}
 
 export async function GET(request: NextRequest) {
   const authError = await validateFounderAccess(request);
@@ -78,6 +92,7 @@ interface NewTaskBody {
   details?: string;
   ownerUserId?: string;
   ownerSlackUserId?: string;
+  ownerName?: string; // "David", "Richie": matched against founders' names and aliases; unclear = unassigned
   dueAt?: string | null;
   hardDeadline?: boolean;
   nudgeAt?: string | null;
@@ -94,7 +109,8 @@ export async function POST(request: NextRequest) {
     for (const [i, t] of body.tasks.entries()) {
       const title = t.title?.trim();
       if (!title) return NextResponse.json({ error: `tasks[${i}]: title is required` }, { status: 400 });
-      const ownerId = t.ownerUserId ?? (t.ownerSlackUserId ? (await userBySlackId(t.ownerSlackUserId))?.id : undefined);
+      const byName = !t.ownerUserId && !t.ownerSlackUserId && t.ownerName ? await ownerByName(t.ownerName) : undefined;
+      const ownerId = t.ownerUserId ?? (t.ownerSlackUserId ? (await userBySlackId(t.ownerSlackUserId))?.id : byName);
       if (t.ownerSlackUserId && !ownerId) return NextResponse.json({ error: `tasks[${i}]: unknown ownerSlackUserId` }, { status: 400 });
       const dueAt = t.dueAt ? new Date(t.dueAt) : null;
       if (dueAt && isNaN(dueAt.getTime())) return NextResponse.json({ error: `tasks[${i}]: bad dueAt` }, { status: 400 });
@@ -108,12 +124,16 @@ export async function POST(request: NextRequest) {
         dueAt,
         hardDeadline: !!t.hardDeadline,
         nudgeAt,
-        source: body.source ?? "meeting",
+        source: body.source ?? (writer.via === "agent" ? "slack" : "meeting"),
         sourceRef: `${stamp}:${i}:${Math.random().toString(36).slice(2, 8)}`,
       });
     }
     const created = await createTasks(input, { kind: "person", userId: writer.userId }, writer.via === "agent" ? "slack" : "dashboard");
-    return NextResponse.json({ status: "ok", created: created.map((c) => ({ id: c.id, title: c.title, ownerId: c.ownerId, dueAt: c.dueAt?.toISOString() ?? null })) });
+    const names = await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, created.map((c) => c.ownerId).filter((x): x is string => !!x).concat(["-"])));
+    return NextResponse.json({
+      status: "ok",
+      created: created.map((c) => ({ id: c.id, title: c.title, ownerId: c.ownerId, owner: names.find((n) => n.id === c.ownerId)?.name ?? "unassigned", dueAt: c.dueAt?.toISOString() ?? null, hardDeadline: c.hardDeadline, nudgeAt: c.nudgeAt?.toISOString() ?? null })),
+    });
   } catch (err) {
     if (err instanceof TeamRuleError) return NextResponse.json({ status: "refused", reason: err.message }, { status: 403 });
     console.error("[API /agent/tasks] Error:", err);

@@ -8,6 +8,7 @@
  *   move      new due date (dueAt ISO); hard deadlines refuse; owners may shift ≤ 2 days
  *   handoff   new owner (newOwnerSlackUserId); creator or workflow owner only
  *   unassign  back to the backlog; anyone (recorded)
+ *   remind    nudgeAt (ISO | null): when the one message goes out; agent or founder
  *   set_deadline  dashboard only: dueAt (ISO | null), hardDeadline (bool), nudgeAt (ISO | null = back to the rule)
  *   cancel    no longer needed; creator or workflow owner only
  *   note      a note on the task (text)
@@ -96,6 +97,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       case "unassign":
         await unassign(task, actor, channel, text);
         break;
+      case "remind": {
+        // "Remind me tomorrow at 3": sets only the message time. Allowed for the agent (acting
+        // for the person who asked) and founders. nudgeAt null = back to the rule.
+        let nudge: Date | null;
+        if (body.nudgeAt === null) nudge = null;
+        else if (typeof body.nudgeAt === "string") {
+          nudge = new Date(body.nudgeAt);
+          if (isNaN(nudge.getTime())) return NextResponse.json({ error: "bad nudgeAt" }, { status: 400 });
+          if (nudge.getTime() < Date.now() - 5 * 60_000) return NextResponse.json({ status: "refused", reason: "That time has already passed" }, { status: 403 });
+        } else return NextResponse.json({ error: "nudgeAt (ISO or null) is required" }, { status: 400 });
+        await setDeadline(task, actor, channel, { nudgeAt: nudge }, text ?? (nudge ? "Reminder time set" : "Reminder cleared"));
+        break;
+      }
       case "set_deadline": {
         // dueAt: ISO sets, null clears, absent keeps; hardDeadline: boolean or absent
         if (writer.via === "agent") return NextResponse.json({ status: "refused", reason: "The agent can't change hard deadlines; use move" }, { status: 403 });

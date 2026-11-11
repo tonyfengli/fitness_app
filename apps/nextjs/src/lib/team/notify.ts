@@ -1,9 +1,8 @@
 /**
- * Delivery for team nudges. Callers say who and what; this picks the channel from the
- * person's profile. Slack DM today; iMessage (the business door on the Mini) and SMS later,
- * each a case here, so removing a channel is removing a case.
- *
- * Slack: SLACK_BOT_TOKEN (the same bot the Mini uses; scopes chat:write + im:write).
+ * Delivery for team messages. Slack DM today (SLACK_BOT_TOKEN, the Mini's bot: chat:write,
+ * im:write, files:write); iMessage/SMS would be more cases here.
+ * A message can carry images (a birthday card): the text goes first (its ts is what we record),
+ * then each image is uploaded into the same DM so it can be long-pressed and saved.
  */
 
 export interface Recipient {
@@ -14,29 +13,54 @@ export interface Recipient {
 
 export interface Delivery {
   channel: "slack";
-  externalId: string | null; // Slack message ts
+  externalId: string | null; // Slack ts of the text message
+  imagesAttached: number;
 }
 
-async function slack<T extends { ok: boolean; error?: string }>(method: string, body: Record<string, unknown>): Promise<T> {
+async function slack<T extends { ok: boolean; error?: string }>(method: string, body: Record<string, unknown>, form = false): Promise<T> {
   const token = process.env.SLACK_BOT_TOKEN;
   if (!token) throw new Error("SLACK_BOT_TOKEN is not set");
   const res = await fetch(`https://slack.com/api/${method}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000),
+    headers: form
+      ? { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" }
+      : { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
+    body: form ? new URLSearchParams(Object.entries(body).map(([k, v]) => [k, String(v)])).toString() : JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
   });
   const data = (await res.json()) as T;
   if (!data.ok) throw new Error(`Slack ${method}: ${data.error ?? res.status}`);
   return data;
 }
 
-export async function sendSlackDm(slackUserId: string, text: string): Promise<Delivery> {
+/** Upload one image (fetched from a URL) into a channel, via Slack's external upload flow */
+async function uploadImage(channelId: string, url: string, filename: string): Promise<void> {
+  const img = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!img.ok) throw new Error(`image ${img.status}`);
+  const bytes = Buffer.from(await img.arrayBuffer());
+  const slot = await slack<{ ok: boolean; upload_url?: string; file_id?: string }>("files.getUploadURLExternal", { filename, length: bytes.length }, true);
+  if (!slot.upload_url || !slot.file_id) throw new Error("Slack gave no upload URL");
+  const put = await fetch(slot.upload_url, { method: "POST", body: bytes, signal: AbortSignal.timeout(30_000) });
+  if (!put.ok) throw new Error(`Slack upload ${put.status}`);
+  await slack("files.completeUploadExternal", { files: [{ id: slot.file_id, title: filename }], channel_id: channelId });
+}
+
+export async function sendSlackDm(slackUserId: string, text: string, images: { url: string; filename: string }[] = []): Promise<Delivery> {
   const open = await slack<{ ok: boolean; channel?: { id: string } }>("conversations.open", { users: slackUserId });
   const channel = open.channel?.id;
   if (!channel) throw new Error("Slack conversations.open returned no channel");
   const posted = await slack<{ ok: boolean; ts?: string }>("chat.postMessage", { channel, text, unfurl_links: false, unfurl_media: false });
-  return { channel: "slack", externalId: posted.ts ?? null };
+  let imagesAttached = 0;
+  for (const img of images) {
+    try {
+      await uploadImage(channel, img.url, img.filename);
+      imagesAttached++;
+    } catch (err) {
+      // The text already went out; a missing image is logged, not a failed message
+      console.warn(`[team/notify] image not attached (${img.filename}):`, err instanceof Error ? err.message : err);
+    }
+  }
+  return { channel: "slack", externalId: posted.ts ?? null, imagesAttached };
 }
 
 /** The channel a person can be reached on right now, or null */

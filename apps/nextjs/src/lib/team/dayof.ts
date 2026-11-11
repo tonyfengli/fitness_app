@@ -121,7 +121,7 @@ export class NudgeRefused extends Error {}
  * the tasks aren't due a message for that person now, or the person already got today's
  * message. The cap is the unique index: the row is claimed before the send.
  */
-export async function sendDayOf(input: { slackUserId: string; taskIds: string[]; text: string; traceId?: string }, now = new Date()): Promise<{ nudgeId: string; externalId: string | null; tasks: number }> {
+export async function sendDayOf(input: { slackUserId: string; taskIds: string[]; text: string; traceId?: string }, now = new Date()): Promise<{ nudgeId: string; externalId: string | null; tasks: number; imagesAttached: number }> {
   if (!input.text.trim()) throw new NudgeRefused("Empty message");
   if (!input.taskIds.length) throw new NudgeRefused("No tasks");
   const { due } = await dayOfItems(now);
@@ -142,13 +142,17 @@ export async function sendDayOf(input: { slackUserId: string; taskIds: string[];
     .returning({ id: TeamNudge.id });
   if (!claimed) throw new NudgeRefused(`${r.name} already got today's message`);
   try {
-    const delivery = await sendSlackDm(input.slackUserId, input.text);
+    // Birthday cards travel as the image itself, so nobody needs a link or the dashboard
+    const images = mine
+      .map((d) => (typeof d.task.context?.imageUrl === "string" ? { url: d.task.context.imageUrl, filename: `${d.task.title.replace(/[^\w ]+/g, "").replace(/\s+/g, "-")}.png` } : null))
+      .filter((x): x is { url: string; filename: string } => !!x);
+    const delivery = await sendSlackDm(input.slackUserId, input.text, images);
     await db.update(TeamNudge).set({ externalId: delivery.externalId }).where(eq(TeamNudge.id, claimed.id));
     await db.insert(TeamNudgeTask).values(mine.map((d) => ({ nudgeId: claimed.id, taskId: d.task.id, businessId })));
     await db.insert(TeamTaskEvent).values(
       mine.map((d) => ({ businessId, taskId: d.task.id, type: "nudged" as const, actor: "agent" as const, channel: "slack" as const, toValue: r.userId, note: input.text, traceId: input.traceId ?? null })),
     );
-    return { nudgeId: claimed.id, externalId: delivery.externalId, tasks: mine.length };
+    return { nudgeId: claimed.id, externalId: delivery.externalId, tasks: mine.length, imagesAttached: delivery.imagesAttached };
   } catch (err) {
     await db.delete(TeamNudge).where(eq(TeamNudge.id, claimed.id)); // free the slot; nothing was sent
     throw err;
