@@ -129,3 +129,32 @@ export async function getClassAttendance(start: string, end: string): Promise<Cl
     slots: result,
   };
 }
+
+export interface RosterSession {
+  classType: string;
+  date: string;
+  time: string; // "5 pm"
+  timeSort: number;
+  booked: { memberId: string | null; name: string; result: string }[]; // still on: Booking / Showed / Showed late
+  dropped: { memberId: string | null; name: string; result: string }[]; // cancelled or no-show
+}
+
+/** Who is booked into each class on one day (past or upcoming). Open Gym is left out. */
+export async function getClassRoster(date: string): Promise<RosterSession[]> {
+  const rows = await fetchBookings(date, date);
+  const sessions = new Map<string, RosterSession>();
+  for (const b of rows) {
+    const classType = String(b["Class Name"] ?? (b["Service"] === "Class Attendant" ? (b["Resource Name"] ?? "Class") : "")).trim();
+    if (!classType || classType.includes("(Historic)")) continue;
+    if (parseGymMasterDate(b["Booking Date"]) !== date) continue;
+    const rawTime = String(b["Booking Start Time"] ?? "");
+    if (!rawTime) continue;
+    const key = `${classType}|${rawTime}`;
+    const s = sessions.get(key) ?? { classType, date, time: timeLabel(rawTime), timeSort: Number(b["sorted_Booking Start Time"] ?? 0), booked: [], dropped: [] };
+    const result = String(b["Booking Result"] ?? "");
+    const person = { memberId: b["Member ID"] != null ? String(b["Member ID"]) : null, name: String(b["Name"] ?? "").trim() || "(no name)", result };
+    (VALID_ATTENDANCE.includes(result) ? s.booked : s.dropped).push(person);
+    sessions.set(key, s);
+  }
+  return [...sessions.values()].sort((a, b) => a.timeSort - b.timeSort || a.classType.localeCompare(b.classType));
+}
