@@ -193,9 +193,9 @@ export const TeamTaskEvent = pgTable(
 );
 
 /**
- * One message sent to one person about their tasks. The strict cap: at most one regular nudge
- * per recipient per local day (partial unique index below). A hard-deadline escalation may
- * bypass the cap once per task (bypassTaskId, unique).
+ * One message sent to one person about their tasks. No daily cap (Tony, Nov 10): a message goes
+ * out only when a task's nudge time arrives, once per time (lib/team/dayof.ts). bypassTaskId is
+ * unused since escalations were dropped; kept so old rows stay valid.
  */
 export const TeamNudge = pgTable(
   "team_nudge",
@@ -220,9 +220,6 @@ export const TeamNudge = pgTable(
     respondedAt: t.timestamp({ withTimezone: true }),
   }),
   (table) => ({
-    oneRegularPerDay: uniqueIndex("team_nudge_recipient_day")
-      .on(table.recipientId, table.localDate)
-      .where(sql`${table.bypassTaskId} is null`),
     oneBypassPerTask: uniqueIndex("team_nudge_bypass_task").on(table.bypassTaskId).where(sql`${table.bypassTaskId} is not null`),
     byRecipient: index("idx_team_nudge_recipient").on(table.recipientId, table.sentAt),
   }),

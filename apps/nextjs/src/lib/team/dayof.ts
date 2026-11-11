@@ -2,9 +2,9 @@
  * The one message a founder gets about a task between meetings (BUSINESS-ACCOUNTABILITY.md →
  * MVP). When it goes out is the task's `nudgeAt`, or, when unset, the rule: a hard deadline
  * → 8am local on the due day; anything else → never. The Mini checks every 5 minutes; the
- * Chief of Staff writes the words; this module decides eligibility, enforces the limits (one
- * regular message per person per local day via team_nudge's unique index, quiet hours), sends,
- * and records. The COS cannot send without going through here.
+ * Chief of Staff writes the words; this module decides eligibility (nudge time reached, not
+ * yet sent for that time, outside quiet hours), sends, and records. No daily cap (Tony, Nov 10):
+ * volume is whatever nudge times are configured. The COS cannot send without going through here.
  */
 
 import { and, eq, inArray } from "@acme/db";
@@ -96,11 +96,6 @@ export async function dayOfItems(now = new Date()): Promise<{ due: DayOfItem[]; 
       skipped.push({ taskId: t.id, title: t.title, reason: `quiet hours (${hour}:00 local); goes out after ${p.quietEnd}:00` });
       continue;
     }
-    const [already] = await db
-      .select({ id: TeamNudge.id })
-      .from(TeamNudge)
-      .where(and(eq(TeamNudge.recipientId, p.userId), eq(TeamNudge.localDate, date), eq(TeamNudge.kind, "reminder")))
-      .limit(1);
     due.push({
       task: t,
       nudgeTime: when.at,
@@ -108,7 +103,7 @@ export async function dayOfItems(now = new Date()): Promise<{ due: DayOfItem[]; 
       recipient: { userId: p.userId, name: p.name, slackUserId: p.slackUserId, timezone: p.timezone, quietStart: p.quietStart, quietEnd: p.quietEnd },
       localDate: date,
       localHour: hour,
-      alreadyNudgedToday: !!already,
+      alreadyNudgedToday: false, // no daily cap since Nov 10; kept for the response shape
     });
   }
   return { due, skipped };
@@ -118,8 +113,7 @@ export class NudgeRefused extends Error {}
 
 /**
  * Send one message to one person covering the given tasks. Refuses (and sends nothing) when
- * the tasks aren't due a message for that person now, or the person already got today's
- * message. The cap is the unique index: the row is claimed before the send.
+ * the tasks aren't due a message for that person now.
  */
 export async function sendDayOf(input: { slackUserId: string; taskIds: string[]; text: string; traceId?: string }, now = new Date()): Promise<{ nudgeId: string; externalId: string | null; tasks: number; imagesAttached: number }> {
   if (!input.text.trim()) throw new NudgeRefused("Empty message");
@@ -138,9 +132,8 @@ export async function sendDayOf(input: { slackUserId: string; taskIds: string[];
   const [claimed] = await db
     .insert(TeamNudge)
     .values({ businessId, recipientId: r.userId, channel: "slack", kind: "reminder", localDate, body: input.text })
-    .onConflictDoNothing()
     .returning({ id: TeamNudge.id });
-  if (!claimed) throw new NudgeRefused(`${r.name} already got today's message`);
+  if (!claimed) throw new NudgeRefused("Could not record the message");
   try {
     // Birthday cards travel as the image itself, so nobody needs a link or the dashboard
     const images = mine
