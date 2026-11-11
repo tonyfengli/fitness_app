@@ -24,13 +24,14 @@ export interface Profile {
   owns: string | null;
   answerStyle: string | null;
   focus: string | null;
+  dailyMessageLimit: number | null;
   notes: { id: string; kind: NoteKind; text: string; source: "person" | "agent" | "workflow" | "cron"; author: string | null; traceId: string | null; createdAt: string }[];
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
   const businessId = await getGymBusinessId();
   const [row] = await db
-    .select({ userId: user.id, name: user.name, slackUserId: TeamProfile.slackUserId, role: TeamProfile.role, owns: TeamProfile.owns, answerStyle: TeamProfile.answerStyle, focus: TeamProfile.focus })
+    .select({ userId: user.id, name: user.name, slackUserId: TeamProfile.slackUserId, role: TeamProfile.role, owns: TeamProfile.owns, answerStyle: TeamProfile.answerStyle, focus: TeamProfile.focus, dailyMessageLimit: TeamProfile.dailyMessageLimit })
     .from(TeamProfile)
     .innerJoin(user, eq(user.id, TeamProfile.userId))
     .where(and(eq(TeamProfile.businessId, businessId), eq(TeamProfile.userId, userId)))
@@ -54,6 +55,11 @@ export async function listProfiles(): Promise<Profile[]> {
     if (p) out.push(p);
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function setDailyLimit(userId: string, limit: number | null): Promise<void> {
+  const v = limit === null || !Number.isFinite(limit) || limit <= 0 ? null : Math.min(20, Math.floor(limit));
+  await db.update(TeamProfile).set({ dailyMessageLimit: v }).where(eq(TeamProfile.userId, userId));
 }
 
 export async function setProfileFields(userId: string, patch: { role?: string | null; owns?: string | null; answerStyle?: string | null; focus?: string | null }): Promise<void> {

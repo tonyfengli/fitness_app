@@ -112,6 +112,22 @@ function ProfileCard({ p, onChange }: { p: Profile; onChange: () => void }) {
             {FIELDS.map((f) => (
               <Field key={f.key} p={p} f={f} onSaved={onChange} />
             ))}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">Messages per day:</span>
+              <select
+                value={p.dailyMessageLimit ?? ""}
+                onChange={async (e) => {
+                  await post({ userId: p.userId, action: "set", dailyMessageLimit: e.target.value ? Number(e.target.value) : null });
+                  onChange();
+                }}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm"
+              >
+                <option value="">No limit</option>
+                {[1, 2, 3, 5].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <ul className="space-y-1.5">
             {p.notes.map((n) => (

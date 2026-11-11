@@ -64,6 +64,7 @@ export const TeamProfile = pgTable("team_profile", (t) => ({
   timezone: t.varchar({ length: 60 }).notNull().default("America/Los_Angeles"),
   quietStart: t.smallint().notNull().default(21), // no messages from this hour (local)...
   quietEnd: t.smallint().notNull().default(8), // ...until this hour
+  dailyMessageLimit: t.smallint(), // max task messages per local day for this person; null = no limit (the default)
   active: t.boolean().notNull().default(true),
   createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
   updatedAt: t

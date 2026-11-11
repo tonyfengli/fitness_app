@@ -3,8 +3,9 @@
  * MVP). When it goes out is the task's `nudgeAt`, or, when unset, the rule: a hard deadline
  * → 8am local on the due day; anything else → never. The Mini checks every 5 minutes; the
  * Chief of Staff writes the words; this module decides eligibility (nudge time reached, not
- * yet sent for that time, outside quiet hours), sends, and records. No daily cap (Tony, Nov 10):
- * volume is whatever nudge times are configured. The COS cannot send without going through here.
+ * yet sent for that time, outside quiet hours, under the person's own daily limit if they have
+ * one), sends, and records. No universal cap (Tony, Nov 10): team_profile.dailyMessageLimit is
+ * per person and empty by default. The COS cannot send without going through here.
  */
 
 import { and, eq, inArray } from "@acme/db";
@@ -59,7 +60,7 @@ export async function dayOfItems(now = new Date()): Promise<{ due: DayOfItem[]; 
   const businessId = await getGymBusinessId();
   const tasks = await db.select().from(TeamTask).where(and(eq(TeamTask.businessId, businessId), inArray(TeamTask.status, [...OPEN])));
   const people = await db
-    .select({ userId: user.id, name: user.name, slackUserId: TeamProfile.slackUserId, timezone: TeamProfile.timezone, quietStart: TeamProfile.quietStart, quietEnd: TeamProfile.quietEnd, active: TeamProfile.active })
+    .select({ userId: user.id, name: user.name, slackUserId: TeamProfile.slackUserId, timezone: TeamProfile.timezone, quietStart: TeamProfile.quietStart, quietEnd: TeamProfile.quietEnd, active: TeamProfile.active, dailyMessageLimit: TeamProfile.dailyMessageLimit })
     .from(TeamProfile)
     .innerJoin(user, eq(user.id, TeamProfile.userId))
     .where(eq(TeamProfile.businessId, businessId));
@@ -95,6 +96,16 @@ export async function dayOfItems(now = new Date()): Promise<{ due: DayOfItem[]; 
     if (inQuietHours(hour, p.quietStart, p.quietEnd)) {
       skipped.push({ taskId: t.id, title: t.title, reason: `quiet hours (${hour}:00 local); goes out after ${p.quietEnd}:00` });
       continue;
+    }
+    if (p.dailyMessageLimit !== null) {
+      const sentToday = await db
+        .select({ id: TeamNudge.id })
+        .from(TeamNudge)
+        .where(and(eq(TeamNudge.recipientId, p.userId), eq(TeamNudge.localDate, date), eq(TeamNudge.kind, "reminder")));
+      if (sentToday.length >= p.dailyMessageLimit) {
+        skipped.push({ taskId: t.id, title: t.title, reason: `daily limit ${p.dailyMessageLimit} reached; goes out tomorrow` });
+        continue;
+      }
     }
     due.push({
       task: t,

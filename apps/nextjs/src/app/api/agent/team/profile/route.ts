@@ -4,7 +4,7 @@
  * GET  /api/agent/team/profile?slackUserId=U…      one, as the Chief reads it (+ `text` brief)
  * GET  /api/agent/team/profile?recent=7            what the Chief added in the last N days
  * POST /api/agent/team/profile  { userId | slackUserId, action, … }
- *   set     { role?, owns?, answerStyle?, focus? }       founders only
+ *   set     { role?, owns?, answerStyle?, focus?, dailyMessageLimit? (null = no limit) }  founders only
  *   note    { kind, text, traceId? }                     the Chief (write key) or a founder
  *   retire  { noteId }                                   founders only
  * Reads: founders or the read-only key. Writes: see each action.
@@ -14,7 +14,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
-import { addNote, getProfile, listProfiles, profileBrief, recentAgentNotes, retireNote, setProfileFields } from "~/lib/team/profile";
+import { addNote, getProfile, listProfiles, profileBrief, recentAgentNotes, retireNote, setDailyLimit, setProfileFields } from "~/lib/team/profile";
 import type { NoteKind } from "~/lib/team/profile";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +54,7 @@ interface Body {
   owns?: string | null;
   answerStyle?: string | null;
   focus?: string | null;
+  dailyMessageLimit?: number | null;
   kind?: string;
   text?: string;
   traceId?: string;
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
       case "set":
         if (writer.via !== "founder") return NextResponse.json({ status: "refused", reason: "Only a founder edits the summary fields" }, { status: 403 });
         await setProfileFields(target.id, { role: body.role, owns: body.owns, answerStyle: body.answerStyle, focus: body.focus });
+        if (body.dailyMessageLimit !== undefined) await setDailyLimit(target.id, body.dailyMessageLimit);
         break;
       case "note": {
         const kind = KINDS.includes(body.kind as NoteKind) ? (body.kind as NoteKind) : "pattern";
