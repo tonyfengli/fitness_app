@@ -12,7 +12,7 @@
 
 import { and, desc, eq, inArray, isNull } from "@acme/db";
 import { db } from "@acme/db/client";
-import { TeamNudge, TeamNudgeTask, TeamTask, TeamTaskEvent, TeamWorkflow, user } from "@acme/db/schema";
+import { Celebration, TeamNudge, TeamNudgeTask, TeamTask, TeamTaskEvent, TeamWorkflow, user } from "@acme/db/schema";
 
 import { getGymBusinessId } from "../business";
 
@@ -131,6 +131,25 @@ const isOwner = (task: Task, actor: Actor) => actor.kind !== "person" || (!!task
 
 const OPEN: TaskStatus[] = ["open", "in_progress", "blocked"];
 
+/**
+ * A task that came from a celebration card keeps the card in step: done → posted, cancelled or
+ * declined → skipped, reopened → ready. Credited to the person who acted, when there is one.
+ * (The card side does the reverse in lib/celebrations/service.ts; both are idempotent.)
+ */
+async function syncCelebration(task: Task, to: TaskStatus, actor: Actor) {
+  const celebrationId = typeof task.context?.celebrationId === "string" ? task.context.celebrationId : null;
+  if (task.source !== "celebrations" || !celebrationId) return;
+  const by = actor.kind === "person" ? actor.userId : null;
+  const now = new Date();
+  if (to === "done") {
+    await db.update(Celebration).set({ status: "posted", postedAt: now, postedBy: by }).where(and(eq(Celebration.id, celebrationId), eq(Celebration.status, "ready")));
+  } else if (to === "cancelled" || to === "declined") {
+    await db.update(Celebration).set({ status: "skipped", skippedAt: now, skippedBy: by, skippedReason: "Task closed" }).where(and(eq(Celebration.id, celebrationId), eq(Celebration.status, "ready")));
+  } else if (to === "open") {
+    await db.update(Celebration).set({ status: "ready", postedAt: null, postedBy: null, skippedAt: null, skippedBy: null, skippedReason: null }).where(eq(Celebration.id, celebrationId));
+  }
+}
+
 async function transition(
   task: Task,
   to: TaskStatus,
@@ -149,6 +168,9 @@ async function transition(
       .returning();
     await tx.insert(TeamTaskEvent).values({ businessId, taskId: task.id, type: eventType, ...actorColumns(actor), channel, fromValue: task.status, toValue: to, note: note ?? null });
     return orThrow(updated);
+  }).then(async (t) => {
+    await syncCelebration(task, to, actor);
+    return t;
   });
 }
 

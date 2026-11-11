@@ -103,7 +103,7 @@ async function ensureTask(c: { id: string; memberId: string; memberName: string;
       [
         {
           title: `Post ${firstName}'s ${c.type} card in GroupMe`,
-          details: `${c.memberName} (#${c.memberId}), ${c.type} on ${c.occasionDate}. Download the card from the Retention tab, post it, then tap Posted.`,
+          details: `${c.memberName} (#${c.memberId}), ${c.type} on ${c.occasionDate}. Save the card image and post it in the members' GroupMe; reply "posted" when it's up.`,
           context: { celebrationId: c.id, imageUrl: c.imageUrl, memberId: c.memberId },
           ownerId: w.ownerId,
           workflowKey: WORKFLOW_KEY,
