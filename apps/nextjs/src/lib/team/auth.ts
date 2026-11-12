@@ -1,5 +1,5 @@
 /**
- * Who may write to team tasks through the API:
+ * Who may write to team tasks (and celebration cards) through the API:
  *  - a signed-in founder (the dashboard), acting as themselves;
  *  - the gym Chief of Staff on the Mini, with TEAM_AGENT_API_KEY in X-TEAM-AGENT-KEY, acting
  *    on behalf of the Slack user who wrote to it (actorSlackUserId → team_profile → user).
@@ -38,7 +38,9 @@ export async function userBySlackId(slackUserId: string): Promise<{ id: string; 
 function hasAgentWriteKey(request: NextRequest): boolean {
   const expected = process.env.TEAM_AGENT_API_KEY;
   const given = request.headers.get("X-TEAM-AGENT-KEY");
-  return !!expected && !!given && given === expected && request.nextUrl.pathname.startsWith("/api/agent/tasks");
+  const path = request.nextUrl.pathname;
+  // Tasks, and the cards behind birthday tasks (send a card, rebuild one)
+  return !!expected && !!given && given === expected && (path.startsWith("/api/agent/tasks") || path === "/api/agent/celebrations");
 }
 
 /** The person this write acts as, or an error response */

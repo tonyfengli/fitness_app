@@ -15,10 +15,10 @@ import { join } from "node:path";
 import { generateImage } from "../../src/lib/ai/images";
 import { composeCelebration } from "../../src/lib/celebrations/compose";
 import { fetchMemberPhoto, hasRealPhoto } from "../../src/lib/celebrations/photo";
-import { DEFAULT_THEME, THEMES } from "../../src/lib/celebrations/themes";
+import { nextTheme, THEMES } from "../../src/lib/celebrations/themes";
 import { getMemberProfile } from "../../src/lib/gymmaster-member";
 
-const [memberId, themeKey = DEFAULT_THEME.birthday, detail] = process.argv.slice(2);
+const [memberId, themeKey = nextTheme("birthday", []).key, detail] = process.argv.slice(2);
 if (!memberId) throw new Error("usage: celebration-poc.ts <memberId> [theme] [detail]");
 const theme = THEMES[themeKey];
 if (!theme) throw new Error(`unknown theme ${themeKey}; have ${Object.keys(THEMES).join(", ")}`);
@@ -48,9 +48,9 @@ console.log(`photo: ${photo ? `${Math.round(photo.length / 1024)}KB` : "none, us
 const png = await composeCelebration({
   background,
   photo,
-  firstName,
   headline: theme.headline(firstName),
   subline: theme.subline?.(detail),
+  accent: theme.accent,
 });
 const outPath = join(outDir, `${theme.key}-${memberId}.png`);
 writeFileSync(outPath, png);

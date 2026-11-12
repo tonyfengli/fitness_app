@@ -20,3 +20,5 @@ export async function storePng(path: string, png: Buffer): Promise<string> {
 
 export const cardPath = (celebrationId: string) => `cards/${celebrationId}.png`;
 export const backgroundPath = (themeKey: string) => `backgrounds/${themeKey}.png`;
+/** Art made for one card alone, when a founder asks for a new background */
+export const cardBackgroundPath = (celebrationId: string) => `backgrounds/cards/${celebrationId}.png`;

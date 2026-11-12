@@ -1,6 +1,6 @@
 /**
- * Daily: find current members with a birthday in the next 7 days, create their celebration
- * rows (never twice) and render the cards that have none. Founders then post by hand from
+ * Daily: find current members with a birthday in the next 14 days (DAYS_AHEAD), create their
+ * celebration rows (never twice) and render the cards that have none. Founders then post by hand from
  * the Retention tab's Celebrations view.
  * GET /api/cron/celebrations                 apply
  * GET /api/cron/celebrations?dry=1           report only (who's upcoming; nothing written)

@@ -437,7 +437,7 @@ export function RetentionDashboard({
     "at-risk": "No visit in 14+ days, or weekly visits trending down. Today's save-call list.",
     "new-members": "",
     payments: "Billing status for every member. Owes, failed or short charges first.",
-    milestones: `Birthday cards for the next 7 days (download, post in GroupMe, tap Posted), then class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1.`,
+    milestones: `Birthday cards for the next 14 days (download, post in GroupMe, tap Posted), then class milestones (25, 50, 60, 80, 100, then every 25) counted since Aug 1.`,
     classes: "",
   };
   const readyCards = celebrations ? celebrations.filter((c) => c.status === "ready") : null;

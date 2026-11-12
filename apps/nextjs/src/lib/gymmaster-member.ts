@@ -78,6 +78,19 @@ export async function getMemberPhone(memberId: string): Promise<string | null> {
   return oldId ? ((await archived(oldId))?.phone ?? null) : null;
 }
 
+/**
+ * Date of birth (YYYY-MM-DD); the archived old record's when the new one has none (several
+ * members were re-entered in the new account without it). The new account wins when both exist.
+ */
+export async function getMemberDob(memberId: string, profile?: MemberProfile | null): Promise<string | null> {
+  const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v);
+  const p = profile === undefined ? await getMemberProfile(memberId) : profile;
+  if (isDate(p?.dob)) return p.dob.slice(0, 10);
+  const oldId = (await getMatches()).newToOld.get(memberId);
+  const old = oldId ? ((await archived(oldId))?.profile as MemberProfile | null | undefined) : null;
+  return isDate(old?.dob) ? old.dob.slice(0, 10) : null;
+}
+
 /** "First Last" */
 export async function getMemberName(memberId: string): Promise<string | null> {
   const p = await getMemberProfile(memberId);

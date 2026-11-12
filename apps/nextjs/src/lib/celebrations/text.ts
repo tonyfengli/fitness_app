@@ -61,3 +61,27 @@ export function fitSize(text: string, weight: Weight, maxWidth: number, max: num
   while (size > min && f.getAdvanceWidth(text, size) > maxWidth) size -= 2;
   return size;
 }
+
+/**
+ * Break text into at most `maxLines` lines at the largest size (down to `min`) where every
+ * line fits in `maxWidth`. Words are never split; at `min` an over-long line is left to overflow.
+ */
+export function fitLines(text: string, weight: Weight, maxWidth: number, maxLines: number, max: number, min: number): { size: number; lines: string[] } {
+  const f = font(weight);
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const wrap = (size: number) => {
+    const lines: string[] = [];
+    for (const word of words) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && f.getAdvanceWidth(`${last} ${word}`, size) <= maxWidth) lines[lines.length - 1] = `${last} ${word}`;
+      else lines.push(word);
+    }
+    return lines;
+  };
+  for (let size = max; size > min; size -= 4) {
+    const lines = wrap(size);
+    if (lines.length <= maxLines && lines.every((l) => f.getAdvanceWidth(l, size) <= maxWidth)) return { size, lines };
+  }
+  const lines = wrap(min);
+  return { size: min, lines: lines.length <= maxLines ? lines : [...lines.slice(0, maxLines - 1), lines.slice(maxLines - 1).join(" ")] };
+}

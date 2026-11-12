@@ -16,7 +16,10 @@ export interface CelebrationRow {
   occasionDate: string; // YYYY-MM-DD
   daysAway: number; // negative = passed
   detail: string | null;
-  themeKey: string;
+  themeKey: string; // the design
+  customWords: boolean; // a founder changed the words on this card
+  photo: "shown" | "none" | "off"; // none = the member has no photo; off = a founder turned it off
+  ownBackground: boolean; // art made for this card alone
   status: "ready" | "posted" | "skipped";
   imageUrl: string | null;
   renderedAt: string | null;
@@ -130,7 +133,7 @@ export function CelebrationsView({ rows, onAction }: Props) {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 text-gray-500">No birthdays in the next 7 days. Cards appear here a week out.</div>
+          <div className="text-center py-12 text-gray-500">No birthdays in the next 14 days. Cards appear here two weeks out.</div>
         )}
       </section>
       {!!done.length && (

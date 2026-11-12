@@ -2,7 +2,7 @@
  * Area `celebration`: member recognition cards (birthdays now, milestones next), rendered by
  * the celebrations cron and reviewed by founders on the Retention tab.
  * Written by: /api/cron/celebrations (create, render) and /api/agent/celebrations (posted,
- * skipped). Design: ai-crew/docs/BUSINESS-ACCOUNTABILITY.md. Naming: packages/db/NAMING.md.
+ * skipped, rebuild). Design: ai-crew/docs/BUSINESS-ACCOUNTABILITY.md. Naming: packages/db/NAMING.md.
  */
 
 import { index, pgEnum, pgTable, unique } from "drizzle-orm/pg-core";
@@ -29,7 +29,13 @@ export const Celebration = pgTable(
     type: celebrationTypeEnum().notNull(),
     occasionDate: t.date().notNull(), // the birthday this year, or the day the milestone was hit
     detail: t.varchar({ length: 100 }), // milestone: the class count ("50")
-    themeKey: t.varchar({ length: 60 }).notNull(),
+    themeKey: t.varchar({ length: 60 }).notNull(), // the design (lib/celebrations/themes.ts), given in rotation
+    // What a founder changed on this one card (through the Chief of Staff); null/default = the design's own
+    headline: t.text(),
+    subline: t.text(), // "" = no second line
+    usePhoto: t.boolean().notNull().default(true), // false = the no-photo layout even when a photo exists
+    backgroundUrl: t.text(), // art made for this card alone (Blob); null = the design's shared background
+    photoSource: t.varchar({ length: 20 }), // where the photo on the rendered card came from ("gymmaster"); null = none on it
     status: celebrationStatusEnum().notNull().default("ready"),
     imageUrl: t.text(), // the rendered card in Blob storage
     renderedAt: t.timestamp({ withTimezone: true }),
