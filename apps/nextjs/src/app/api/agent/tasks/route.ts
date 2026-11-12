@@ -20,7 +20,7 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, inArray } from "@acme/db";
+import { and, asc, desc, eq, inArray, like } from "@acme/db";
 import { db } from "@acme/db/client";
 import { TeamProfile, TeamTask, user } from "@acme/db/schema";
 import { validateFounderAccess } from "~/lib/api-auth";
@@ -111,6 +111,17 @@ export async function POST(request: NextRequest) {
   if (!Array.isArray(body.tasks) || !body.tasks.length) return NextResponse.json({ error: "tasks[] is required" }, { status: 400 });
   try {
     const stamp = Date.now().toString(36);
+    // A meeting posted again: same drafts are skipped, unless every earlier draft from it was
+    // closed (Tony cleared them to re-import), then this post starts a fresh round.
+    let meetingRef = body.meetingRef;
+    if (body.draft && meetingRef) {
+      const businessId = await getGymBusinessId();
+      const earlier = await db
+        .select({ status: TeamTask.status })
+        .from(TeamTask)
+        .where(and(eq(TeamTask.businessId, businessId), eq(TeamTask.source, body.source ?? "granola"), like(TeamTask.sourceRef, `${meetingRef}%`)));
+      if (earlier.length && earlier.every((e) => e.status === "cancelled" || e.status === "declined")) meetingRef = `${meetingRef}~${stamp}`;
+    }
     const input = [];
     for (const [i, t] of body.tasks.entries()) {
       const title = t.title?.trim();
@@ -125,14 +136,15 @@ export async function POST(request: NextRequest) {
       if (nudgeAt && isNaN(nudgeAt.getTime())) return NextResponse.json({ error: `tasks[${i}]: bad nudgeAt` }, { status: 400 });
       input.push({
         title,
-        details: t.details?.trim() ? t.details.trim() : undefined,
+        // Meeting drafts: the quote is the details (one field to read, edit and remind with); context keeps the original
+        details: t.details?.trim() ? t.details.trim() : body.draft && t.quote?.trim() ? t.quote.trim() : undefined,
         ownerId: ownerId ?? null,
         creatorId: writer.userId,
         dueAt,
         hardDeadline: !!t.hardDeadline,
         nudgeAt: body.draft ? null : nudgeAt,
         source: body.source ?? (writer.via === "agent" ? "slack" : "meeting"),
-        sourceRef: body.meetingRef ? `${body.meetingRef}:${i}` : `${stamp}:${i}:${Math.random().toString(36).slice(2, 8)}`,
+        sourceRef: meetingRef ? `${meetingRef}:${i}` : `${stamp}:${i}:${Math.random().toString(36).slice(2, 8)}`,
         context: body.draft
           ? { draft: true, suggestedOwnerId: resolvedOwner ?? null, suggestedOwnerName: t.ownerName ?? null, meeting: body.meetingTitle ?? null, quote: t.quote ?? null }
           : undefined,

@@ -3,10 +3,11 @@
  * event, and the rules about who may do what live here, so workflows, routes and agents all
  * get the same behavior. Design: ai-crew/docs/BUSINESS-ACCOUNTABILITY.md.
  *
- * Rules (V1):
- * - Owners may complete, decline, block/unblock and progress their own tasks.
- * - Reassignment and cancelling need the creator (or the workflow's owner for workflow tasks).
- * - Hard-deadline tasks never move their due date.
+ * Rules:
+ * - Any founder may complete, close, reopen, edit, hand off or re-date any task (Nov 12).
+ * - Only the owner may start or block a task (those come from the owner's own replies).
+ * - Hard-deadline tasks never move their due date through changeDeadline (the Team tab's
+ *   set_deadline is how a founder changes or removes one).
  * - createTasks is all-or-nothing and never duplicates a (source, sourceRef).
  */
 
@@ -121,10 +122,12 @@ export async function escalationTarget(task: Task): Promise<string | null> {
   return w?.ownerId ?? null;
 }
 
-async function mayManage(task: Task, actor: Actor): Promise<boolean> {
-  if (actor.kind !== "person") return true; // workflows, agents and crons act within their own rules
-  if (task.creatorId === actor.userId) return true;
-  return (await escalationTarget(task)) === actor.userId;
+/**
+ * Any founder may manage any task (Tony, Nov 12: "any founder can do anything on the Team tab").
+ * Only founders reach this code: routes accept a founder session or the Chief acting for a founder.
+ */
+async function mayManage(_task: Task, _actor: Actor): Promise<boolean> {
+  return true;
 }
 
 const isOwner = (task: Task, actor: Actor) => actor.kind !== "person" || (!!task.ownerId && task.ownerId === actor.userId);
@@ -194,7 +197,7 @@ export async function decline(task: Task, actor: Actor, channel: Channel, reason
 
 export async function cancel(task: Task, actor: Actor, channel: Channel, reason?: string): Promise<Task> {
   if (task.status === "cancelled") return task;
-  if (!(await mayManage(task, actor))) throw new TeamRuleError("Only the creator (or the workflow's owner) can cancel this task");
+  // Anyone on the team may close a task (Tony, Nov 12): no creator check
   return transition(task, "cancelled", actor, channel, "status_changed", { nextCheckAt: null }, reason);
 }
 
@@ -269,7 +272,7 @@ export async function setDeadline(task: Task, actor: Actor, channel: Channel, pa
   });
 }
 
-/** Up to SMALL_SHIFT_DAYS the owner may move a soft due date; more needs the creator. Hard deadlines never move. */
+/** Move a soft due date. Hard deadlines never move here. (SMALL_SHIFT_DAYS is kept for reference; any founder may now move any amount.) */
 export const SMALL_SHIFT_DAYS = 2;
 
 export async function changeDeadline(task: Task, actor: Actor, channel: Channel, dueAt: Date, note?: string): Promise<Task> {
