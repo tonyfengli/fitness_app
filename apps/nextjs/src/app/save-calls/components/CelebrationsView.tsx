@@ -20,6 +20,12 @@ export interface CelebrationRow {
   customWords: boolean; // a founder changed the words on this card
   photo: "shown" | "none" | "off"; // none = the member has no photo; off = a founder turned it off
   ownBackground: boolean; // art made for this card alone
+  photoFrom: "gymmaster" | "groupme" | null; // where the photo on the card came from
+  aiEdit: string | null; // a founder had the card redrawn by the image model: their words
+  lastSentAt: string | null; // last DMed to someone in Slack
+  lastSentTo: string | null; // their Slack user id
+  /** The member's GroupMe picture and a founder's one-time answer on it; null = none found */
+  groupMePhoto: { status: "suggested" | "approved" | "rejected"; nickname: string; exactName: boolean } | null;
   status: "ready" | "posted" | "skipped";
   imageUrl: string | null;
   renderedAt: string | null;

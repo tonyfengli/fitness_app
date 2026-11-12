@@ -12,23 +12,30 @@
  *                                background?: "new" | "design", backgroundHint? }. Only "new" calls a model
  *                                (art only; the photo never leaves). Optional sendToSlackUserId DMs the result.
  *   send                         DM the card image: { toSlackUserId | toName (a founder's name), text? }
+ *   photo                        the member's GroupMe picture (members with no GymMaster photo): { decision:
+ *                                "show" (DM the picture to showToSlackUserId) | "use" (note? = who they are in it;
+ *                                the picture goes to the image model once to become a portrait, cards rebuilt) |
+ *                                "reject" (never use, never ask again) }
+ *   edit                         { instruction }: the image model redraws the finished card (the card, photo
+ *                                included, goes to OpenAI). rerender/rebuild return to the code-built card.
+ *                                rebuild, send, photo and edit accept sendToSlackUserId to DM the result.
  */
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { and, desc, eq, or, sql } from "@acme/db";
 import { db } from "@acme/db/client";
-import { Celebration, TeamProfile, user } from "@acme/db/schema";
+import { Celebration, CelebrationPhotoMatch, TeamProfile, user } from "@acme/db/schema";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getGymBusinessId } from "~/lib/business";
-import { CardChangeError, DAYS_AHEAD, rebuildCard, renderCard, sendCard, settleTask } from "~/lib/celebrations/service";
+import { CardChangeError, DAYS_AHEAD, decidePhoto, editCard, rebuildCard, renderCard, sendCard, settleTask, showPhoto } from "~/lib/celebrations/service";
 import type { CardParts } from "~/lib/celebrations/service";
 import { themesFor } from "~/lib/celebrations/themes";
 import { resolveWriter } from "~/lib/team/auth";
 import type { CelebrationRow } from "~/app/save-calls/components/CelebrationsView";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 180; // a render fetches the background and the photo; a new background is one image call (~15–60 s)
+export const maxDuration = 300; // a render fetches the background and the photo; a new background is one image call (~15–60 s)
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const DAY = 864e5;
@@ -67,6 +74,12 @@ export async function GET(request: NextRequest) {
         usePhoto: Celebration.usePhoto,
         backgroundUrl: Celebration.backgroundUrl,
         photoSource: Celebration.photoSource,
+        aiEditPrompt: Celebration.aiEditPrompt,
+        lastSentAt: Celebration.lastSentAt,
+        lastSentTo: Celebration.lastSentTo,
+        photoMatchStatus: CelebrationPhotoMatch.status,
+        photoMatchNickname: CelebrationPhotoMatch.nickname,
+        photoMatchExact: CelebrationPhotoMatch.exactName,
         status: Celebration.status,
         imageUrl: Celebration.imageUrl,
         renderedAt: Celebration.renderedAt,
@@ -77,6 +90,7 @@ export async function GET(request: NextRequest) {
       })
       .from(Celebration)
       .leftJoin(user, eq(user.id, sql`coalesce(${Celebration.postedBy}, ${Celebration.skippedBy})`))
+      .leftJoin(CelebrationPhotoMatch, and(eq(CelebrationPhotoMatch.businessId, Celebration.businessId), eq(CelebrationPhotoMatch.memberId, Celebration.memberId)))
       .where(
         and(
           eq(Celebration.businessId, businessId),
@@ -97,6 +111,11 @@ export async function GET(request: NextRequest) {
       customWords: r.headline !== null || r.subline !== null,
       photo: r.photoSource ? "shown" : r.usePhoto ? "none" : "off",
       ownBackground: !!r.backgroundUrl,
+      photoFrom: r.photoSource === "gymmaster" || r.photoSource === "groupme" ? r.photoSource : null,
+      aiEdit: r.aiEditPrompt,
+      lastSentAt: r.lastSentAt?.toISOString() ?? null,
+      lastSentTo: r.lastSentTo,
+      groupMePhoto: r.photoMatchStatus ? { status: r.photoMatchStatus, nickname: r.photoMatchNickname ?? "", exactName: !!r.photoMatchExact } : null,
       status: r.status,
       imageUrl: r.imageUrl,
       renderedAt: r.renderedAt?.toISOString() ?? null,
@@ -128,6 +147,10 @@ type PostBody = CardParts & {
   toSlackUserId?: string;
   toName?: string;
   text?: string;
+  decision?: string;
+  note?: string;
+  showToSlackUserId?: string;
+  instruction?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -139,7 +162,7 @@ export async function POST(request: NextRequest) {
   const { id, action } = body;
   if (!id || !action) return NextResponse.json({ error: "id and action are required" }, { status: 400 });
   // The Chief of Staff changes and sends cards; posted/skipped go through the task (task_update)
-  if (writer.via === "agent" && action !== "rebuild" && action !== "send") return NextResponse.json({ error: `The agent key can't ${action} a card` }, { status: 403 });
+  if (writer.via === "agent" && !["rebuild", "send", "photo", "edit"].includes(action)) return NextResponse.json({ error: `The agent key can't ${action} a card` }, { status: 403 });
 
   try {
     const businessId = await getGymBusinessId();
@@ -198,6 +221,31 @@ export async function POST(request: NextRequest) {
       const sent = await sendCard(id, to, body.text);
       console.log(`[API /agent/celebrations] ${writer.name} sent card ${id} to ${to} (${writer.via})`);
       return NextResponse.json({ id, status: "sent", to, ...sent });
+    }
+    // The result goes to the founder who asked; a failed DM is reported, not thrown (the change is made)
+    const dm = (to?: string) =>
+      to
+        ? sendCard(id, to).then(
+            () => true as const,
+            (err: unknown) => (err instanceof Error ? err.message : String(err)),
+          )
+        : Promise.resolve(false as const);
+    if (action === "photo") {
+      if (body.decision === "show") {
+        const to = body.showToSlackUserId ?? body.sendToSlackUserId;
+        if (!to) return NextResponse.json({ error: "showToSlackUserId is required" }, { status: 400 });
+        const shown = await showPhoto(id, to);
+        return NextResponse.json({ id, shown: true, memberName: shown.memberName, nickname: shown.nickname, photoStatus: shown.status });
+      }
+      if (body.decision !== "use" && body.decision !== "reject") return NextResponse.json({ error: 'decision must be "show", "use" or "reject"' }, { status: 400 });
+      const decided = await decidePhoto(id, body.decision, userId, body.note);
+      console.log(`[API /agent/celebrations] ${writer.name} said ${body.decision} to the GroupMe picture for card ${id} (${writer.via})`);
+      return NextResponse.json({ id, status: body.decision === "use" ? "approved" : "rejected", ...decided, sent: decided.card ? await dm(body.sendToSlackUserId) : false });
+    }
+    if (action === "edit") {
+      const edited = await editCard(id, body.instruction ?? "");
+      console.log(`[API /agent/celebrations] ${writer.name} had card ${id} redrawn (${writer.via})`);
+      return NextResponse.json({ id, memberName: c.memberName, occasionDate: c.occasionDate, imageUrl: edited.imageUrl, renderedAt: now.toISOString(), sent: await dm(body.sendToSlackUserId) });
     }
     return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
   } catch (err) {
