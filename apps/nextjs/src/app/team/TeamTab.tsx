@@ -97,7 +97,11 @@ function Tags({ t }: { t: ReviewTask }) {
       {!closed && (t.hardDeadline || t.nudgeAt) && <TimePill t={t} d={d} />}
       {!closed && !t.hardDeadline && d !== null && d >= 0 && d <= 1 && <span className="text-gray-600">{d === 0 ? "Today" : "Tomorrow"}</span>}
       {t.status === "blocked" && <span className="text-gray-600">Blocked</span>}
-      {t.carryOvers > 0 && <span className="font-semibold text-gray-900">×{t.carryOvers}</span>}
+      {t.carryOvers > 0 && (
+        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800" title={`"Not yet" at ${t.carryOvers} Monday review${t.carryOvers === 1 ? "" : "s"}`}>
+          Carried {t.carryOvers === 1 ? "once" : `×${t.carryOvers}`}
+        </span>
+      )}
     </span>
   );
 }
@@ -423,6 +427,18 @@ function TimingChips({ t, onSave }: { t: ReviewTask; onSave: (extra: Record<stri
   );
 }
 
+/** A single block of text → the task's name (first line, ≤200) and details (the rest) */
+function splitText(text: string): { title: string; details: string | null } {
+  const lines = text.trim().split("\n");
+  let title = (lines.shift() ?? "").trim();
+  let rest = lines.join("\n").trim();
+  if (title.length > 200) {
+    rest = `${title.slice(200)}${rest ? `\n${rest}` : ""}`.trim();
+    title = title.slice(0, 200);
+  }
+  return { title, details: rest || null };
+}
+
 // --- unassigned backlog: assign or drop, nothing else ------------------------------------
 
 function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]; onChange: () => void }) {
@@ -460,13 +476,13 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
     <li className={`border-t border-gray-100 px-5 py-4 first:border-t-0 transition-opacity ${busy ? "opacity-60" : ""}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
         <div className="min-w-0 flex-1">
-          <EditableText value={t.title} placeholder="Title" className="-mx-1 whitespace-pre-line px-1 text-[15px] leading-6 text-gray-800" onSave={(title) => save("edit", { title })} />
+          {/* One block: the first line is the task's name, the rest its details. Trim it down at the review. */}
           <EditableText
-            value={t.details ?? ""}
-            placeholder="Add details"
+            value={[t.title, t.details ?? ""].filter(Boolean).join("\n")}
+            placeholder="What needs doing"
             multiline
-            className="-mx-1 mt-0.5 line-clamp-3 whitespace-pre-line px-1 text-sm text-gray-500"
-            onSave={(details) => save("edit", { details: details || null })}
+            className="-mx-1 whitespace-pre-line px-1 text-[15px] leading-6 text-gray-800"
+            onSave={(text) => save("edit", splitText(text))}
           />
           {!suggestedId && ctx.suggestedOwnerName && <div className="mt-1 text-sm text-gray-500">Mentioned: {ctx.suggestedOwnerName}</div>}
           <TimingChips t={t} onSave={(extra) => save("set_deadline", extra)} />
@@ -672,7 +688,6 @@ export function TeamTab() {
               </span>
               <h3 className="text-xl font-semibold tracking-tight text-gray-900">{first(p.name)}</h3>
               {!now.length && !stuck.length && <span className="text-sm text-gray-400">{later.length ? "Nothing due soon" : "Nothing open"}</span>}
-              {p.carryOvers > 0 && <span className="ml-auto rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">{p.carryOvers} carried</span>}
             </div>
             {(p.open.length > 0 || stuck.length > 0) && (
               <ul>

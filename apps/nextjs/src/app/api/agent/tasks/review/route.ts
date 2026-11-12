@@ -104,7 +104,8 @@ export async function GET(request: NextRequest) {
         createdAt: t.createdAt.toISOString(),
         completedAt: t.completedAt?.toISOString() ?? null,
         daysOpen: Math.round((end.getTime() - t.createdAt.getTime()) / 864e5),
-        carryOvers: mine.filter((e) => e.type === "deadline_changed" || (e.type === "note" && e.note === REVIEW_NOTE)).length,
+        // Carried = "Not yet" at a Monday review, nothing else (Tony, Nov 12): date changes never count
+        carryOvers: mine.filter((e) => e.type === "note" && e.note === REVIEW_NOTE).length,
         nudges: mine.filter((e) => e.type === "nudged").length,
         lastReply: reply ? { at: reply.createdAt.toISOString(), text: reply.note ?? "" } : null,
       };
