@@ -119,10 +119,12 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.open.length - a.open.length || a.name.localeCompare(b.name));
 
     const unassigned = tasks.filter((t) => !t.ownerId && OPEN.includes(t.status as (typeof OPEN)[number])).map(shape);
+    const closedUnassigned = tasks.filter((t) => !t.ownerId && !OPEN.includes(t.status as (typeof OPEN)[number])).map(shape);
 
     return NextResponse.json({
       status: "ok",
       unassigned,
+      closedUnassigned,
       people: byPerson,
       owners: everyone, // for the owner pickers
       _meta: { generatedAt: now.toISOString(), nextMeeting: nextMeeting(now).toISOString(), since: since.toISOString() },

@@ -18,6 +18,7 @@ interface Owner {
 }
 interface ReviewData {
   unassigned: ReviewTask[];
+  closedUnassigned?: ReviewTask[];
   people: ReviewPerson[];
   owners: Owner[];
   _meta: { nextMeeting: string; since: string };
@@ -104,7 +105,7 @@ function Meta({ t }: { t: ReviewTask }) {
 
 // --- a task row -------------------------------------------------------------------
 
-function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owners: Owner[]; nextMeeting: string; onChange: () => void; thumb?: string | null }) {
+function Row({ t, owners, nextMeeting, onChange, thumb, ownerLabel }: { t: ReviewTask; owners: Owner[]; nextMeeting: string; onChange: (stay: boolean) => void; thumb?: string | null; ownerLabel?: string }) {
   const [more, setMore] = useState(false);
   const [sub, setSub] = useState<"none" | "move" | "handoff">("none");
   const [editing, setEditing] = useState(false);
@@ -124,7 +125,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
       setMore(false);
       setSub("none");
       setEditing(false);
-      onChange();
+      onChange(action !== "cancel"); // Done stays in place with Undo; Close goes straight to Closed
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -161,7 +162,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
                       setEditing(false);
                     }
                   }}
-                  className="w-full rounded-md border border-blue-400 px-3 py-1.5 text-base font-semibold text-gray-900 ring-2 ring-blue-100"
+                  className="w-full rounded-md border border-blue-400 px-3 py-1.5 text-[15px] text-gray-900 ring-2 ring-blue-100"
                 />
                 <button type="submit" className={BTN_WHITE} disabled={!!busy || !title.trim() || title === t.title}>Save</button>
                 <button
@@ -176,8 +177,10 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
                 </button>
               </form>
             ) : (
-              <span className={`text-base font-semibold ${closed ? "text-gray-500 line-through" : "text-gray-900"}`}>
-                <button type="button" className="text-left" onClick={() => !closed && setEditing(true)} title={closed ? undefined : "Click to edit"}>
+              <span className={`text-[15px] leading-6 ${closed ? "text-gray-400" : "text-gray-800"}`}>
+                {ownerLabel && <span className="mr-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">{ownerLabel}</span>}
+                {closed && <span className={`mr-2 text-xs font-medium ${t.status === "done" ? "text-emerald-600" : "text-gray-400"}`}>{t.status === "done" ? "✓ Done" : "Closed"}</span>}
+                <button type="button" className={`text-left ${closed ? "line-through decoration-gray-300" : "hover:text-gray-950"}`} onClick={() => !closed && setEditing(true)} title={closed ? undefined : "Click to edit"}>
                   {t.title}
                 </button>
                 <Tags t={t} />
@@ -203,7 +206,7 @@ function Row({ t, owners, nextMeeting, onChange, thumb }: { t: ReviewTask; owner
             <button className={sub === "move" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "move" ? "none" : "move")}>Change date</button>
             <button className={sub === "handoff" ? BTN_ACTIVE : BTN_WHITE} onClick={() => setSub(sub === "handoff" ? "none" : "handoff")}>Hand off</button>
             <button className={BTN_WHITE} disabled={!!busy} onClick={() => act("unassign", { text: "Unassigned at the meeting" })}>Unassign</button>
-            <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Delete</button>
+            <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={!!busy} onClick={() => act("cancel", { text: "Closed at the meeting" })}>Close</button>
           </div>
           {sub === "move" && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -272,7 +275,7 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
         </div>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-base font-semibold text-gray-900">
+        <span className="text-[15px] leading-6 text-gray-800">
           {t.title}
           <span className="ml-2 text-sm font-normal text-gray-600">
             {busy && picked ? `Assigning to ${first(owners.find((o) => o.userId === picked)?.name ?? "")}…` : t.dueAt ? `Due ${fmt(t.dueAt)}` : "no date"}
@@ -285,7 +288,7 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
             disabled={busy}
             onPick={assign}
           />
-          <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Delete</button>
+          <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Closed at the meeting" })}>Close</button>
         </div>
       </div>
       {(ctx.quote || (!suggested && ctx.suggestedOwnerName)) && (
@@ -390,8 +393,15 @@ export function TeamTab() {
     }, 20_000);
     return () => clearInterval(id);
   }, [load]);
-  const changed = (ids: string[]) => {
-    setTouched((prev) => new Set([...prev, ...ids]));
+  const changed = (ids: string[], stay = true) => {
+    setTouched((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (stay) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
     load();
   };
 
@@ -399,7 +409,8 @@ export function TeamTab() {
   if (!data) return <div className="mt-6 py-12 text-center text-gray-500">Loading the review…</div>;
 
   const openTotal = data.people.reduce((n, p) => n + p.open.length, 0);
-  const closedTotal = data.people.reduce((n, p) => n + p.closedThisWeek.length, 0);
+  const closedUnassigned = data.closedUnassigned ?? [];
+  const closedTotal = data.people.reduce((n, p) => n + p.closedThisWeek.length, 0) + closedUnassigned.length;
   const carried = data.people.reduce((n, p) => n + p.carryOvers, 0);
 
   return (
@@ -414,15 +425,16 @@ export function TeamTab() {
       </div>
 
       {data.unassigned.length > 0 ? (
-        <section className="rounded-xl border border-amber-200 bg-white">
-          <div className="flex items-center gap-3 px-5 py-4">
-            <h3 className="text-lg font-semibold text-gray-900">Unassigned</h3>
-            <span className="text-sm text-gray-600">{data.unassigned.length} open</span>
-            <button onClick={() => setAdding(true)} className={`${BTN_WHITE} ml-auto px-3`} aria-label="Add an item" title="Add an item">+</button>
+        <section className="overflow-hidden rounded-xl border border-amber-200 bg-white">
+          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50/60 px-5 py-3">
+            <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-dashed border-amber-400 text-sm font-semibold text-amber-700" aria-hidden>?</span>
+            <h3 className="text-base font-semibold tracking-tight text-gray-900">Unassigned</h3>
+            <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-amber-200">{data.unassigned.length} open</span>
+            <button onClick={() => setAdding(true)} className={`${BTN_WHITE} px-3`} aria-label="Add an item" title="Add an item">+</button>
           </div>
-          <ul className="border-t border-gray-100">
+          <ul>
             {data.unassigned.map((t) => (
-              <UnassignedRow key={t.id} t={t} owners={data.owners} onChange={() => changed([t.id])} />
+              <UnassignedRow key={t.id} t={t} owners={data.owners} onChange={() => changed([t.id], false)} />
             ))}
           </ul>
         </section>
@@ -437,20 +449,25 @@ export function TeamTab() {
       {data.people.map((p) => {
         const stuck = p.closedThisWeek.filter((t) => touched.has(t.id));
         return (
-          <section key={p.userId} className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-baseline gap-3 px-5 py-4">
-              <h3 className="text-lg font-semibold text-gray-900">{first(p.name)}</h3>
-              <span className="text-sm text-gray-600">{p.open.length ? `${p.open.length} open` : "Nothing open."}</span>
-              {p.carryOvers > 0 && <span className="text-sm text-gray-600">{p.carryOvers} carried</span>}
+          <section key={p.userId} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div className={`flex items-center gap-3 px-5 py-3 ${p.open.length || stuck.length ? "border-b border-gray-200 bg-gray-50" : ""}`}>
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white" aria-hidden>
+                {first(p.name).charAt(0)}
+              </span>
+              <h3 className="text-base font-semibold tracking-tight text-gray-900">{first(p.name)}</h3>
+              <span className="ml-auto flex items-center gap-2 text-xs font-medium">
+                {p.carryOvers > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">{p.carryOvers} carried</span>}
+                <span className={`rounded-full px-2 py-0.5 ${p.open.length ? "bg-white text-gray-700 ring-1 ring-gray-200" : "text-gray-400"}`}>{p.open.length ? `${p.open.length} open` : "Nothing open"}</span>
+              </span>
             </div>
             {(p.open.length > 0 || stuck.length > 0) && (
-              <ul className="border-t border-gray-100">
+              <ul>
                 {p.open.map((t) => {
                   const image = typeof t.context?.imageUrl === "string" ? t.context.imageUrl : null;
-                  return <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed([t.id])} thumb={t.source === "celebrations" ? image : undefined} />;
+                  return <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={(stay) => changed([t.id], stay)} thumb={t.source === "celebrations" ? image : undefined} />;
                 })}
                 {stuck.map((t) => (
-                  <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed([t.id])} />
+                  <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={(stay) => changed([t.id], stay)} />
                 ))}
               </ul>
             )}
@@ -467,7 +484,14 @@ export function TeamTab() {
           </button>
           {showClosed && (
             <ul className="border-t border-gray-100">
-              {data.people.flatMap((p) => p.closedThisWeek.filter((t) => !touched.has(t.id)).map((t) => <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={() => changed([t.id])} />))}
+              {data.people.flatMap((p) =>
+                p.closedThisWeek
+                  .filter((t) => !touched.has(t.id))
+                  .map((t) => <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={(stay) => changed([t.id], stay)} ownerLabel={first(p.name)} />),
+              )}
+              {closedUnassigned.map((t) => (
+                <Row key={t.id} t={t} owners={data.owners} nextMeeting={data._meta.nextMeeting} onChange={(stay) => changed([t.id], stay)} ownerLabel="Unassigned" />
+              ))}
             </ul>
           )}
         </section>
