@@ -255,8 +255,22 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
       setBusy(false);
     }
   };
+  const ctx = (t.context ?? {}) as { suggestedOwnerId?: string | null; suggestedOwnerName?: string | null; quote?: string | null; meeting?: string | null };
+  const suggested = ctx.suggestedOwnerId ? owners.find((o) => o.userId === ctx.suggestedOwnerId) : undefined;
+  const assign = (id: string) => {
+    setPicked(id);
+    void act("handoff", { newOwnerUserId: id, text: "Assigned at the meeting" });
+  };
   return (
     <li className={`border-t border-gray-100 px-5 py-4 first:border-t-0 transition-opacity ${busy ? "opacity-60" : ""}`}>
+      {suggested && !busy && (
+        <div className="mb-2 flex items-center gap-2">
+          <button className={`${BTN} border-blue-600 bg-blue-600 text-white hover:bg-blue-700`} onClick={() => assign(suggested.userId)}>
+            Accept → {first(suggested.name)}
+          </button>
+          <span className="text-sm text-gray-500">suggested from {ctx.meeting ?? "the meeting"}</span>
+        </div>
+      )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-base font-semibold text-gray-900">
           {t.title}
@@ -269,14 +283,17 @@ function UnassignedRow({ t, owners, onChange }: { t: ReviewTask; owners: Owner[]
             owners={owners}
             value={picked}
             disabled={busy}
-            onPick={(id) => {
-              setPicked(id);
-              void act("handoff", { newOwnerUserId: id, text: "Assigned at the meeting" });
-            }}
+            onPick={assign}
           />
           <button className={`${BTN} border-transparent text-gray-700 hover:bg-gray-100`} disabled={busy} onClick={() => act("cancel", { text: "Dropped at the meeting" })}>Delete</button>
         </div>
       </div>
+      {(ctx.quote || (!suggested && ctx.suggestedOwnerName)) && (
+        <div className="mt-1.5 text-sm text-gray-500">
+          {ctx.quote ? `“${ctx.quote}”` : ""}
+          {!suggested && ctx.suggestedOwnerName ? `${ctx.quote ? " · " : ""}mentioned: ${ctx.suggestedOwnerName}` : ""}
+        </div>
+      )}
       {error && <div className="mt-2 text-sm text-red-700">{error}</div>}
     </li>
   );
@@ -367,6 +384,11 @@ export function TeamTab() {
   }, []);
   useEffect(() => {
     load();
+    // Live during the meeting: meeting drafts from Granola appear without a reload
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 20_000);
+    return () => clearInterval(id);
   }, [load]);
   const changed = (ids: string[]) => {
     setTouched((prev) => new Set([...prev, ...ids]));

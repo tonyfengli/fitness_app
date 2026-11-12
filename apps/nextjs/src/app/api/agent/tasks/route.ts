@@ -11,6 +11,11 @@
  *                                      ownerUserId? | ownerSlackUserId?, dueAt?, hardDeadline? }] }.
  *                                      No owner = the unassigned backlog (assigned at the meeting).
  *                                      All or nothing; the creator is whoever is signed in.
+ *                                      Meeting drafts (Granola, via the COS): { draft: true, source: "granola",
+ *                                      meetingRef, meetingTitle, tasks: [{ title, ownerName?, dueAt?, quote? }] }.
+ *                                      Drafts stay unassigned; the owner named is kept as a suggestion
+ *                                      (context.suggestedOwnerId) for a one-tap Accept on the Team tab.
+ *                                      Same meetingRef again = no duplicates.
  */
 
 import type { NextRequest } from "next/server";
@@ -96,10 +101,11 @@ interface NewTaskBody {
   dueAt?: string | null;
   hardDeadline?: boolean;
   nudgeAt?: string | null;
+  quote?: string; // the meeting line it came from (drafts)
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => ({}))) as { tasks?: NewTaskBody[]; actorSlackUserId?: string; source?: string };
+  const body = (await request.json().catch(() => ({}))) as { tasks?: NewTaskBody[]; actorSlackUserId?: string; source?: string; draft?: boolean; meetingRef?: string; meetingTitle?: string };
   const writer = await resolveWriter(request, body.actorSlackUserId);
   if (writer instanceof NextResponse) return writer;
   if (!Array.isArray(body.tasks) || !body.tasks.length) return NextResponse.json({ error: "tasks[] is required" }, { status: 400 });
@@ -110,7 +116,8 @@ export async function POST(request: NextRequest) {
       const title = t.title?.trim();
       if (!title) return NextResponse.json({ error: `tasks[${i}]: title is required` }, { status: 400 });
       const byName = !t.ownerUserId && !t.ownerSlackUserId && t.ownerName ? await ownerByName(t.ownerName) : undefined;
-      const ownerId = t.ownerUserId ?? (t.ownerSlackUserId ? (await userBySlackId(t.ownerSlackUserId))?.id : byName);
+      const resolvedOwner = t.ownerUserId ?? (t.ownerSlackUserId ? (await userBySlackId(t.ownerSlackUserId))?.id : byName);
+      const ownerId = body.draft ? undefined : resolvedOwner; // drafts wait for Tony's Accept
       if (t.ownerSlackUserId && !ownerId) return NextResponse.json({ error: `tasks[${i}]: unknown ownerSlackUserId` }, { status: 400 });
       const dueAt = t.dueAt ? new Date(t.dueAt) : null;
       if (dueAt && isNaN(dueAt.getTime())) return NextResponse.json({ error: `tasks[${i}]: bad dueAt` }, { status: 400 });
@@ -123,16 +130,20 @@ export async function POST(request: NextRequest) {
         creatorId: writer.userId,
         dueAt,
         hardDeadline: !!t.hardDeadline,
-        nudgeAt,
+        nudgeAt: body.draft ? null : nudgeAt,
         source: body.source ?? (writer.via === "agent" ? "slack" : "meeting"),
-        sourceRef: `${stamp}:${i}:${Math.random().toString(36).slice(2, 8)}`,
+        sourceRef: body.meetingRef ? `${body.meetingRef}:${i}` : `${stamp}:${i}:${Math.random().toString(36).slice(2, 8)}`,
+        context: body.draft
+          ? { draft: true, suggestedOwnerId: resolvedOwner ?? null, suggestedOwnerName: t.ownerName ?? null, meeting: body.meetingTitle ?? null, quote: t.quote ?? null }
+          : undefined,
       });
     }
     const created = await createTasks(input, { kind: "person", userId: writer.userId }, writer.via === "agent" ? "slack" : "dashboard");
     const names = await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, created.map((c) => c.ownerId).filter((x): x is string => !!x).concat(["-"])));
     return NextResponse.json({
       status: "ok",
-      created: created.map((c) => ({ id: c.id, title: c.title, ownerId: c.ownerId, owner: names.find((n) => n.id === c.ownerId)?.name ?? "unassigned", dueAt: c.dueAt?.toISOString() ?? null, hardDeadline: c.hardDeadline, nudgeAt: c.nudgeAt?.toISOString() ?? null })),
+      duplicatesSkipped: input.length - created.length,
+      created: created.map((c) => ({ id: c.id, title: c.title, ownerId: c.ownerId, owner: names.find((n) => n.id === c.ownerId)?.name ?? "unassigned", suggestedOwner: (c.context as { suggestedOwnerName?: string } | null)?.suggestedOwnerName ?? null, dueAt: c.dueAt?.toISOString() ?? null, hardDeadline: c.hardDeadline, nudgeAt: c.nudgeAt?.toISOString() ?? null })),
     });
   } catch (err) {
     if (err instanceof TeamRuleError) return NextResponse.json({ status: "refused", reason: err.message }, { status: 403 });
