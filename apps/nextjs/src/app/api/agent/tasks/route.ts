@@ -25,6 +25,7 @@ import { db } from "@acme/db/client";
 import { TeamProfile, TeamTask, user } from "@acme/db/schema";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { getGymBusinessId } from "~/lib/business";
+import { recordActivity } from "~/lib/team/activity";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
 import { isUrgent, nextMeeting } from "~/lib/team/meeting";
 import { createTasks, TeamRuleError } from "~/lib/team/tasks";
@@ -151,6 +152,10 @@ export async function POST(request: NextRequest) {
       });
     }
     const created = await createTasks(input, { kind: "person", userId: writer.userId }, writer.via === "agent" ? "slack" : "dashboard");
+    // Tasks the Chief created for the founder who asked (meeting drafts are reviewed on the Team tab, not remembered here)
+    if (writer.via === "agent" && !body.draft) {
+      await recordActivity(created.map((c) => ({ userId: writer.userId, slackUserId: body.actorSlackUserId, kind: "task_created" as const, subjectType: "task" as const, subjectId: c.id, summary: `Created the task "${c.title}"` })));
+    }
     const names = await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, created.map((c) => c.ownerId).filter((x): x is string => !!x).concat(["-"])));
     return NextResponse.json({
       status: "ok",

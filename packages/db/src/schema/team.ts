@@ -248,3 +248,33 @@ export const TeamNudgeTask = pgTable(
     byTask: index("idx_team_nudge_task_task").on(table.taskId),
   }),
 );
+
+/**
+ * The shared activity record: one row each time the Chief of Staff sends something to a person
+ * or changes something for them (a card sent or changed, a reminder sent, a task created or
+ * updated). Not the questions it answers. Conversations with the Chief are separate and
+ * forget each other; this is what they all read to know what was recently done for someone
+ * ("make it more fun" → the card sent to them ten minutes ago).
+ * Append-only. Written by lib/team/activity.ts (recordActivity) from the card, task and
+ * reminder code paths; read by GET /api/agent/team/activity. Design: ai-crew/docs/BUSINESS-ACCOUNTABILITY.md.
+ */
+export const TeamActivityEvent = pgTable(
+  "team_activity_event",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    businessId: t
+      .uuid()
+      .notNull()
+      .references(() => Business.id, { onDelete: "cascade" }),
+    slackUserId: t.varchar({ length: 20 }).notNull(), // who it was sent to or done for
+    userId: t.text().references(() => user.id, { onDelete: "set null" }), // the same person as a login, when they have one
+    kind: t.varchar({ length: 40 }).notNull(), // card_sent, card_changed, card_photo_shown, card_photo_decided, reminder_sent, task_created, task_updated
+    subjectType: t.varchar({ length: 20 }).notNull(), // "card" | "task"
+    subjectId: t.varchar({ length: 64 }).notNull(), // celebration id or task id
+    summary: t.text().notNull(), // one line the Chief can read back: "Sent Alex Kim's birthday card (Nov 16)"
+    createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  }),
+  (table) => ({
+    byPerson: index("idx_team_activity_event_person").on(table.businessId, table.slackUserId, table.createdAt),
+  }),
+);

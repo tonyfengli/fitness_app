@@ -18,6 +18,7 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { recordActivity } from "~/lib/team/activity";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
 import { addNote, block, cancel, changeDeadline, complete, decline, edit, getTask, reassign, recordReply, reopen, review, setDeadline, start, TeamRuleError, unassign, unblock } from "~/lib/team/tasks";
 import type { Actor, Channel } from "~/lib/team/tasks";
@@ -140,6 +141,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         break;
       default:
         return NextResponse.json({ error: `Unknown action ${body.action ?? "(none)"}` }, { status: 400 });
+    }
+    // What the Chief did to a task for the founder who asked ("reply" only records their words)
+    if (writer.via === "agent" && body.action !== "reply") {
+      await recordActivity({ userId: writer.userId, slackUserId: body.actorSlackUserId, kind: "task_updated", subjectType: "task", subjectId: task.id, summary: `${body.action} on the task "${task.title}"` });
     }
     const trace = await traceTask(task.id);
     return NextResponse.json({ status: "ok", action: body.action, by: writer.name, task: trace?.task ?? null });

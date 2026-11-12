@@ -33,6 +33,7 @@ import { cleanPortrait } from "./portrait";
 import { backgroundPath, cardBackgroundPath, cardPath, portraitPath, storePng } from "./storage";
 import { nextTheme, themeAfter, THEMES, themesFor } from "./themes";
 import type { Theme } from "./themes";
+import { recordActivity } from "../team/activity";
 import { sendSlackDm } from "../team/notify";
 import { cancel, complete, createTasks, findTask, TeamRuleError } from "../team/tasks";
 import type { Actor } from "../team/tasks";
@@ -275,6 +276,7 @@ export async function showPhoto(celebrationId: string, slackUserId: string): Pro
   const text = `GroupMe picture for ${card.memberName}'s card: "${match.nickname}" in the members' group (${sure}). Currently ${match.status}.`;
   const delivery = await sendSlackDm(slackUserId, text, [{ url: match.sourceImageUrl, filename: `groupme-${card.memberId}.jpg` }]);
   if (!delivery.imagesAttached) throw new Error("Slack took the message but not the picture");
+  await recordActivity({ slackUserId, kind: "card_photo_shown", subjectType: "card", subjectId: card.id, summary: `Showed them the GroupMe picture of "${match.nickname}" for ${card.memberName}'s ${card.type} card (${card.occasionDate}); waiting for use it / no` });
   return { memberName: card.memberName, nickname: match.nickname, status: match.status };
 }
 
@@ -317,7 +319,7 @@ export async function sendCard(celebrationId: string, slackUserId: string, text?
   const fresh = `${c.imageUrl}${c.imageUrl.includes("?") ? "&" : "?"}v=${c.renderedAt?.getTime() ?? Date.now()}`;
   const delivery = await sendSlackDm(slackUserId, text?.trim() || `${first}'s ${c.type} card (${c.occasionDate}):`, [{ url: fresh, filename: `${first}-${c.type}-${c.occasionDate}.png` }]);
   if (!delivery.imagesAttached) throw new Error("Slack took the message but not the image");
-  await db.update(Celebration).set({ lastSentAt: new Date(), lastSentTo: slackUserId }).where(eq(Celebration.id, c.id));
+  await recordActivity({ slackUserId, kind: "card_sent", subjectType: "card", subjectId: c.id, summary: `Sent ${c.memberName}'s ${c.type} card (${c.occasionDate}) to their DM` });
   return { externalId: delivery.externalId, memberName: c.memberName, occasionDate: c.occasionDate };
 }
 

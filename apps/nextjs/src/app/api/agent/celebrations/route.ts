@@ -31,6 +31,7 @@ import { getGymBusinessId } from "~/lib/business";
 import { CardChangeError, DAYS_AHEAD, decidePhoto, editCard, rebuildCard, renderCard, sendCard, settleTask, showPhoto } from "~/lib/celebrations/service";
 import type { CardParts } from "~/lib/celebrations/service";
 import { themesFor } from "~/lib/celebrations/themes";
+import { recordActivity } from "~/lib/team/activity";
 import { resolveWriter } from "~/lib/team/auth";
 import type { CelebrationRow } from "~/app/save-calls/components/CelebrationsView";
 
@@ -75,8 +76,6 @@ export async function GET(request: NextRequest) {
         backgroundUrl: Celebration.backgroundUrl,
         photoSource: Celebration.photoSource,
         aiEditPrompt: Celebration.aiEditPrompt,
-        lastSentAt: Celebration.lastSentAt,
-        lastSentTo: Celebration.lastSentTo,
         photoMatchStatus: CelebrationPhotoMatch.status,
         photoMatchNickname: CelebrationPhotoMatch.nickname,
         photoMatchExact: CelebrationPhotoMatch.exactName,
@@ -113,8 +112,6 @@ export async function GET(request: NextRequest) {
       ownBackground: !!r.backgroundUrl,
       photoFrom: r.photoSource === "gymmaster" || r.photoSource === "groupme" ? r.photoSource : null,
       aiEdit: r.aiEditPrompt,
-      lastSentAt: r.lastSentAt?.toISOString() ?? null,
-      lastSentTo: r.lastSentTo,
       groupMePhoto: r.photoMatchStatus ? { status: r.photoMatchStatus, nickname: r.photoMatchNickname ?? "", exactName: !!r.photoMatchExact } : null,
       status: r.status,
       imageUrl: r.imageUrl,
@@ -173,6 +170,10 @@ export async function POST(request: NextRequest) {
       .limit(1);
     if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const now = new Date();
+    // What the Chief changed for the founder who asked goes in the shared activity record (dashboard clicks don't)
+    const cardLabel = `${c.memberName}'s ${c.type} card (${c.occasionDate})`;
+    const noteChange = (kind: "card_changed" | "card_photo_decided", summary: string) =>
+      writer.via === "agent" ? recordActivity({ userId, slackUserId: body.actorSlackUserId, kind, subjectType: "card", subjectId: id, summary }) : Promise.resolve();
 
     if (action === "posted" || action === "skipped") {
       if (c.status !== "ready") return NextResponse.json({ error: `Already ${c.status}` }, { status: 409 });
@@ -202,6 +203,7 @@ export async function POST(request: NextRequest) {
     if (action === "rebuild") {
       const card = await rebuildCard(id, { design: body.design, headline: body.headline, subline: body.subline, photo: body.photo, background: body.background, backgroundHint: body.backgroundHint });
       console.log(`[API /agent/celebrations] ${writer.name} rebuilt card ${id} (${writer.via})`);
+      await noteChange("card_changed", `Rebuilt ${cardLabel} from its parts`);
       let sent: boolean | string = false;
       if (body.sendToSlackUserId) {
         // The card is rebuilt either way; a failed DM is reported, not thrown
@@ -240,11 +242,13 @@ export async function POST(request: NextRequest) {
       if (body.decision !== "use" && body.decision !== "reject") return NextResponse.json({ error: 'decision must be "show", "use" or "reject"' }, { status: 400 });
       const decided = await decidePhoto(id, body.decision, userId, body.note);
       console.log(`[API /agent/celebrations] ${writer.name} said ${body.decision} to the GroupMe picture for card ${id} (${writer.via})`);
+      await noteChange("card_photo_decided", body.decision === "use" ? `Approved the GroupMe picture for ${cardLabel}; portrait made` : `Turned down the GroupMe picture for ${cardLabel}`);
       return NextResponse.json({ id, status: body.decision === "use" ? "approved" : "rejected", ...decided, sent: decided.card ? await dm(body.sendToSlackUserId) : false });
     }
     if (action === "edit") {
       const edited = await editCard(id, body.instruction ?? "");
       console.log(`[API /agent/celebrations] ${writer.name} had card ${id} redrawn (${writer.via})`);
+      await noteChange("card_changed", `Had the AI redraw ${cardLabel}: "${(body.instruction ?? "").trim().slice(0, 120)}"`);
       return NextResponse.json({ id, memberName: c.memberName, occasionDate: c.occasionDate, imageUrl: edited.imageUrl, renderedAt: now.toISOString(), sent: await dm(body.sendToSlackUserId) });
     }
     return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });

@@ -14,6 +14,7 @@ import { TeamNudge, TeamNudgeTask, TeamProfile, TeamTask, TeamTaskEvent, user } 
 
 import { getGymBusinessId } from "../business";
 import { sendSlackDm } from "./notify";
+import { recordActivity } from "./activity";
 import type { Task } from "./tasks";
 
 const OPEN = ["open", "in_progress", "blocked"] as const;
@@ -155,6 +156,16 @@ export async function sendDayOf(input: { slackUserId: string; taskIds: string[];
     await db.insert(TeamNudgeTask).values(mine.map((d) => ({ nudgeId: claimed.id, taskId: d.task.id, businessId })));
     await db.insert(TeamTaskEvent).values(
       mine.map((d) => ({ businessId, taskId: d.task.id, type: "nudged" as const, actor: "agent" as const, channel: "slack" as const, toValue: r.userId, note: input.text, traceId: input.traceId ?? null })),
+    );
+    // The shared activity record: the reminder per task, and each card that travelled with it
+    await recordActivity(
+      mine.flatMap((d) => {
+        const celebrationId = typeof d.task.context?.celebrationId === "string" && typeof d.task.context.imageUrl === "string" ? d.task.context.celebrationId : null;
+        return [
+          { slackUserId: input.slackUserId, userId: r.userId, kind: "reminder_sent" as const, subjectType: "task" as const, subjectId: d.task.id, summary: `Sent the reminder for the task "${d.task.title}"` },
+          ...(celebrationId ? [{ slackUserId: input.slackUserId, userId: r.userId, kind: "card_sent" as const, subjectType: "card" as const, subjectId: celebrationId, summary: `Sent the card for "${d.task.title}" with the reminder` }] : []),
+        ];
+      }),
     );
     return { nudgeId: claimed.id, externalId: delivery.externalId, tasks: mine.length, imagesAttached: delivery.imagesAttached };
   } catch (err) {

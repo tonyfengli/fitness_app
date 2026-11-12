@@ -44,10 +44,6 @@ export const Celebration = pgTable(
     aiEditPrompt: t.text(),
     status: celebrationStatusEnum().notNull().default("ready"),
     imageUrl: t.text(), // the rendered card in Blob storage
-    // The last time the card was DMed to someone in Slack, and to whom (Slack user id). The Chief of Staff
-    // reads it to know which card "her" / "this one" means when a founder replies in their DM.
-    lastSentAt: t.timestamp({ withTimezone: true }),
-    lastSentTo: t.varchar({ length: 20 }),
     renderedAt: t.timestamp({ withTimezone: true }),
     postedAt: t.timestamp({ withTimezone: true }),
     postedBy: t.text().references(() => user.id, { onDelete: "set null" }), // the founder who tapped Posted
