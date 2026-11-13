@@ -1,5 +1,6 @@
 /**
- * Delivery for team messages. Slack DM today (SLACK_BOT_TOKEN, the Mini's bot: chat:write,
+ * Delivery for team messages. Slack today: a DM, or a place a person asked from (a channel
+ * thread, a thread in their DM), so an answer appears where the question was. Originally DM only (SLACK_BOT_TOKEN, the Mini's bot: chat:write,
  * im:write, files:write); iMessage/SMS would be more cases here.
  * A message can carry images (a birthday card): the text goes first (its ts is what we record),
  * then each image is uploaded into the same DM so it can be long-pressed and saved.
@@ -41,7 +42,7 @@ export interface SlackImage {
 }
 
 /** Upload one image into a channel, via Slack's external upload flow */
-async function uploadImage(channelId: string, image: SlackImage): Promise<void> {
+async function uploadImage(channelId: string, image: SlackImage, threadTs?: string): Promise<void> {
   const { filename } = image;
   let bytes = image.bytes;
   if (!bytes) {
@@ -53,18 +54,40 @@ async function uploadImage(channelId: string, image: SlackImage): Promise<void> 
   if (!slot.upload_url || !slot.file_id) throw new Error("Slack gave no upload URL");
   const put = await fetch(slot.upload_url, { method: "POST", body: new Uint8Array(bytes), signal: AbortSignal.timeout(30_000) });
   if (!put.ok) throw new Error(`Slack upload ${put.status}`);
-  await slack("files.completeUploadExternal", { files: [{ id: slot.file_id, title: filename }], channel_id: channelId });
+  await slack("files.completeUploadExternal", { files: [{ id: slot.file_id, title: filename }], channel_id: channelId, ...(threadTs ? { thread_ts: threadTs } : {}) });
 }
 
+/**
+ * Where a person asked from, so the answer can go there: `channelId` for a channel (omit for
+ * their DM), `threadTs` for the thread within it. Both come from the Chief of Staff's
+ * conversation info (chat_id, topic_id).
+ */
+export interface SlackPlace {
+  channelId?: string;
+  threadTs?: string;
+}
+
+export const isSlackChannelId = (v: unknown): v is string => typeof v === "string" && /^[CG][A-Z0-9]{6,}$/.test(v);
+export const isSlackTs = (v: unknown): v is string => typeof v === "string" && /^\d{6,}\.\d+$/.test(v);
+
 export async function sendSlackDm(slackUserId: string, text: string, images: SlackImage[] = []): Promise<Delivery> {
-  const open = await slack<{ ok: boolean; channel?: { id: string } }>("conversations.open", { users: slackUserId });
-  const channel = open.channel?.id;
+  return sendSlack(slackUserId, {}, text, images);
+}
+
+/** Post to a place: the channel given, else the person's DM; in the thread given, else top level */
+export async function sendSlack(slackUserId: string, place: SlackPlace, text: string, images: SlackImage[] = []): Promise<Delivery> {
+  let channel = place.channelId;
+  if (!channel) {
+    const open = await slack<{ ok: boolean; channel?: { id: string } }>("conversations.open", { users: slackUserId });
+    channel = open.channel?.id;
+  }
   if (!channel) throw new Error("Slack conversations.open returned no channel");
-  const posted = await slack<{ ok: boolean; ts?: string }>("chat.postMessage", { channel, text, unfurl_links: false, unfurl_media: false });
+  const thread = place.threadTs ? { thread_ts: place.threadTs } : {};
+  const posted = await slack<{ ok: boolean; ts?: string }>("chat.postMessage", { channel, text, unfurl_links: false, unfurl_media: false, ...thread });
   let imagesAttached = 0;
   for (const img of images) {
     try {
-      await uploadImage(channel, img);
+      await uploadImage(channel, img, place.threadTs);
       imagesAttached++;
     } catch (err) {
       // The text already went out; a missing image is logged, not a failed message

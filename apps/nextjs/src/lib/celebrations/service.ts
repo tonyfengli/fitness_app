@@ -34,7 +34,8 @@ import { backgroundPath, cardBackgroundPath, cardPath, portraitPath, storePng } 
 import { nextTheme, themeAfter, THEMES, themesFor } from "./themes";
 import type { Theme } from "./themes";
 import { recordActivity } from "../team/activity";
-import { sendSlackDm } from "../team/notify";
+import { sendSlack } from "../team/notify";
+import type { Delivery, SlackImage, SlackPlace } from "../team/notify";
 import { cancel, complete, createTasks, findTask, TeamRuleError } from "../team/tasks";
 import type { Actor } from "../team/tasks";
 
@@ -286,15 +287,32 @@ export async function photoSuggestion(celebrationId: string) {
   return { card: c, match };
 }
 
-/** DM the suggested GroupMe picture itself to a founder, so they can say yes or no */
-export async function showPhoto(celebrationId: string, slackUserId: string): Promise<{ memberName: string; nickname: string; status: string }> {
+/**
+ * Reply where asked: post where the person asked from (a channel thread, a thread in their DM).
+ * If that place can't be posted to (the bot isn't in the channel), it goes to their DM instead.
+ */
+async function deliver(slackUserId: string, place: SlackPlace | undefined, text: string, images: SlackImage[]): Promise<Delivery & { where: "where they asked" | "their DM" }> {
+  const asked = !!place && (!!place.channelId || !!place.threadTs);
+  if (asked) {
+    try {
+      const d = await sendSlack(slackUserId, place, text, images);
+      if (d.imagesAttached || !images.length) return { ...d, where: "where they asked" };
+    } catch (err) {
+      console.warn("[celebrations] couldn't post where asked, using the DM:", err instanceof Error ? err.message : err);
+    }
+  }
+  return { ...(await sendSlack(slackUserId, {}, text, images)), where: "their DM" };
+}
+
+/** Show the suggested GroupMe picture itself to a founder, where they asked, so they can say yes or no */
+export async function showPhoto(celebrationId: string, slackUserId: string, place?: SlackPlace): Promise<{ memberName: string; nickname: string; status: string; where: string }> {
   const { card, match } = await photoSuggestion(celebrationId);
   const sure = match.exactName ? "same name" : "name is only a partial match, so check it's the same person";
   const text = `GroupMe picture for ${card.memberName}'s card: "${match.nickname}" in the members' group (${sure}). Currently ${match.status}.`;
-  const delivery = await sendSlackDm(slackUserId, text, [{ url: match.sourceImageUrl, filename: `groupme-${card.memberId}.jpg` }]);
+  const delivery = await deliver(slackUserId, place, text, [{ url: match.sourceImageUrl, filename: `groupme-${card.memberId}.jpg` }]);
   if (!delivery.imagesAttached) throw new Error("Slack took the message but not the picture");
   await recordActivity({ slackUserId, kind: "card_photo_shown", subjectType: "card", subjectId: card.id, summary: `Showed them the GroupMe picture of "${match.nickname}" for ${card.memberName}'s ${card.type} card (${card.occasionDate}); waiting for use it / no` });
-  return { memberName: card.memberName, nickname: match.nickname, status: match.status };
+  return { memberName: card.memberName, nickname: match.nickname, status: match.status, where: delivery.where };
 }
 
 /**
@@ -327,8 +345,11 @@ export async function decidePhoto(celebrationId: string, decision: "use" | "reje
   return { memberName: card.memberName, nickname: match.nickname, card: rendered };
 }
 
-/** DM a card's image to someone in Slack. The card is fetched fresh, so a rebuild a moment ago is what goes out. */
-export async function sendCard(celebrationId: string, slackUserId: string, text?: string): Promise<{ externalId: string | null; memberName: string; occasionDate: string }> {
+/**
+ * Send a card's image to someone in Slack: where they asked from when `place` is given,
+ * otherwise their DM. A card rendered a moment ago goes out as those bytes.
+ */
+export async function sendCard(celebrationId: string, slackUserId: string, text?: string, place?: SlackPlace): Promise<{ externalId: string | null; memberName: string; occasionDate: string; where: string }> {
   const [c] = await db.select().from(Celebration).where(eq(Celebration.id, celebrationId)).limit(1);
   if (!c) throw new CardChangeError("No such card.");
   if (!c.imageUrl) throw new CardChangeError(`${c.memberName}'s card hasn't been rendered yet.`);
@@ -336,10 +357,10 @@ export async function sendCard(celebrationId: string, slackUserId: string, text?
   const fresh = `${c.imageUrl}${c.imageUrl.includes("?") ? "&" : "?"}v=${c.renderedAt?.getTime() ?? Date.now()}`;
   const recent = justRendered.get(c.id);
   const bytes = recent && Date.now() - recent.at < FRESH_MS ? recent.png : undefined;
-  const delivery = await sendSlackDm(slackUserId, text?.trim() || `${first}'s ${c.type} card (${c.occasionDate}):`, [{ url: fresh, bytes, filename: `${first}-${c.type}-${c.occasionDate}.png` }]);
+  const delivery = await deliver(slackUserId, place, text?.trim() || `${first}'s ${c.type} card (${c.occasionDate}):`, [{ url: fresh, bytes, filename: `${first}-${c.type}-${c.occasionDate}.png` }]);
   if (!delivery.imagesAttached) throw new Error("Slack took the message but not the image");
-  await recordActivity({ slackUserId, kind: "card_sent", subjectType: "card", subjectId: c.id, summary: `Sent ${c.memberName}'s ${c.type} card (${c.occasionDate}) to their DM` });
-  return { externalId: delivery.externalId, memberName: c.memberName, occasionDate: c.occasionDate };
+  await recordActivity({ slackUserId, kind: "card_sent", subjectType: "card", subjectId: c.id, summary: `Sent ${c.memberName}'s ${c.type} card (${c.occasionDate}), ${delivery.where === "their DM" ? "to their DM" : "in the thread where they asked"}` });
+  return { externalId: delivery.externalId, memberName: c.memberName, occasionDate: c.occasionDate, where: delivery.where };
 }
 
 /**

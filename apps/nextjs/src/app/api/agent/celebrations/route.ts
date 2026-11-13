@@ -18,7 +18,10 @@
  *                                "reject" (never use, never ask again) }
  *   edit                         { instruction }: the image model redraws the finished card (the card, photo
  *                                included, goes to OpenAI). rerender/rebuild return to the code-built card.
- *                                rebuild, send, photo and edit accept sendToSlackUserId to DM the result.
+ *                                rebuild, photo and edit accept sendToSlackUserId to send the result.
+ *   Reply where asked: every action that sends something takes replyChannelId (the channel the founder
+ *   asked in; omit for their DM) and replyThreadTs (the thread). The card or picture is posted there;
+ *   without them, or if that place can't be posted to, it goes to the person's DM.
  */
 
 import type { NextRequest } from "next/server";
@@ -33,6 +36,7 @@ import type { CardParts } from "~/lib/celebrations/service";
 import { themesFor } from "~/lib/celebrations/themes";
 import { recordActivity } from "~/lib/team/activity";
 import { resolveWriter } from "~/lib/team/auth";
+import { isSlackChannelId, isSlackTs } from "~/lib/team/notify";
 import type { CelebrationRow } from "~/app/save-calls/components/CelebrationsView";
 
 export const dynamic = "force-dynamic";
@@ -148,6 +152,8 @@ type PostBody = CardParts & {
   note?: string;
   showToSlackUserId?: string;
   instruction?: string;
+  replyChannelId?: string;
+  replyThreadTs?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -170,6 +176,8 @@ export async function POST(request: NextRequest) {
       .limit(1);
     if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const now = new Date();
+    // Reply where asked: the channel and thread the founder wrote from (ignored if malformed → their DM)
+    const place = { channelId: isSlackChannelId(body.replyChannelId) ? body.replyChannelId : undefined, threadTs: isSlackTs(body.replyThreadTs) ? body.replyThreadTs : undefined };
     // What the Chief changed for the founder who asked goes in the shared activity record (dashboard clicks don't)
     const cardLabel = `${c.memberName}'s ${c.type} card (${c.occasionDate})`;
     const noteChange = (kind: "card_changed" | "card_photo_decided", summary: string) =>
@@ -207,7 +215,7 @@ export async function POST(request: NextRequest) {
       let sent: boolean | string = false;
       if (body.sendToSlackUserId) {
         // The card is rebuilt either way; a failed DM is reported, not thrown
-        sent = await sendCard(id, body.sendToSlackUserId).then(
+        sent = await sendCard(id, body.sendToSlackUserId, undefined, place).then(
           () => true,
           (err: unknown) => (err instanceof Error ? err.message : String(err)),
         );
@@ -220,14 +228,15 @@ export async function POST(request: NextRequest) {
         const reason = body.toName ? `Couldn't find one founder with a Slack account called "${body.toName}".` : "toSlackUserId or toName is required";
         return NextResponse.json({ status: "refused", reason }, { status: 409 });
       }
-      const sent = await sendCard(id, to, body.text);
+      // Someone else's card request goes to that person's DM; the asker's own goes where they asked
+      const sent = await sendCard(id, to, body.text, to === body.actorSlackUserId ? place : undefined);
       console.log(`[API /agent/celebrations] ${writer.name} sent card ${id} to ${to} (${writer.via})`);
       return NextResponse.json({ id, status: "sent", to, ...sent });
     }
     // The result goes to the founder who asked; a failed DM is reported, not thrown (the change is made)
     const dm = (to?: string) =>
       to
-        ? sendCard(id, to).then(
+        ? sendCard(id, to, undefined, place).then(
             () => true as const,
             (err: unknown) => (err instanceof Error ? err.message : String(err)),
           )
@@ -236,8 +245,8 @@ export async function POST(request: NextRequest) {
       if (body.decision === "show") {
         const to = body.showToSlackUserId ?? body.sendToSlackUserId;
         if (!to) return NextResponse.json({ error: "showToSlackUserId is required" }, { status: 400 });
-        const shown = await showPhoto(id, to);
-        return NextResponse.json({ id, shown: true, memberName: shown.memberName, nickname: shown.nickname, photoStatus: shown.status });
+        const shown = await showPhoto(id, to, place);
+        return NextResponse.json({ id, shown: true, memberName: shown.memberName, nickname: shown.nickname, photoStatus: shown.status, where: shown.where });
       }
       if (body.decision !== "use" && body.decision !== "reject") return NextResponse.json({ error: 'decision must be "show", "use" or "reject"' }, { status: 400 });
       const decided = await decidePhoto(id, body.decision, userId, body.note);
