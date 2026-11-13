@@ -285,3 +285,45 @@ export const TeamActivityEvent = pgTable(
     byPerson: index("idx_team_activity_event_person").on(table.businessId, table.slackUserId, table.createdAt),
   }),
 );
+
+/**
+ * The nudge decision log: one row each time the nudge rules ran for a person on a day, whether
+ * they chose to send or to stay quiet. Holds what was considered, the rule that decided, and
+ * (once delivered) the message it led to. The quiet days are logged on purpose: without them
+ * nobody can tell later whether silence was right or the rules were hiding something.
+ * What happened next (answered, task moved, done by the date) is derived at read time from
+ * team_nudge and team_task_event, never stored here.
+ * Written by lib/team/nudge.ts (decide, then markSent); read by GET /api/agent/nudges for the
+ * monthly review. Design: ai-crew/docs/BUSINESS-ACCOUNTABILITY.md → "Nudges".
+ */
+export const TeamNudgeDecision = pgTable(
+  "team_nudge_decision",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    businessId: t
+      .uuid()
+      .notNull()
+      .references(() => Business.id, { onDelete: "cascade" }),
+    userId: t
+      .text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }), // whose plate was looked at
+    localDate: t.date().notNull(), // their local day; one decision per person per day
+    decision: t.varchar({ length: 10 }).notNull(), // send | hold
+    kind: t.varchar({ length: 20 }), // triage | task; null on hold
+    rule: t.varchar({ length: 40 }).notNull(), // why: triage_due, coming_due, overdue, budget_spent, nothing_live, weekend, quiet_hours
+    detail: t.text().notNull(), // the same, as a sentence a person can read
+    taskId: t.uuid().references(() => TeamTask.id, { onDelete: "set null" }), // the one task, for kind = task
+    angle: t.varchar({ length: 20 }), // coming | overdue: a task gets each at most once per due date
+    dueOn: t.date(), // the task's due day when chosen, so a moved date allows a new message
+    considered: t.jsonb().$type<{ taskId: string; title: string; due: string | null; verdict: string }[]>().notNull().default(sql`'[]'::jsonb`),
+    budgetUsed: t.smallint().notNull(), // messages already sent this week before this decision
+    budgetLimit: t.smallint().notNull(),
+    nudgeId: t.uuid().references(() => TeamNudge.id, { onDelete: "set null" }), // set once the message went out
+    createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  }),
+  (table) => ({
+    onePerDay: unique("team_nudge_decision_person_day").on(table.userId, table.localDate),
+    byPerson: index("idx_team_nudge_decision_person").on(table.userId, table.createdAt),
+  }),
+);

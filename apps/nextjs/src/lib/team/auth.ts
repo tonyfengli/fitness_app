@@ -39,9 +39,9 @@ function hasAgentWriteKey(request: NextRequest): boolean {
   const expected = process.env.TEAM_AGENT_API_KEY;
   const given = request.headers.get("X-TEAM-AGENT-KEY");
   const path = request.nextUrl.pathname;
-  // Tasks, the cards behind birthday tasks (send a card, rebuild one), and founder profiles
-  // (a note about someone; a person's own working style)
-  return !!expected && !!given && given === expected && (path.startsWith("/api/agent/tasks") || path === "/api/agent/celebrations" || path === "/api/agent/team/profile");
+  // Tasks, the cards behind birthday tasks (send a card, rebuild one), founder profiles
+  // (a note about someone; a person's own working style), and a person's own nudges
+  return !!expected && !!given && given === expected && (path.startsWith("/api/agent/tasks") || path === "/api/agent/celebrations" || path === "/api/agent/team/profile" || path === "/api/agent/nudges");
 }
 
 /** The person this write acts as, or an error response */
