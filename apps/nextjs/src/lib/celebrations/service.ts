@@ -81,6 +81,20 @@ export async function getBackground(theme: Theme, businessId: string, run?: Cele
   return made.png;
 }
 
+/**
+ * Cards rendered by this process in the last few minutes. Blob storage can keep serving the
+ * previous image for up to a minute after an overwrite (seen Nov 12 2026: a card rebuilt with
+ * a photo was DMed seconds later as the old no-photo card), so a send right after a render
+ * uses these bytes instead of fetching the URL.
+ */
+const justRendered = new Map<string, { png: Buffer; at: number }>();
+const FRESH_MS = 3 * 60_000;
+function rememberRender(celebrationId: string, png: Buffer) {
+  const now = Date.now();
+  for (const [id, r] of justRendered) if (now - r.at > FRESH_MS) justRendered.delete(id);
+  justRendered.set(celebrationId, { png, at: now });
+}
+
 async function fetchPng(url: string): Promise<Buffer | null> {
   const res = await fetch(url, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
   return res?.ok ? Buffer.from(await res.arrayBuffer()) : null;
@@ -124,6 +138,7 @@ export async function renderCard(celebrationId: string, run?: CelebrationRun, fr
   const subline = (c.subline === null ? theme.subline?.(c.detail ?? undefined) : c.subline.trim()) || null; // "" = no second line
   const png = await composeCelebration({ background, photo, headline, subline: subline ?? undefined, accent: theme.accent });
   const imageUrl = await storePng(cardPath(c.id), png);
+  rememberRender(c.id, png);
   await db.update(Celebration).set({ imageUrl, renderedAt: new Date(), photoSource, aiEditPrompt: null }).where(eq(Celebration.id, c.id));
   await ensureTask({ ...c, imageUrl });
   return {
@@ -209,7 +224,8 @@ export async function editCard(celebrationId: string, instruction: string): Prom
   if (!c.imageUrl) throw new CardChangeError(`${c.memberName}'s card hasn't been rendered yet.`);
   const ask = instruction.trim().slice(0, 600);
   if (!ask) throw new CardChangeError("Say what to change.");
-  const current = await fetchPng(`${c.imageUrl}?v=${Date.now()}`);
+  const recent = justRendered.get(c.id);
+  const current = recent && Date.now() - recent.at < FRESH_MS ? recent.png : await fetchPng(`${c.imageUrl}?v=${Date.now()}`);
   if (!current) throw new Error("Couldn't load the current card");
   const prompt =
     `This is a square ${c.type} card for a gym member. Change it as follows: ${ask}. ` +
@@ -218,6 +234,7 @@ export async function editCard(celebrationId: string, instruction: string): Prom
   const made = await editImage({ images: [current], prompt, purpose: `celebrations:${c.type}:edit`, quality: "medium" });
   const png = await sharp(made.png).resize(CARD, CARD, { fit: "cover" }).png().toBuffer();
   const imageUrl = await storePng(cardPath(c.id), png);
+  rememberRender(c.id, png);
   await db.update(Celebration).set({ imageUrl, renderedAt: new Date(), aiEditPrompt: ask }).where(eq(Celebration.id, c.id));
   return { imageUrl };
 }
@@ -317,7 +334,9 @@ export async function sendCard(celebrationId: string, slackUserId: string, text?
   if (!c.imageUrl) throw new CardChangeError(`${c.memberName}'s card hasn't been rendered yet.`);
   const first = c.memberName.split(" ")[0] ?? c.memberName;
   const fresh = `${c.imageUrl}${c.imageUrl.includes("?") ? "&" : "?"}v=${c.renderedAt?.getTime() ?? Date.now()}`;
-  const delivery = await sendSlackDm(slackUserId, text?.trim() || `${first}'s ${c.type} card (${c.occasionDate}):`, [{ url: fresh, filename: `${first}-${c.type}-${c.occasionDate}.png` }]);
+  const recent = justRendered.get(c.id);
+  const bytes = recent && Date.now() - recent.at < FRESH_MS ? recent.png : undefined;
+  const delivery = await sendSlackDm(slackUserId, text?.trim() || `${first}'s ${c.type} card (${c.occasionDate}):`, [{ url: fresh, bytes, filename: `${first}-${c.type}-${c.occasionDate}.png` }]);
   if (!delivery.imagesAttached) throw new Error("Slack took the message but not the image");
   await recordActivity({ slackUserId, kind: "card_sent", subjectType: "card", subjectId: c.id, summary: `Sent ${c.memberName}'s ${c.type} card (${c.occasionDate}) to their DM` });
   return { externalId: delivery.externalId, memberName: c.memberName, occasionDate: c.occasionDate };

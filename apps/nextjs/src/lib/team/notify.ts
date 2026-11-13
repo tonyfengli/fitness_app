@@ -33,19 +33,30 @@ async function slack<T extends { ok: boolean; error?: string }>(method: string, 
   return data;
 }
 
-/** Upload one image (fetched from a URL) into a channel, via Slack's external upload flow */
-async function uploadImage(channelId: string, url: string, filename: string): Promise<void> {
-  const img = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-  if (!img.ok) throw new Error(`image ${img.status}`);
-  const bytes = Buffer.from(await img.arrayBuffer());
+/** An image to attach: the bytes when the caller has them (a card rendered a moment ago), otherwise a URL to fetch */
+export interface SlackImage {
+  url: string;
+  filename: string;
+  bytes?: Buffer;
+}
+
+/** Upload one image into a channel, via Slack's external upload flow */
+async function uploadImage(channelId: string, image: SlackImage): Promise<void> {
+  const { filename } = image;
+  let bytes = image.bytes;
+  if (!bytes) {
+    const img = await fetch(image.url, { signal: AbortSignal.timeout(20_000) });
+    if (!img.ok) throw new Error(`image ${img.status}`);
+    bytes = Buffer.from(await img.arrayBuffer());
+  }
   const slot = await slack<{ ok: boolean; upload_url?: string; file_id?: string }>("files.getUploadURLExternal", { filename, length: bytes.length }, true);
   if (!slot.upload_url || !slot.file_id) throw new Error("Slack gave no upload URL");
-  const put = await fetch(slot.upload_url, { method: "POST", body: bytes, signal: AbortSignal.timeout(30_000) });
+  const put = await fetch(slot.upload_url, { method: "POST", body: new Uint8Array(bytes), signal: AbortSignal.timeout(30_000) });
   if (!put.ok) throw new Error(`Slack upload ${put.status}`);
   await slack("files.completeUploadExternal", { files: [{ id: slot.file_id, title: filename }], channel_id: channelId });
 }
 
-export async function sendSlackDm(slackUserId: string, text: string, images: { url: string; filename: string }[] = []): Promise<Delivery> {
+export async function sendSlackDm(slackUserId: string, text: string, images: SlackImage[] = []): Promise<Delivery> {
   const open = await slack<{ ok: boolean; channel?: { id: string } }>("conversations.open", { users: slackUserId });
   const channel = open.channel?.id;
   if (!channel) throw new Error("Slack conversations.open returned no channel");
@@ -53,7 +64,7 @@ export async function sendSlackDm(slackUserId: string, text: string, images: { u
   let imagesAttached = 0;
   for (const img of images) {
     try {
-      await uploadImage(channel, img.url, img.filename);
+      await uploadImage(channel, img);
       imagesAttached++;
     } catch (err) {
       // The text already went out; a missing image is logged, not a failed message
