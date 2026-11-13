@@ -27,10 +27,10 @@ const FIELDS: { key: "role" | "owns" | "answerStyle" | "focus" | "bestTimes" | "
   { key: "owns", label: "Owns", hint: "Areas and recurring responsibilities" },
   { key: "answerStyle", label: "Likes answers", hint: "Numbers first, short, the why…" },
   { key: "focus", label: "Current focus", hint: "What they're chasing right now" },
-  { key: "bestTimes", label: "Best times", hint: "When a message gets a real answer" },
+  { key: "bestTimes", label: "Best times", hint: "When they actually reply to messages" },
   { key: "pushLevel", label: "Push level", hint: "light, steady or persistent" },
-  { key: "askStyle", label: "How to ask", hint: "Casual, one thing at a time…" },
-  { key: "avoid", label: "Avoid", hint: "What gets ignored: lists, morning briefs…" },
+  { key: "askStyle", label: "How to ask", hint: "What gets them to deliver (for the group, a good reason, their own plan, their own choice), then how to ask" },
+  { key: "avoid", label: "Avoid", hint: "The worst way to reach them; what you've seen them ignore" },
 ];
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "America/Los_Angeles", day: "numeric", month: "short" });
