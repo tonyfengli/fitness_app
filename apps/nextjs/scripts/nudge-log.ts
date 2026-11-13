@@ -26,10 +26,11 @@ if (process.argv.includes("--dry")) {
   console.log(`Right now the rules would: ${plan.decision.toUpperCase()} (${plan.rule}) — ${plan.detail}`);
   console.log(`Budget this week: ${plan.budget.used}/${plan.budget.limit}`);
   if (plan.task) console.log(`Task: "${plan.task.title}" due ${plan.task.dueOn} (${plan.task.angle})`);
-  if (plan.undated) console.log(`Triage over ${plan.undated.length} undated task(s)`);
+  if (plan.named) console.log(`Triage: ${plan.undatedTotal} undated; would name: ${plan.named.map((t) => t.title).join(" | ")}`);
   process.exit(0);
 }
 
+const after = (m: number) => (m < 1 ? "under a minute" : m < 90 ? `${m} min` : `${Math.round(m / 6) / 10}h`);
 const days = Number(process.argv[3]) || 35;
 const log = await nudgeLog(who.id, days);
 const sent = log.filter((r) => r.outcome);
@@ -39,7 +40,7 @@ console.log(`Sent: ${count("acted")} acted · ${count("answered, nothing changed
 for (const r of log) {
   console.log(`${r.date}  ${r.decision.toUpperCase()}  ${r.rule}  (budget ${r.budget})  ${r.detail}`);
   if (r.message) console.log(`    said: ${r.message.replace(/\s+/g, " ")}`);
-  if (r.outcome) console.log(`    then: ${r.outcome.verdict}${r.outcome.replied ? ` · answered after ${r.outcome.repliedAfterHours}h` : ""}${r.outcome.taskChanges.length ? ` · ${r.outcome.taskChanges.join(", ")}` : ""}${r.outcome.datesSet ? ` · ${r.outcome.datesSet} date(s) set` : ""}${r.outcome.doneByDue === null ? "" : r.outcome.doneByDue ? " · done by its date" : " · not done by its date"}`);
+  if (r.outcome) console.log(`    then: ${r.outcome.verdict}${r.outcome.replied ? ` · answered after ${after(r.outcome.repliedAfterMinutes ?? 0)}` : ""}${r.outcome.taskChanges.length ? ` · ${r.outcome.taskChanges.join(", ")}` : ""}${r.outcome.datesSet ? ` · ${r.outcome.datesSet} date(s) set` : ""}${r.outcome.doneByDue === null ? "" : r.outcome.doneByDue ? " · done by its date" : " · not done by its date"}`);
   for (const c of r.considered) console.log(`      - ${c.title}${c.due ? ` (${c.due})` : ""}: ${c.verdict}`);
 }
 process.exit(0);

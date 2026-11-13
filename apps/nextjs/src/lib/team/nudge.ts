@@ -7,8 +7,11 @@
  *   1. Weekends and quiet hours: nothing.
  *   2. A weekly budget (WEEKLY_BUDGET messages, Monday to Sunday local). Spent: nothing.
  *   3. Triage, once a week from Tuesday on, when the person has open tasks with no date:
- *      one question, "which of these are actually due this week?". Their answer puts dates on
- *      the ones that matter; the rest stay a backlog and are never pushed.
+ *      one question, "any of these due this week?". Their answer puts dates on the ones that
+ *      matter; the rest stay a backlog and are never pushed. The question names TRIAGE_NAMED
+ *      tasks, chosen here by rotation (the ones not named for the longest, oldest first), and
+ *      says how many undated there are in all: a summary, not a hidden filter (Nov 13: three
+ *      picked by the agent with no count made Tony wonder what was left out).
  *   4. One live task: open, theirs, dated. "coming" = due today or within COMING_DAYS;
  *      "overdue" = the date passed. Each at most once per task per due date, so the same
  *      reminder is never repeated; a moved date makes it new. Skipped: hard deadlines (the
@@ -29,6 +32,9 @@ import type { Channel } from "./tasks";
 
 export const WEEKLY_BUDGET = 3;
 export const COMING_DAYS = 2; // "coming" = due today, tomorrow or the day after
+export const TRIAGE_NAMED = 3;
+const NAMED = "named in the triage question";
+const HELD = "undated: held, not named this time";
 const TRIAGE_FROM_WEEKDAY = 2; // Tuesday: after Monday's meeting has added the week's tasks
 const RECENT_TOUCH_HOURS = 24;
 const OUTCOME_DAYS = 3;
@@ -57,7 +63,10 @@ export interface NudgePlan {
   budget: { used: number; limit: number };
   /** For kind = task */
   task?: { id: string; title: string; details: string | null; dueOn: string; angle: string; daysToDue: number };
-  /** For kind = triage: the undated tasks, soonest created first */
+  /** For kind = triage: the tasks the question names (chosen by rotation), and the rest */
+  named?: { id: string; title: string }[];
+  others?: { id: string; title: string }[];
+  undatedTotal?: number;
   undated?: { id: string; title: string }[];
   /** How this person wants to be reached, for the agent that writes the words */
   profile?: string;
@@ -100,7 +109,15 @@ export async function decide(userId: string, now = new Date(), dry = false): Pro
   const undated = tasks.filter((t) => !t.dueAt && t.status !== "blocked");
   const triagedThisWeek = weekRows.some((r) => r.kind === "triage" && r.nudgeId);
   if (weekday >= TRIAGE_FROM_WEEKDAY && !triagedThisWeek && undated.length) {
-    for (const t of undated) considered.push({ taskId: t.id, title: t.title, due: null, verdict: "undated: part of the triage question" });
+    // Rotation: never named first, then named longest ago; oldest task breaks a tie
+    const triages = await db
+      .select({ localDate: TeamNudgeDecision.localDate, considered: TeamNudgeDecision.considered })
+      .from(TeamNudgeDecision)
+      .where(and(eq(TeamNudgeDecision.userId, userId), eq(TeamNudgeDecision.kind, "triage"), isNotNull(TeamNudgeDecision.nudgeId)));
+    const lastNamed = new Map<string, string>();
+    for (const r of triages) for (const c of r.considered) if (c.verdict === NAMED && r.localDate > (lastNamed.get(c.taskId) ?? "")) lastNamed.set(c.taskId, r.localDate);
+    const order = [...undated].sort((a, b) => (lastNamed.get(a.id) ?? "").localeCompare(lastNamed.get(b.id) ?? "") || a.createdAt.getTime() - b.createdAt.getTime());
+    order.forEach((t, i) => considered.push({ taskId: t.id, title: t.title, due: null, verdict: i < TRIAGE_NAMED ? NAMED : HELD }));
     return plan(await save({ ...base, decision: "send", kind: "triage", rule: "triage_due", detail: `${undated.length} open task(s) have no date and no triage question has gone out this week.`, considered }), tasks, userId);
   }
 
@@ -168,7 +185,7 @@ async function plan(d: Decision, tasks: (typeof TeamTask.$inferSelect)[], userId
   };
   if (out.decision !== "send" || out.alreadySent) return out;
   const profile = await getProfile(userId);
-  if (profile) out.profile = profileBrief({ ...profile, notes: [] });
+  if (profile) out.profile = profileBrief({ ...profile, notes: [] }).replace(/\n+No notes yet\.$/, "");
   if (out.kind === "task") {
     const t = tasks.find((x) => x.id === d.taskId);
     // The task was finished, dated differently or handed off since the decision: nothing to say
@@ -176,8 +193,14 @@ async function plan(d: Decision, tasks: (typeof TeamTask.$inferSelect)[], userId
     const daysToDue = Math.round((new Date(`${d.dueOn}T12:00:00Z`).getTime() - new Date(`${d.localDate}T12:00:00Z`).getTime()) / 864e5);
     out.task = { id: t.id, title: t.title, details: t.details, dueOn: d.dueOn, angle: d.angle ?? "coming", daysToDue };
   } else {
-    out.undated = tasks.filter((t) => !t.dueAt && t.status !== "blocked").sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map((t) => ({ id: t.id, title: t.title }));
-    if (!out.undated.length) return { ...out, decision: "hold", rule: "task_gone", detail: "Every open task has a date now." };
+    // Only what is still open and undated; a task dated since the decision drops out
+    const still = new Map(tasks.filter((t) => !t.dueAt && t.status !== "blocked").map((t) => [t.id, t.title]));
+    const pick = (verdict: string) => d.considered.filter((c) => c.verdict === verdict && still.has(c.taskId)).map((c) => ({ id: c.taskId, title: still.get(c.taskId) ?? c.title }));
+    out.named = pick(NAMED);
+    out.others = pick(HELD);
+    out.undatedTotal = out.named.length + out.others.length;
+    out.undated = [...out.named, ...out.others]; // read by a runner from before the rotation change
+    if (!out.named.length) return { ...out, decision: "hold", rule: "task_gone", detail: "The tasks chosen for the triage question all have dates now." };
   }
   return out;
 }
@@ -230,7 +253,7 @@ export interface NudgeLogRow {
   message: string | null;
   sentAt: string | null;
   /** Derived, for sent rows: what happened in the OUTCOME_DAYS after */
-  outcome: { replied: boolean; repliedAfterHours: number | null; taskChanges: string[]; datesSet: number; doneByDue: boolean | null; verdict: string } | null;
+  outcome: { replied: boolean; repliedAfterMinutes: number | null; taskChanges: string[]; datesSet: number; doneByDue: boolean | null; verdict: string } | null;
 }
 
 /** The log for the monthly review, newest first, with what happened after each message */
@@ -260,7 +283,7 @@ export async function nudgeLog(userId: string, days = 35, now = new Date()): Pro
       const replied = !!n.respondedAt;
       const open = until > now;
       const verdict = taskChanges.length ? "acted" : replied ? "answered, nothing changed" : open ? "waiting" : "ignored";
-      outcome = { replied, repliedAfterHours: n.respondedAt ? Math.round(((n.respondedAt.getTime() - n.sentAt.getTime()) / 36e5) * 10) / 10 : null, taskChanges, datesSet, doneByDue, verdict };
+      outcome = { replied, repliedAfterMinutes: n.respondedAt ? Math.round((n.respondedAt.getTime() - n.sentAt.getTime()) / 6e4) : null, taskChanges, datesSet, doneByDue, verdict };
     }
     out.push({
       date: d.localDate,
