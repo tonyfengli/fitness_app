@@ -278,7 +278,8 @@ export const SMALL_SHIFT_DAYS = 2;
 export async function changeDeadline(task: Task, actor: Actor, channel: Channel, dueAt: Date, note?: string): Promise<Task> {
   if (!OPEN.includes(task.status)) throw new TeamRuleError(`Task is ${task.status}`);
   if (task.hardDeadline) throw new TeamRuleError("This deadline can't move");
-  const shiftDays = task.dueAt ? Math.abs(dueAt.getTime() - task.dueAt.getTime()) / 864e5 : Infinity;
+  // A first date on an undated task is the owner's commitment, not a move: the owner may set it.
+  const shiftDays = task.dueAt ? Math.abs(dueAt.getTime() - task.dueAt.getTime()) / 864e5 : 0;
   const ownerMay = isOwner(task, actor) && shiftDays <= SMALL_SHIFT_DAYS;
   if (!ownerMay && !(await mayManage(task, actor))) throw new TeamRuleError(`Moving a due date more than ${SMALL_SHIFT_DAYS} days needs the creator`);
   return db.transaction(async (tx) => {

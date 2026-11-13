@@ -16,6 +16,13 @@ import type { Actor, Channel } from "./tasks";
 
 export type NoteKind = "preference" | "responsibility" | "focus" | "pattern" | "fact";
 
+export const PUSH_LEVELS = ["light", "steady", "persistent"] as const;
+export type PushLevel = (typeof PUSH_LEVELS)[number];
+
+/** The fields a person may change about themselves through their own agent */
+export const STYLE_FIELDS = ["answerStyle", "focus", "bestTimes", "pushLevel", "askStyle", "avoid"] as const;
+export type StyleField = (typeof STYLE_FIELDS)[number];
+
 export interface Profile {
   userId: string;
   name: string;
@@ -24,6 +31,10 @@ export interface Profile {
   owns: string | null;
   answerStyle: string | null;
   focus: string | null;
+  bestTimes: string | null;
+  pushLevel: PushLevel | null;
+  askStyle: string | null;
+  avoid: string | null;
   dailyMessageLimit: number | null;
   notes: { id: string; kind: NoteKind; text: string; source: "person" | "agent" | "workflow" | "cron"; author: string | null; traceId: string | null; createdAt: string }[];
 }
@@ -31,7 +42,7 @@ export interface Profile {
 export async function getProfile(userId: string): Promise<Profile | null> {
   const businessId = await getGymBusinessId();
   const [row] = await db
-    .select({ userId: user.id, name: user.name, slackUserId: TeamProfile.slackUserId, role: TeamProfile.role, owns: TeamProfile.owns, answerStyle: TeamProfile.answerStyle, focus: TeamProfile.focus, dailyMessageLimit: TeamProfile.dailyMessageLimit })
+    .select({ userId: user.id, name: user.name, slackUserId: TeamProfile.slackUserId, role: TeamProfile.role, owns: TeamProfile.owns, answerStyle: TeamProfile.answerStyle, focus: TeamProfile.focus, bestTimes: TeamProfile.bestTimes, pushLevel: TeamProfile.pushLevel, askStyle: TeamProfile.askStyle, avoid: TeamProfile.avoid, dailyMessageLimit: TeamProfile.dailyMessageLimit })
     .from(TeamProfile)
     .innerJoin(user, eq(user.id, TeamProfile.userId))
     .where(and(eq(TeamProfile.businessId, businessId), eq(TeamProfile.userId, userId)))
@@ -43,7 +54,8 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     .leftJoin(user, eq(user.id, TeamProfileNote.authorId))
     .where(and(eq(TeamProfileNote.userId, userId), isNull(TeamProfileNote.retiredAt)))
     .orderBy(desc(TeamProfileNote.createdAt));
-  return { ...row, notes: notes.map((n) => ({ id: n.id, kind: n.kind, text: n.text, source: n.source, author: n.authorName ?? null, traceId: n.traceId, createdAt: n.createdAt.toISOString() })) };
+  const pushLevel = PUSH_LEVELS.find((l) => l === row.pushLevel) ?? null;
+  return { ...row, pushLevel, notes: notes.map((n) => ({ id: n.id, kind: n.kind, text: n.text, source: n.source, author: n.authorName ?? null, traceId: n.traceId, createdAt: n.createdAt.toISOString() })) };
 }
 
 export async function listProfiles(): Promise<Profile[]> {
@@ -62,12 +74,18 @@ export async function setDailyLimit(userId: string, limit: number | null): Promi
   await db.update(TeamProfile).set({ dailyMessageLimit: v }).where(eq(TeamProfile.userId, userId));
 }
 
-export async function setProfileFields(userId: string, patch: { role?: string | null; owns?: string | null; answerStyle?: string | null; focus?: string | null }): Promise<void> {
+export type ProfilePatch = Partial<Record<"role" | "owns" | StyleField, string | null>>;
+
+export async function setProfileFields(userId: string, patch: ProfilePatch): Promise<void> {
   const clean: Record<string, string | null> = {};
-  for (const key of ["role", "owns", "answerStyle", "focus"] as const) {
+  for (const key of ["role", "owns", ...STYLE_FIELDS] as const) {
     if (!(key in patch)) continue;
     const trimmed = patch[key]?.trim() ?? "";
-    clean[key] = trimmed ? trimmed : null;
+    if (key === "pushLevel") {
+      const level = trimmed.toLowerCase();
+      if (level && !PUSH_LEVELS.some((l) => l === level)) throw new Error(`pushLevel must be one of ${PUSH_LEVELS.join(", ")}`);
+      clean[key] = level || null;
+    } else clean[key] = trimmed ? trimmed.slice(0, 600) : null;
   }
   if (!Object.keys(clean).length) return;
   await db.update(TeamProfile).set(clean).where(eq(TeamProfile.userId, userId));
@@ -106,6 +124,10 @@ export function profileBrief(p: Profile): string {
   if (p.owns) lines.push(`Owns: ${p.owns}`);
   if (p.answerStyle) lines.push(`Likes answers: ${p.answerStyle}`);
   if (p.focus) lines.push(`Current focus: ${p.focus}`);
+  if (p.bestTimes) lines.push(`Best times to reach: ${p.bestTimes}`);
+  if (p.pushLevel) lines.push(`Push level: ${p.pushLevel}`);
+  if (p.askStyle) lines.push(`How to ask: ${p.askStyle}`);
+  if (p.avoid) lines.push(`Avoid: ${p.avoid}`);
   if (p.notes.length) {
     lines.push("", "Notes (newest first):");
     for (const n of p.notes.slice(0, 25)) lines.push(`- [${n.kind}, ${n.createdAt.slice(0, 10)}, ${n.source === "agent" ? "you" : (n.author ?? "a founder")}] ${n.text}`);

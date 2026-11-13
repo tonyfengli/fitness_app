@@ -4,7 +4,10 @@
  * GET  /api/agent/team/profile?slackUserId=U…      one, as the Chief reads it (+ `text` brief)
  * GET  /api/agent/team/profile?recent=7            what the Chief added in the last N days
  * POST /api/agent/team/profile  { userId | slackUserId, action, … }
- *   set     { role?, owns?, answerStyle?, focus?, dailyMessageLimit? (null = no limit) }  founders only
+ *   set     { role?, owns?, answerStyle?, focus?, bestTimes?, pushLevel?, askStyle?, avoid?,
+ *             dailyMessageLimit? (null = no limit) }       founders: any field, anyone's.
+ *             An agent (write key): the working-style fields only, and only for the person it
+ *             is acting for (actorSlackUserId = the profile's own Slack id), at their request.
  *   note    { kind, text, traceId? }                     the Chief (write key) or a founder
  *   retire  { noteId }                                   founders only
  * Reads: founders or the read-only key. Writes: see each action.
@@ -14,8 +17,9 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
 import { resolveWriter, userBySlackId } from "~/lib/team/auth";
-import { addNote, getProfile, listProfiles, profileBrief, recentAgentNotes, retireNote, setDailyLimit, setProfileFields } from "~/lib/team/profile";
-import type { NoteKind } from "~/lib/team/profile";
+import { recordActivity } from "~/lib/team/activity";
+import { addNote, getProfile, listProfiles, profileBrief, recentAgentNotes, retireNote, setDailyLimit, setProfileFields, STYLE_FIELDS } from "~/lib/team/profile";
+import type { NoteKind, ProfilePatch } from "~/lib/team/profile";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +58,10 @@ interface Body {
   owns?: string | null;
   answerStyle?: string | null;
   focus?: string | null;
+  bestTimes?: string | null;
+  pushLevel?: string | null;
+  askStyle?: string | null;
+  avoid?: string | null;
   dailyMessageLimit?: number | null;
   kind?: string;
   text?: string;
@@ -71,11 +79,25 @@ export async function POST(request: NextRequest) {
   if (!target) return NextResponse.json({ error: "userId or a known slackUserId is required" }, { status: 400 });
   try {
     switch (body.action) {
-      case "set":
-        if (writer.via !== "founder") return NextResponse.json({ status: "refused", reason: "Only a founder edits the summary fields" }, { status: 403 });
-        await setProfileFields(target.id, { role: body.role, owns: body.owns, answerStyle: body.answerStyle, focus: body.focus });
-        if (body.dailyMessageLimit !== undefined) await setDailyLimit(target.id, body.dailyMessageLimit);
+      case "set": {
+        const patch: ProfilePatch = {};
+        if (writer.via === "agent") {
+          // A person's own working style, through their own agent. Nobody else's, nothing else.
+          if (writer.userId !== target.id) return NextResponse.json({ status: "refused", reason: "An agent may change only the working style of the person it is acting for" }, { status: 403 });
+          for (const key of STYLE_FIELDS) if (body[key] !== undefined) patch[key] = body[key];
+          if (!Object.keys(patch).length) return NextResponse.json({ status: "refused", reason: `Nothing to change. An agent may set: ${STYLE_FIELDS.join(", ")}` }, { status: 403 });
+        } else {
+          for (const key of ["role", "owns", ...STYLE_FIELDS] as const) if (body[key] !== undefined) patch[key] = body[key];
+        }
+        try {
+          await setProfileFields(target.id, patch);
+        } catch (err) {
+          return NextResponse.json({ error: err instanceof Error ? err.message : "Bad value" }, { status: 400 });
+        }
+        if (writer.via === "founder" && body.dailyMessageLimit !== undefined) await setDailyLimit(target.id, body.dailyMessageLimit);
+        if (writer.via === "agent") await recordActivity({ userId: target.id, kind: "profile_updated", subjectType: "profile", subjectId: target.id, summary: `Working style updated: ${Object.keys(patch).join(", ")}` });
         break;
+      }
       case "note": {
         const kind = KINDS.includes(body.kind as NoteKind) ? (body.kind as NoteKind) : "pattern";
         if (!body.text?.trim()) return NextResponse.json({ error: "text is required" }, { status: 400 });

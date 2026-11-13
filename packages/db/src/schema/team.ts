@@ -61,6 +61,13 @@ export const TeamProfile = pgTable("team_profile", (t) => ({
   owns: t.text(), // areas and recurring responsibilities
   answerStyle: t.text(), // how they like answers: numbers first, short, detailed, …
   focus: t.text(), // what they're chasing right now
+  // Working style: how to reach this person about their tasks. Settings, not private data
+  // (Tony, Nov 12 2026). Seeded by a short interview (ai-crew/shared/working-style-interview.md),
+  // changed only by the person themselves: on the Team tab or through their own agent.
+  bestTimes: t.text(), // when a message gets a real answer: "after 2pm, never before the morning class"
+  pushLevel: t.varchar({ length: 20 }), // light | steady | persistent; null = not asked yet
+  askStyle: t.text(), // what gets a response: "casual, one thing at a time"
+  avoid: t.text(), // what gets ignored: "lists, morning briefs"
   timezone: t.varchar({ length: 60 }).notNull().default("America/Los_Angeles"),
   quietStart: t.smallint().notNull().default(21), // no messages from this hour (local)...
   quietEnd: t.smallint().notNull().default(8), // ...until this hour

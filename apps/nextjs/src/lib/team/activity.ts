@@ -14,14 +14,14 @@ import { TeamActivityEvent, TeamProfile } from "@acme/db/schema";
 
 import { getGymBusinessId } from "../business";
 
-export type ActivityKind = "card_sent" | "card_changed" | "card_photo_shown" | "card_photo_decided" | "reminder_sent" | "task_created" | "task_updated";
+export type ActivityKind = "card_sent" | "card_changed" | "card_photo_shown" | "card_photo_decided" | "reminder_sent" | "task_created" | "task_updated" | "profile_updated";
 
 export interface ActivityInput {
   /** Who it was sent to or done for: a Slack user id, or a login when the Slack id isn't at hand */
   slackUserId?: string | null;
   userId?: string | null;
   kind: ActivityKind;
-  subjectType: "card" | "task";
+  subjectType: "card" | "task" | "profile";
   subjectId: string;
   /** One readable line, past tense: "Sent Alex Kim's birthday card (2026-11-16)" */
   summary: string;
