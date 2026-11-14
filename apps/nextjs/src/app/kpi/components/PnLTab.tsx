@@ -15,6 +15,7 @@ import {
 } from "recharts";
 
 import { ExpenseBreakdown } from "../types";
+import { pnlLines } from "~/lib/pnl-lines";
 import { MONTH_NAMES } from "../constants";
 import { ReconciliationView } from "./ReconciliationView";
 import { MobilePnlTrendChart } from "./MobilePnlTrendChart";
@@ -192,17 +193,9 @@ export function PnLTab() {
       if (monthNum < startMonth || monthNum > endMonth) continue;
       const monthName = MONTH_NAMES[monthNum - 1]!;
 
-      // Stripe revenue = charged net of refunds (gross of fees)
-      const stripeRevenue = revMonth.stripe.gross - revMonth.stripe.refunds;
-      const otherIncome = revMonth.quickbooks.otherIncome;
-      const allRevenue = stripeRevenue + otherIncome;
-
-      // Operating expenses = QuickBooks expenses + Stripe processing fees
-      const qbExpenses = revMonth.quickbooks.expenses || emptyExpenses;
-      const stripeFees = revMonth.stripe.fees;
-      const expenseBreakdown: PnlExpenses = { ...qbExpenses, stripeFees, total: qbExpenses.total + stripeFees };
-      const expenses = expenseBreakdown.total;
-      const netIncome = allRevenue - expenses;
+      // Revenue = Stripe net of refunds + other income; expenses = QuickBooks + Stripe fees.
+      // Shared with the monthly KPI pages in Notion (lib/pnl-lines.ts).
+      const { stripeRevenue, otherIncome, allRevenue, expenses, expenseBreakdown, netIncome } = pnlLines(revMonth);
 
       pnlData.push({
         month: monthName,

@@ -8,10 +8,12 @@
 import { eq, and, inArray, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import { KpiMonthlySnapshot, KpiMemberOverride } from "@acme/db/schema";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
+import { syncMonthToNotion } from "~/lib/kpi-notion-sync";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // the Notion update after finalize/reopen runs after the response
 
 // GET - Load snapshot for a month
 export async function GET(request: NextRequest) {
@@ -341,6 +343,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     console.log("[PATCH] Success!");
+    // Notion's Monthly KPIs page follows the month's status (Final or Draft), after the response
+    after(() => syncMonthToNotion(Number(year), Number(month), status === "finalized" ? "KPI finalized" : "KPI reopened"));
     return NextResponse.json({
       success: true,
       message: status === "finalized" ? "Month finalized" : "Month reopened for editing",

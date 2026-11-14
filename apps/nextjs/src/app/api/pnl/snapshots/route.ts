@@ -7,12 +7,14 @@
 import { and, asc, eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { PnlMonthlySnapshot } from "@acme/db/schema";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { validateFounderAccess } from "~/lib/api-auth";
+import { syncMonthToNotion } from "~/lib/kpi-notion-sync";
 import { isQuickBooksConnected } from "~/lib/quickbooks";
 import { summarizeMonths, type MonthlyReconciliation } from "~/lib/revenue-reconciliation";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // the Notion update after finalize/reopen runs after the response
 
 export async function GET(request: NextRequest) {
   const authError = await validateFounderAccess(request);
@@ -63,6 +65,8 @@ export async function PATCH(request: NextRequest) {
     if (!updated.length) {
       return NextResponse.json({ error: "No saved P&L data for that month" }, { status: 404 });
     }
+    // Notion's Monthly KPIs page shows the P&L as Final or Draft, after the response
+    after(() => syncMonthToNotion(Number(year), Number(month), status === "finalized" ? "P&L finalized" : "P&L reopened"));
     return NextResponse.json({ success: true, message: status === "finalized" ? "Month finalized" : "Month reopened" });
   } catch (error) {
     console.error("[API /pnl/snapshots] PATCH error:", error);
