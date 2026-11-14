@@ -36,6 +36,7 @@ const db = await notion<{ url: string; data_sources?: { id: string }[] }>("datab
       "P&L": { select: { options: [{ name: "Final", color: "green" }, { name: "Draft", color: "yellow" }, { name: "None", color: "gray" }] } },
       "Live views": { checkbox: {} },
       Sent: { date: {} },
+      Version: { number: {} }, // the send's timestamp in ms: the newest page per month is kept
     },
   },
 });

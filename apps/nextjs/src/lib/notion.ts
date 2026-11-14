@@ -40,18 +40,3 @@ export const heading = (level: 2 | 3, text: string): NotionBlock => ({ type: `he
 export const paragraph = (text: string): NotionBlock => ({ type: "paragraph", paragraph: { rich_text: richText(text) } });
 export const bullet = (text: string): NotionBlock => ({ type: "bulleted_list_item", bulleted_list_item: { rich_text: richText(text) } });
 export const callout = (text: string, emoji = "ℹ️"): NotionBlock => ({ type: "callout", callout: { rich_text: richText(text), icon: { type: "emoji", emoji } } });
-
-/** Replace a page's whole body: archive what's there, then append the new blocks (100 per call) */
-export async function replacePageBody(pageId: string, blocks: NotionBlock[]): Promise<void> {
-  const existing: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await notion<{ results: { id: string }[]; has_more: boolean; next_cursor: string | null }>(
-      `blocks/${pageId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ""}`,
-    );
-    existing.push(...page.results.map((b) => b.id));
-    cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined;
-  } while (cursor);
-  for (const id of existing) await notion(`blocks/${id}`, "DELETE");
-  for (let i = 0; i < blocks.length; i += 100) await notion(`blocks/${pageId}/children`, "PATCH", { children: blocks.slice(i, i + 100) });
-}

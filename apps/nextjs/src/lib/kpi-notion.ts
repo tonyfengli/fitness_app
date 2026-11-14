@@ -12,7 +12,7 @@
  * computed by a model.
  *
  * Member names are shortened to first name + last initial everywhere, task titles included
- * (Tony, Nov 14 2026). Re-sending a month replaces its page, so fixes flow through.
+ * (Tony, Nov 14 2026). Re-sending a month replaces its page (sendReport), so fixes flow through.
  *
  * "What stands out" is a placeholder for OpenClaw's monthly analysis (not built yet).
  *
@@ -26,7 +26,7 @@ import { PnlMonthlySnapshot } from "@acme/db/schema";
 
 import { churnJudgment, newMembersJudgment } from "~/app/kpi/lib/metric-definitions";
 import { getDerivedKpi, type DerivedKpiMonth } from "~/lib/kpi-derived";
-import { bullet, callout, heading, notion, paragraph, replacePageBody, type NotionBlock } from "~/lib/notion";
+import { bullet, callout, heading, notion, paragraph, type NotionBlock } from "~/lib/notion";
 import { pnlLines } from "~/lib/pnl-lines";
 import type { MonthlyReconciliation } from "~/lib/revenue-reconciliation";
 
@@ -311,40 +311,28 @@ function dataSource(): string {
   return id;
 }
 
-type Row = { id: string; url: string; properties: Record<string, { rich_text?: { plain_text: string }[]; date?: { start: string } | null }> };
-
-/** The months already in Notion: { "2026-10": { url, sentAt } } */
-export async function sentMonths(): Promise<Record<string, { url: string; sentAt: string | null }>> {
-  const out: Record<string, { url: string; sentAt: string | null }> = {};
-  let cursor: string | undefined;
-  do {
-    const res = await notion<{ results: Row[]; has_more: boolean; next_cursor: string | null }>(`data_sources/${dataSource()}/query`, "POST", { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
-    for (const r of res.results) {
-      const key = r.properties.Key?.rich_text?.map((t) => t.plain_text).join("");
-      if (key) out[key] = { url: r.url, sentAt: r.properties.Sent?.date?.start ?? null };
-    }
-    cursor = res.has_more ? (res.next_cursor ?? undefined) : undefined;
-  } while (cursor);
-  return out;
-}
-
-/** Create or replace the month's row and page. Returns the page URL. */
+/**
+ * Write the month's page. Every send writes a complete NEW page (with a Version, the send's
+ * millisecond timestamp), then moves every older page for that month to Notion's trash.
+ * Two sends that overlap (Draft then Final a minute apart, Nov 14) can no longer clear each
+ * other's content: whichever order they finish in, only the newest version is kept, and a
+ * reader sees the old page until the new one is complete.
+ */
 export async function sendReport(report: MonthReport): Promise<{ url: string; created: boolean }> {
-  const found = await notion<{ results: Row[] }>(`data_sources/${dataSource()}/query`, "POST", {
-    filter: { property: "Key", rich_text: { equals: report.key } },
-    page_size: 1,
-  });
-  const existing = found.results[0];
-  if (existing) {
-    await notion(`pages/${existing.id}`, "PATCH", { properties: report.properties });
-    await replacePageBody(existing.id, report.blocks);
-    return { url: existing.url, created: false };
-  }
+  const version = Date.now();
   const page = await notion<{ id: string; url: string }>("pages", "POST", {
     parent: { type: "data_source_id", data_source_id: dataSource() },
-    properties: report.properties,
+    properties: { ...report.properties, Version: { number: version } },
     children: report.blocks.slice(0, 100),
   });
-  if (report.blocks.length > 100) for (let i = 100; i < report.blocks.length; i += 100) await notion(`blocks/${page.id}/children`, "PATCH", { children: report.blocks.slice(i, i + 100) });
-  return { url: page.url, created: true };
+  for (let i = 100; i < report.blocks.length; i += 100) await notion(`blocks/${page.id}/children`, "PATCH", { children: report.blocks.slice(i, i + 100) });
+
+  const found = await notion<{ results: { id: string; properties: { Version?: { number: number | null } } }[] }>(`data_sources/${dataSource()}/query`, "POST", {
+    filter: { property: "Key", rich_text: { equals: report.key } },
+    page_size: 100,
+  });
+  const newest = Math.max(...found.results.map((r) => r.properties.Version?.number ?? 0));
+  const stale = found.results.filter((r) => (r.properties.Version?.number ?? 0) < newest);
+  for (const r of stale) await notion(`pages/${r.id}`, "PATCH", { in_trash: true });
+  return { url: page.url, created: stale.length === 0 };
 }
