@@ -9,3 +9,7 @@ read it live in `~/ai-crew` (see its CLAUDE.md).
   commits, docs or pushed files.
 - **Commits and pushes need Tony's OK.** Pushes to main auto-deploy to Vercel.
 - **One `next dev`:** never start a second dev server in `apps/nextjs`.
+- **Workflow map:** Tony's whiteboard of what is built must follow the code. When a change
+  touches something it shows (a cron, a rule with a number on the board, a switch, a new
+  workflow), end by telling him what the board needs and update it after his yes. Rule and
+  checklist: `~/ai-crew/docs/WORKFLOW-MAP.md`.
