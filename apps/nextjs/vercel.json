@@ -8,6 +8,14 @@
     {
       "path": "/api/cron/celebrations",
       "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/cron/intel-start",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/intel-poll",
+      "schedule": "40 * * * *"
     }
   ]
 }

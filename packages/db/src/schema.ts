@@ -20,6 +20,7 @@ export * from "./schema/spotify-tracks";
 export * from "./schema/music-tracks";
 export * from "./schema/celebration";
 export * from "./schema/team";
+export * from "./schema/intel";
 
 export const Business = pgTable("business", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),

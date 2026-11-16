@@ -27,6 +27,7 @@ reaches the database.
 | `kpi` | KPI dashboard snapshots, overrides, billing links | |
 | `gymmaster` | GymMaster data: archive pulls, member matching across accounts | ai-crew/docs/GYMMASTER-MIGRATION.md |
 | `retention` | Retention events and outreach | ai-crew/docs/KILO-INTEGRATION.md |
+| `intel` | Public content and competitor data: Instagram posts, Meta ads, Google reviews, website pages. No member data | ai-crew/docs/INTEL-COLLECTION.md |
 
 A new area needs a row here **and** an entry in `AREAS` in `scripts/check-names.ts`. Until
 both exist, the check fails, which is the point: say what the area is before using it.

@@ -16,7 +16,7 @@ import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "../src/schema";
 
 /** Registered areas. Keep in sync with the table in NAMING.md. */
-const AREAS = ["team", "celebration", "kpi", "gymmaster", "retention"];
+const AREAS = ["team", "celebration", "kpi", "gymmaster", "retention", "intel"];
 
 /** Tables that existed before the convention (2026-11-10). Never add to this list. */
 const LEGACY = new Set([
