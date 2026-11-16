@@ -101,16 +101,6 @@ function KPIDashboard() {
               P&L
             </button>
             <button
-              onClick={() => setActiveTab("competitors")}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "competitors"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Competitors
-            </button>
-            <button
               onClick={() => setActiveTab("elev8")}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === "elev8"
@@ -126,6 +116,7 @@ function KPIDashboard() {
         {/* Tab Content */}
         {activeTab === "elev8" && <OutputTemplate />}
         {activeTab === "pnl" && <PnLTab />}
+        {/* No button for this one yet: Tony opens /kpi?tab=competitors directly while it is being shaped */}
         {activeTab === "competitors" && <CompetitorsTab />}
         {activeTab === "overview" && <ReportingTab />}
         {activeTab === "team" && <TeamTab />}
