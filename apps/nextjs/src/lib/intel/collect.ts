@@ -59,7 +59,8 @@ export async function launchDue(opts: { apply: boolean; force?: boolean; now?: D
   const [last] = await db
     .select({ startedAt: IntelRun.startedAt })
     .from(IntelRun)
-    .where(and(eq(IntelRun.businessId, businessId), eq(IntelRun.source, "instagram"), eq(IntelRun.kind, "scheduled"), ne(IntelRun.status, "failed")))
+    // A pull started by hand counts too: "collect now" on Saturday means Monday's is not needed
+    .where(and(eq(IntelRun.businessId, businessId), eq(IntelRun.source, "instagram"), ne(IntelRun.kind, "backfill"), ne(IntelRun.status, "failed")))
     .orderBy(desc(IntelRun.startedAt))
     .limit(1);
   const daysSince = last ? (now.getTime() - last.startedAt.getTime()) / DAY : Infinity;
