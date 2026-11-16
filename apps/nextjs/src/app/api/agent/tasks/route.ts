@@ -5,6 +5,7 @@
  * GET /api/agent/tasks?owner=<userId>  one person's
  * GET /api/agent/tasks?urgent=1        hard-deadline tasks due before the next Monday 7pm Pacific
  *                                      (the "one touch, day of" set; see BUSINESS-ACCOUNTABILITY.md)
+ * Each task carries details and updatedAt: the Notion task sync on the personal side pairs on them.
  * Founders, or the OpenClaw key (read-only).
  * POST /api/agent/tasks                create tasks at the meeting (founder) or for a Slack user
  *                                      (COS with the write key). Body: { tasks: [{ title, details?,
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
       .map(({ task: t, ownerName }) => ({
         id: t.id,
         title: t.title,
+        details: t.details,
         status: t.status,
         ownerId: t.ownerId,
         owner: ownerName ?? "unassigned",
@@ -85,6 +87,7 @@ export async function GET(request: NextRequest) {
         context: t.context,
         createdAt: t.createdAt.toISOString(),
         completedAt: t.completedAt?.toISOString() ?? null,
+        updatedAt: t.updatedAt.toISOString(),
       }));
     return NextResponse.json({ status: "ok", tasks, _meta: { generatedAt: new Date().toISOString(), nextMeeting: cutoff.toISOString(), urgent } });
   } catch (err) {

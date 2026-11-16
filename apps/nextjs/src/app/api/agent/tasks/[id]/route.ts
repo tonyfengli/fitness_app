@@ -14,6 +14,9 @@
  *   note      a note on the task (text)
  * Who: a signed-in founder (acts as themselves) or the COS with X-TEAM-AGENT-KEY acting as
  * actorSlackUserId. The library's rules decide what that person may do; a refusal is a 403.
+ * via: "notion" (agent key only): the change was made by that person in their Notion task list
+ * and carried here by the task sync (ai-crew personal/scripts/task-sync.mjs). It is recorded on
+ * the "system" channel, not as something the Chief did, and move may clear a soft date (dueAt null).
  */
 
 import type { NextRequest } from "next/server";
@@ -39,6 +42,7 @@ interface Body {
   title?: string;
   details?: string | null;
   traceId?: string;
+  via?: string;
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +54,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
   const actor: Actor = { kind: "person", userId: writer.userId };
-  const channel: Channel = writer.via === "agent" ? "slack" : "dashboard";
+  const fromNotion = writer.via === "agent" && body.via === "notion";
+  const channel: Channel = fromNotion ? "system" : writer.via === "agent" ? "slack" : "dashboard";
   const text = body.text?.trim();
   try {
     switch (body.action) {
@@ -78,6 +83,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await decline(task, actor, channel, text);
         break;
       case "move": {
+        if (fromNotion && body.dueAt === null) {
+          // The date was removed in Notion. Hard deadlines stay, as they do for any move.
+          if (task.hardDeadline) throw new TeamRuleError("This deadline can't move");
+          await setDeadline(task, actor, channel, { dueAt: null }, text);
+          break;
+        }
         const due = body.dueAt ? new Date(body.dueAt) : null;
         if (!due || isNaN(due.getTime())) return NextResponse.json({ error: "dueAt (ISO) is required" }, { status: 400 });
         await changeDeadline(task, actor, channel, due, text);
@@ -143,7 +154,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ error: `Unknown action ${body.action ?? "(none)"}` }, { status: 400 });
     }
     // What the Chief did to a task for the founder who asked ("reply" only records their words)
-    if (writer.via === "agent" && body.action !== "reply") {
+    if (writer.via === "agent" && !fromNotion && body.action !== "reply") {
       await recordActivity({ userId: writer.userId, slackUserId: body.actorSlackUserId, kind: "task_updated", subjectType: "task", subjectId: task.id, summary: `${body.action} on the task "${task.title}"` });
     }
     const trace = await traceTask(task.id);
