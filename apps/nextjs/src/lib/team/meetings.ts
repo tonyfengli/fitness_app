@@ -110,6 +110,8 @@ export interface MeetingHit {
   title: string;
   heading: string;
   text: string;
+  /** The meeting's shared Granola link, so an answer can point to its source */
+  url: string;
   /** How many of the words asked for this section has, out of how many were searched */
   matched: number;
   of: number;
@@ -131,6 +133,7 @@ interface MeetingRow {
   heldAt: Date;
   title: string;
   notes: string;
+  url: string;
 }
 
 /**
@@ -156,7 +159,7 @@ export function rankSections(rows: MeetingRow[], q: string): { words: string[]; 
     .filter((h) => h.matched > 0)
     .sort((a, b) => b.score - a.score || b.x.r.heldAt.getTime() - a.x.r.heldAt.getTime())
     .slice(0, MAX_HITS)
-    .map(({ x, matched }) => ({ meetingId: x.r.id, day: meetingDay(x.r.heldAt), title: x.r.title, heading: x.s.heading, text: x.s.text.slice(0, SECTION_CHARS), matched, of: words.length }));
+    .map(({ x, matched }) => ({ meetingId: x.r.id, day: meetingDay(x.r.heldAt), title: x.r.title, heading: x.s.heading, text: x.s.text.slice(0, SECTION_CHARS), url: x.r.url, matched, of: words.length }));
   return { words, hits };
 }
 
@@ -164,7 +167,7 @@ export function rankSections(rows: MeetingRow[], q: string): { words: string[]; 
 export async function searchMeetings(q: string): Promise<{ words: string[]; hits: MeetingHit[]; meetingsSearched: number }> {
   const businessId = await getGymBusinessId();
   const rows = await db
-    .select({ id: TeamMeeting.id, heldAt: TeamMeeting.heldAt, title: TeamMeeting.title, notes: TeamMeeting.notes })
+    .select({ id: TeamMeeting.id, heldAt: TeamMeeting.heldAt, title: TeamMeeting.title, notes: TeamMeeting.notes, url: TeamMeeting.url })
     .from(TeamMeeting)
     .where(eq(TeamMeeting.businessId, businessId))
     .orderBy(desc(TeamMeeting.heldAt));
