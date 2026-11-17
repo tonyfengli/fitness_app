@@ -327,3 +327,37 @@ export const TeamNudgeDecision = pgTable(
     byPerson: index("idx_team_nudge_decision_person").on(table.userId, table.createdAt),
   }),
 );
+
+/**
+ * The meeting record: one row per meeting, holding Granola's summary as written. This is the
+ * business's memory of what was said and decided; the Chief of Staff lists, searches and
+ * opens these the way it looks up tasks or members. Only meetings posted in the Slack
+ * meetings channel are saved (anything there is shared with every founder).
+ * Written by lib/team/meetings.ts (saveMeeting) when the gym tools read a Granola note, and
+ * by the nightly catch-up; a note read again replaces its text. Read by GET /api/agent/meetings.
+ * Design: ai-crew/docs/BUSINESS-ACCOUNTABILITY.md → "Meeting memory".
+ */
+export const TeamMeeting = pgTable(
+  "team_meeting",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    businessId: t
+      .uuid()
+      .notNull()
+      .references(() => Business.id, { onDelete: "cascade" }),
+    source: t.varchar({ length: 20 }).notNull().default("granola"),
+    externalRef: t.varchar({ length: 80 }).notNull(), // the note's id in the source (Granola's id from its link)
+    url: t.text().notNull(), // the shared note link
+    title: t.text().notNull(),
+    heldAt: t.timestamp({ withTimezone: true }).notNull(), // when the note was started, i.e. the meeting
+    headings: t.text().array().notNull().default(sql`'{}'::text[]`), // the summary's section headings, for the one-line index
+    notes: t.text().notNull(), // the summary as plain text ("## heading" lines and "- " items)
+    createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  }),
+  (table) => ({
+    oneNote: unique("uq_team_meeting_ref").on(table.businessId, table.source, table.externalRef),
+    byDate: index("idx_team_meeting_held").on(table.businessId, table.heldAt),
+  }),
+);
+

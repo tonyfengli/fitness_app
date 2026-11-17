@@ -22,7 +22,7 @@ reaches the database.
 
 | Area | What it covers | Doc |
 |---|---|---|
-| `team` | Staff accountability: tasks, their history, nudges, workflows, messaging settings | ai-crew/docs/BUSINESS-ACCOUNTABILITY.md |
+| `team` | Staff accountability: tasks, their history, nudges, workflows, messaging settings, and the meeting record | ai-crew/docs/BUSINESS-ACCOUNTABILITY.md |
 | `celebration` | Member recognition: birthdays, milestones, later PRs | (planned) |
 | `kpi` | KPI dashboard snapshots, overrides, billing links | |
 | `gymmaster` | GymMaster data: archive pulls, member matching across accounts | ai-crew/docs/GYMMASTER-MIGRATION.md |
